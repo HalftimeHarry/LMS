@@ -1,31 +1,14 @@
 <script lang="ts">
-	import { pb, persistAuth } from '$lib';
+	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { applyAction } from '$app/forms';
+	import type { ActionData } from './$types';
 
-	let email    = $state('');
-	let password = $state('');
-	let remember = $state(false);
-	let error    = $state('');
-	let loading  = $state(false);
+	let { form }: { form: ActionData } = $props();
 
-	// Redirect destination — e.g. /login?redirect=/dashboard/picks
 	const redirect = $derived($page.url.searchParams.get('redirect') ?? '/dashboard');
-
-	async function login() {
-		error = '';
-		loading = true;
-		try {
-			await pb.collection('users').authWithPassword(email, password);
-			persistAuth(remember);
-			goto(redirect);
-		} catch (e: unknown) {
-			error = 'Invalid email or password.';
-			console.error(e);
-		} finally {
-			loading = false;
-		}
-	}
+	let loading = $state(false);
 </script>
 
 <svelte:head><title>Sign In — LMS Pool</title></svelte:head>
@@ -36,15 +19,27 @@
 		<h1 class="mb-1 text-2xl font-bold text-white">Sign in</h1>
 		<p class="mb-6 text-sm text-gray-400">Welcome back to the pool.</p>
 
-		<form onsubmit={(e) => { e.preventDefault(); login(); }} class="flex flex-col gap-4">
+		<form
+			method="POST"
+			use:enhance={() => {
+				loading = true;
+				return async ({ result }) => {
+					loading = false;
+					if (result.type === 'redirect') {
+						goto(result.location);
+					} else {
+						await applyAction(result);
+					}
+				};
+			}}
+			class="flex flex-col gap-4"
+		>
+			<input type="hidden" name="redirect" value={redirect} />
 
 			<div class="flex flex-col gap-1">
 				<label for="email" class="text-xs font-medium text-gray-400">Email</label>
 				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					required
+					id="email" name="email" type="email" required
 					placeholder="you@example.com"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
@@ -53,23 +48,15 @@
 			<div class="flex flex-col gap-1">
 				<label for="password" class="text-xs font-medium text-gray-400">Password</label>
 				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					required
+					id="password" name="password" type="password" required
 					placeholder="Your password"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
 			</div>
 
-			<!-- Remember me / different computer -->
 			<div class="flex flex-col gap-2 rounded border border-gray-800 bg-gray-900/50 p-3">
 				<label class="flex cursor-pointer items-center gap-3 text-sm text-gray-300">
-					<input
-						type="checkbox"
-						bind:checked={remember}
-						class="h-4 w-4 accent-[#c9a84c]"
-					/>
+					<input type="checkbox" name="remember" class="h-4 w-4 accent-[#c9a84c]" />
 					Keep me signed in on this device
 				</label>
 				<p class="pl-7 text-xs text-gray-500">
@@ -77,8 +64,8 @@
 				</p>
 			</div>
 
-			{#if error}
-				<p class="rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{error}</p>
+			{#if form?.error}
+				<p class="rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{form.error}</p>
 			{/if}
 
 			<button

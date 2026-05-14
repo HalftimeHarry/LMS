@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"seed:teams": "tsx scripts/seed-nfl-teams.ts",
-		"setup:pb":   "tsx scripts/setup-pocketbase.ts"
+		"setup:pb":            "tsx scripts/setup-pocketbase.ts",
+		"migrate:entry-types": "tsx scripts/migrate-entry-types.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-netlify": "^4.0.0",
