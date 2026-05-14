@@ -11,5 +11,10 @@
 			"label": "SvelteKit Dev",
 			"onAutoForward": "openPreview"
 		}
+	},
+	"customizations": {
+		"gitpod": {
+			"automationsFile": ".gitpod/automations.yaml"
+		}
 	}
 }

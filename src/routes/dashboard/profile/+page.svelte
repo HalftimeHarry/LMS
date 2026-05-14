@@ -12,7 +12,7 @@
 
 	const role = $derived(roleLabel[data.user.role] ?? { label: data.user.role, color: 'bg-gray-800 text-gray-400 border-gray-700' });
 
-	let displayName   = $state(data.user.displayName);
+	let displayName   = $state(data.user.displayName as string);
 	let profileLoading = $state(false);
 	let passwordLoading = $state(false);
 
@@ -78,8 +78,9 @@
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<label class="text-xs font-medium text-gray-400">Email</label>
+				<label for="email-display" class="text-xs font-medium text-gray-400">Email</label>
 				<input
+					id="email-display"
 					type="email"
 					value={data.user.email}
 					disabled
@@ -89,7 +90,7 @@
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<label class="text-xs font-medium text-gray-400">Role</label>
+				<p class="text-xs font-medium text-gray-400">Role</p>
 				<div class="flex items-center gap-2 rounded border border-gray-800 bg-gray-900/50 px-3 py-2">
 					<span class="rounded border px-2 py-0.5 text-xs font-medium {role.color}">{role.label}</span>
 					<span class="text-xs text-gray-600">Role is assigned by a super admin.</span>

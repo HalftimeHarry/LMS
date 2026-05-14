@@ -1,29 +1,16 @@
-import PocketBase from 'pocketbase';
-import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
-import { fail, redirect } from '@sveltejs/kit';
+import { pbAdmin } from '$lib/server/pb-admin';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-async function adminPb(cookies: import('@sveltejs/kit').Cookies) {
-	const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
-	const cookie = cookies.get('pb_auth');
-	if (cookie) {
-		const { token, record } = JSON.parse(cookie);
-		pb.authStore.save(token, record);
-	}
-	return pb;
-}
-
-export const load: PageServerLoad = async ({ cookies }) => {
-	const pb = await adminPb(cookies);
-	const seasons = await pb.collection('seasons').getFullList({
-		sort: '-year'
-	});
+export const load: PageServerLoad = async () => {
+	const pb = await pbAdmin();
+	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
 	return { seasons };
 };
 
 export const actions: Actions = {
-	delete: async ({ request, cookies }) => {
-		const pb = await adminPb(cookies);
+	delete: async ({ request }) => {
+		const pb = await pbAdmin();
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		try {
@@ -34,8 +21,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	setStatus: async ({ request, cookies }) => {
-		const pb = await adminPb(cookies);
+	setStatus: async ({ request }) => {
+		const pb = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
 		const status = data.get('status') as string;
