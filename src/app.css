@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@theme {
+  --color-pool-gold: #c9a84c;
+  --color-pool-gold-light: #e8c96a;
+  --color-pool-dark: #0a0a0a;
+  --color-pool-surface: rgba(10, 10, 10, 0.82);
+  --color-pool-border: rgba(201, 168, 76, 0.3);
+}

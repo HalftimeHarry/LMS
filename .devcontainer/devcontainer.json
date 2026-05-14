@@ -1,0 +1,15 @@
+{
+	"name": "LMS",
+	"build": {
+		"context": "..",
+		"dockerfile": "../Dockerfile"
+	},
+	"postCreateCommand": "pnpm install",
+	"forwardPorts": [5173],
+	"portsAttributes": {
+		"5173": {
+			"label": "SvelteKit Dev",
+			"onAutoForward": "openPreview"
+		}
+	}
+}
