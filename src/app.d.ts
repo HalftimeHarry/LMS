@@ -1,9 +1,12 @@
-// See https://svelte.dev/docs/kit/types#app.d.ts
-// for information about these interfaces
+import type { RecordModel } from 'pocketbase';
+
 declare global {
 	namespace App {
+		interface Locals {
+			user: RecordModel | null;
+			role: 'super_admin' | 'pool_admin' | 'participant' | null;
+		}
 		// interface Error {}
-		// interface Locals {}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

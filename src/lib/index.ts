@@ -1,1 +1,1 @@
-export { pb } from './pocketbase';
+export { pb, currentUser, userRole, isSuperAdmin, isPoolAdmin, isAdmin, persistAuth, signOut } from './pocketbase';
