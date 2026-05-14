@@ -1,20 +1,9 @@
-import PocketBase from 'pocketbase';
-import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
+import { pbAdmin } from '$lib/server/pb-admin';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-async function adminPb(cookies: import('@sveltejs/kit').Cookies) {
-	const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
-	const cookie = cookies.get('pb_auth');
-	if (cookie) {
-		const { token, record } = JSON.parse(cookie);
-		pb.authStore.save(token, record);
-	}
-	return pb;
-}
-
-export const load: PageServerLoad = async ({ cookies, url }) => {
-	const pb = await adminPb(cookies);
+export const load: PageServerLoad = async ({ url }) => {
+	const pb = await pbAdmin();
 	const seasonId = url.searchParams.get('season') ?? '';
 
 	const [seasons, teams] = await Promise.all([
@@ -38,8 +27,8 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 };
 
 export const actions: Actions = {
-	createWeek: async ({ request, cookies }) => {
-		const pb   = await adminPb(cookies);
+	createWeek: async ({ request }) => {
+		const pb   = await pbAdmin();
 		const data = await request.formData();
 
 		const seasonId   = data.get('seasonId')  as string;
@@ -73,8 +62,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	setStatus: async ({ request, cookies }) => {
-		const pb   = await adminPb(cookies);
+	setStatus: async ({ request }) => {
+		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
 		const status = data.get('status') as string;
@@ -86,8 +75,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	setFavorite: async ({ request, cookies }) => {
-		const pb   = await adminPb(cookies);
+	setFavorite: async ({ request }) => {
+		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
 		const teamId = data.get('teamId') as string;
@@ -101,8 +90,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	deleteWeek: async ({ request, cookies }) => {
-		const pb   = await adminPb(cookies);
+	deleteWeek: async ({ request }) => {
+		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id   = data.get('id') as string;
 		try {

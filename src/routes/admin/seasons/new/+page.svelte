@@ -39,10 +39,17 @@
 			</div>
 		</div>
 
-		<div class="flex flex-col gap-1">
-			<label for="entryFee" class="text-xs font-medium text-gray-400">Entry fee ($)</label>
-			<input id="entryFee" name="entryFee" type="number" required placeholder="100" min="1"
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+		<div class="grid gap-4 sm:grid-cols-2">
+			<div class="flex flex-col gap-1">
+				<label for="lmsEntryFee" class="text-xs font-medium text-gray-400">LMS entry fee ($)</label>
+				<input id="lmsEntryFee" name="lmsEntryFee" type="number" required placeholder="100" min="1"
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+			</div>
+			<div class="flex flex-col gap-1">
+				<label for="secondHalfEntryFee" class="text-xs font-medium text-gray-400">Second Half entry fee ($)</label>
+				<input id="secondHalfEntryFee" name="secondHalfEntryFee" type="number" required placeholder="50" min="1"
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+			</div>
 		</div>
 
 		<div class="grid gap-4 sm:grid-cols-2">

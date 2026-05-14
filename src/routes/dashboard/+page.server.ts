@@ -1,30 +1,29 @@
-import PocketBase from 'pocketbase';
-import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
 import { redirect } from '@sveltejs/kit';
+import { pbAdmin } from '$lib/server/pb-admin';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
 
-	const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
-	const cookie = cookies.get('pb_auth');
-	if (cookie) {
-		const { token, record } = JSON.parse(cookie);
-		pb.authStore.save(token, record);
+	let pb: Awaited<ReturnType<typeof pbAdmin>>;
+	try {
+		pb = await pbAdmin();
+	} catch (e) {
+		console.error('[dashboard] pbAdmin failed:', e);
+		throw e;
 	}
 
-	const [entries, activeSeason] = await Promise.all([
+	const [entries, seasons] = await Promise.all([
 		pb.collection('entries').getFullList({
 			filter: `user = "${locals.user.id}"`,
 			expand: 'season',
-			sort:   '-created'
-		}),
-		pb.collection('seasons').getFirstListItem('status = "active" || status = "open"', {
-			sort: '-year'
-		}).catch(() => null)
+			sort:   '-id'
+		}).catch(() => []),
+		pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => [])
 	]);
 
-	// Current week for active season
+	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
+
 	let currentWeek = null;
 	if (activeSeason) {
 		currentWeek = await pb.collection('weekly_settings').getFirstListItem(
@@ -33,20 +32,17 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 		).catch(() => null);
 	}
 
-	const activeEntries    = entries.filter(e => e.status === 'active');
-	const pendingEntries   = entries.filter(e => e.status === 'pending_payment');
-	const eliminatedEntries= entries.filter(e => e.status === 'eliminated');
-
+	const e = entries as any[];
 	return {
 		user: {
 			id:          locals.user.id,
 			displayName: locals.user.displayName as string,
 			role:        locals.user.role        as string
 		},
-		entries,
-		activeEntries,
-		pendingEntries,
-		eliminatedEntries,
+		entries:           e,
+		activeEntries:     e.filter(x => x.status === 'active'),
+		pendingEntries:    e.filter(x => x.status === 'pending_payment'),
+		eliminatedEntries: e.filter(x => x.status === 'eliminated'),
 		activeSeason,
 		currentWeek
 	};
