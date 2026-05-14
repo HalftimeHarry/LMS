@@ -15,6 +15,7 @@ export const actions: Actions = {
 		const email    = data.get('email')    as string;
 		const password = data.get('password') as string;
 		const remember = data.get('remember') === 'on';
+		const dest     = (data.get('redirect') as string) || '/dashboard';
 
 		const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
 		try {
@@ -35,6 +36,6 @@ export const actions: Actions = {
 			}
 		);
 
-		redirect(302, '/dashboard');
+		redirect(302, dest);
 	}
 };

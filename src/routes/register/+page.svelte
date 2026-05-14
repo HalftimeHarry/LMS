@@ -1,41 +1,13 @@
 <script lang="ts">
-	import { pb, persistAuth } from '$lib';
+	import { enhance, applyAction } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import type { ActionData } from './$types';
+
+	let { form }: { form: ActionData } = $props();
 
 	const reason = $derived($page.url.searchParams.get('reason'));
-
-	let displayName = $state('');
-	let email       = $state('');
-	let password    = $state('');
-	let confirm     = $state('');
-	let remember    = $state(true);
-	let error       = $state('');
-	let loading     = $state(false);
-
-	async function register() {
-		error = '';
-		if (password !== confirm) { error = 'Passwords do not match.'; return; }
-		if (password.length < 8)  { error = 'Password must be at least 8 characters.'; return; }
-
-		loading = true;
-		try {
-			await pb.collection('users').create({
-				email,
-				password,
-				passwordConfirm: confirm,
-				displayName,
-				role: 'participant'
-			});
-			await pb.collection('users').authWithPassword(email, password);
-			persistAuth(remember);
-			goto('/dashboard');
-		} catch (e: unknown) {
-			error = (e as { message?: string })?.message ?? 'Registration failed.';
-		} finally {
-			loading = false;
-		}
-	}
+	let loading = $state(false);
 </script>
 
 <svelte:head><title>Register — LMS Pool</title></svelte:head>
@@ -53,15 +25,29 @@
 			</div>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); register(); }} class="flex flex-col gap-4">
+		{#if form?.error}
+			<p class="mb-4 rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{form.error}</p>
+		{/if}
 
+		<form
+			method="POST"
+			use:enhance={() => {
+				loading = true;
+				return async ({ result }) => {
+					loading = false;
+					if (result.type === 'redirect') {
+						goto(result.location);
+					} else {
+						await applyAction(result);
+					}
+				};
+			}}
+			class="flex flex-col gap-4"
+		>
 			<div class="flex flex-col gap-1">
 				<label for="displayName" class="text-xs font-medium text-gray-400">Display name</label>
 				<input
-					id="displayName"
-					type="text"
-					bind:value={displayName}
-					required
+					id="displayName" name="displayName" type="text" required
 					placeholder="Dustin"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
@@ -70,10 +56,7 @@
 			<div class="flex flex-col gap-1">
 				<label for="email" class="text-xs font-medium text-gray-400">Email</label>
 				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					required
+					id="email" name="email" type="email" required
 					placeholder="you@example.com"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
@@ -82,10 +65,7 @@
 			<div class="flex flex-col gap-1">
 				<label for="password" class="text-xs font-medium text-gray-400">Password</label>
 				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					required
+					id="password" name="password" type="password" required
 					placeholder="Min. 8 characters"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
@@ -94,28 +74,16 @@
 			<div class="flex flex-col gap-1">
 				<label for="confirm" class="text-xs font-medium text-gray-400">Confirm password</label>
 				<input
-					id="confirm"
-					type="password"
-					bind:value={confirm}
-					required
+					id="confirm" name="confirm" type="password" required
 					placeholder="Repeat password"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 				/>
 			</div>
 
-			<!-- Remember me -->
 			<label class="flex cursor-pointer items-center gap-3 text-sm text-gray-300">
-				<input
-					type="checkbox"
-					bind:checked={remember}
-					class="h-4 w-4 accent-[#c9a84c]"
-				/>
+				<input type="checkbox" name="remember" checked class="h-4 w-4 accent-[#c9a84c]" />
 				Keep me signed in on this device
 			</label>
-
-			{#if error}
-				<p class="rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{error}</p>
-			{/if}
 
 			<button
 				type="submit"
