@@ -21,9 +21,12 @@
 	};
 
 	// Favorite team selection per row
-	let favoriteTeam: Record<string, string> = $state(
-		Object.fromEntries(data.weeks.map((w: { id: string; biggestFavoriteTeam: string }) => [w.id, w.biggestFavoriteTeam ?? '']))
-	);
+	let favoriteTeam: Record<string, string> = $state({});
+	$effect(() => {
+		for (const w of data.weeks as { id: string; biggestFavoriteTeam: string }[]) {
+			if (!(w.id in favoriteTeam)) favoriteTeam[w.id] = w.biggestFavoriteTeam ?? '';
+		}
+	});
 
 	let createLoading = $state(false);
 
