@@ -1,0 +1,7 @@
+services:
+  dev-server:
+    name: SvelteKit Dev Server
+    description: Vite dev server on port 5173
+    commands:
+      start: cd /workspaces/LMS && pnpm dev --host 0.0.0.0 --port 5173
+      ready: curl -sf http://localhost:5173
