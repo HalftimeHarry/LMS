@@ -46,10 +46,33 @@
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 	<h1 class="text-2xl font-bold text-white">Entries</h1>
-	<button
-		onclick={() => showCreateForm = !showCreateForm}
-		class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
-	>+ Add Entries</button>
+	<div class="flex flex-wrap gap-3">
+		<!-- Season filter -->
+		<select
+			value={data.seasonFilter ?? ''}
+			onchange={(e) => updateFilter('season', (e.target as HTMLSelectElement).value)}
+			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+		>
+			<option value="">All seasons</option>
+			{#each data.seasons as s}
+				<option value={s.id}>{s.name}</option>
+			{/each}
+		</select>
+		<!-- Status filter -->
+		<select
+			value={data.statusFilter}
+			onchange={(e) => updateFilter('status', (e.target as HTMLSelectElement).value)}
+			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+		>
+			{#each statusOptions as opt}
+				<option value={opt.value}>{opt.label}</option>
+			{/each}
+		</select>
+		<button
+			onclick={() => showCreateForm = !showCreateForm}
+			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
+		>+ Add Entries</button>
+	</div>
 </div>
 
 <!-- Success toast -->
@@ -139,30 +162,6 @@
 	</form>
 </div>
 {/if}
-	<div class="flex flex-wrap gap-3">
-		<!-- Season filter -->
-		<select
-			value={data.seasonFilter ?? ''}
-			onchange={(e) => updateFilter('season', (e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			<option value="">All seasons</option>
-			{#each data.seasons as s}
-				<option value={s.id}>{s.name}</option>
-			{/each}
-		</select>
-		<!-- Status filter -->
-		<select
-			value={data.statusFilter}
-			onchange={(e) => updateFilter('status', (e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			{#each statusOptions as opt}
-				<option value={opt.value}>{opt.label}</option>
-			{/each}
-		</select>
-	</div>
-</div>
 
 <p class="mb-4 text-sm text-gray-500">{data.entries.length} entr{data.entries.length === 1 ? 'y' : 'ies'}</p>
 
