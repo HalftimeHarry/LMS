@@ -10,7 +10,8 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"seed:teams": "tsx scripts/seed-nfl-teams.ts"
+		"seed:teams": "tsx scripts/seed-nfl-teams.ts",
+		"setup:pb":   "tsx scripts/setup-pocketbase.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-netlify": "^4.0.0",
@@ -26,6 +27,7 @@
 	},
 	"dependencies": {
 		"bits-ui": "^1.0.0",
+		"dotenv": "^16.4.5",
 		"zod": "^3.23.8",
 		"clsx": "^2.1.1",
 		"lucide-svelte": "^0.468.0",

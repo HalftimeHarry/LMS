@@ -10,8 +10,12 @@
  */
 
 import PocketBase from 'pocketbase';
+import { config } from 'dotenv';
+import { resolve } from 'path';
 
-const PB_URL      = process.env.POCKETBASE_URL      ?? process.env.PUBLIC_POCKETBASE_URL ?? '';
+config({ path: resolve(process.cwd(), '.env') });
+
+const PB_URL      = process.env.PUBLIC_POCKETBASE_URL ?? '';
 const ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL    ?? '';
 const ADMIN_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD ?? '';
 
