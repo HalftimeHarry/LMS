@@ -3,6 +3,10 @@
 
 	let { data }: { data: PageData } = $props();
 
+	const pickByEntry          = $derived(data.pickByEntry          as Record<string, any>);
+	const usedTeamCountByEntry = $derived(data.usedTeamCountByEntry as Record<string, number>);
+	const NFL_TEAMS = 32;
+
 	const statusColors: Record<string, string> = {
 		pending_payment: 'bg-yellow-950/60 text-yellow-400 border-yellow-800',
 		active:          'bg-green-950/60 text-green-400 border-green-800',
@@ -68,12 +72,6 @@
 				<span class="text-sm font-medium {weekStatusColors[data.currentWeek.status] ?? 'text-gray-400'}">
 					{data.currentWeek.status.replace('_', ' ').toUpperCase()}
 				</span>
-				{#if data.currentWeek.status === 'open' && data.activeEntries.length > 0}
-					<a
-						href="/dashboard/picks"
-						class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
-					>Make Pick</a>
-				{/if}
 			</div>
 		</div>
 	</div>
@@ -103,7 +101,10 @@
 	{:else}
 		<div class="flex flex-col gap-3">
 			{#each data.entries as entry}
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+				<a
+					href="/dashboard/entries/{entry.id}"
+					class="block rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]"
+				>
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<div>
 							<p class="font-semibold text-white">{entry.entryName}</p>
@@ -118,7 +119,7 @@
 								<p class="mt-1 text-xs text-yellow-500">Awaiting payment confirmation.</p>
 							{/if}
 						</div>
-						<div class="flex items-center gap-3">
+						<div class="flex flex-wrap items-center gap-2">
 							{#if entry.paid}
 								<span class="text-xs text-green-400">✅ Paid</span>
 							{:else}
@@ -127,15 +128,35 @@
 							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[entry.status] ?? ''}">
 								{entry.status.replace('_', ' ')}
 							</span>
-							{#if entry.status === 'active' && data.currentWeek?.status === 'open'}
-								<a href="/dashboard/picks?entry={entry.id}"
-									class="rounded bg-[#c9a84c] px-3 py-1 text-xs font-semibold text-black transition hover:bg-[#e8c96a]">
-									Pick
-								</a>
+							{#if entry.status === 'active'}
+							{@const available = NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)}
+							<span class="text-xs text-gray-500">
+								{available} team{available !== 1 ? 's' : ''} available
+							</span>
+						{/if}
+						{#if entry.status === 'active' && data.currentWeek}
+								{@const pick = pickByEntry[entry.id]}
+								{#if pick}
+									{@const teams = pick.expand?.pickedTeams ?? []}
+									{@const isLms = entry.entryType === 'lms'}
+									{@const isPending = data.currentWeek.status === 'open'}
+									<span class="rounded border px-2.5 py-1 text-xs font-medium
+										{isPending
+											? 'border-yellow-800 bg-yellow-950/60 text-yellow-400'
+											: 'border-gray-700 bg-gray-900/60 text-gray-400'}">
+										{isPending ? 'Pending' : 'Used'} · Wk {data.currentWeek.week}
+										— {teams.map((t: any) => t.city + ' ' + t.name).join(', ')}
+										<span class="{isLms ? 'text-red-400' : 'text-green-400'}">{isLms ? 'to lose' : 'to win'}</span>
+									</span>
+								{:else if data.currentWeek.status === 'open'}
+									<span class="rounded border border-yellow-800 bg-yellow-950/60 px-2.5 py-1 text-xs font-medium text-yellow-400">
+										Wk {data.currentWeek.week} — pick needed
+									</span>
+								{/if}
 							{/if}
 						</div>
 					</div>
-				</div>
+				</a>
 			{/each}
 		</div>
 	{/if}

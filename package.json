@@ -16,7 +16,8 @@
 		"seed:teams": "tsx scripts/seed-nfl-teams.ts",
 		"setup:pb": "tsx scripts/setup-pocketbase.ts",
 		"migrate:entry-types": "tsx scripts/migrate-entry-types.ts",
-		"migrate:season-picks-config": "tsx scripts/migrate-season-picks-config.ts"
+		"migrate:season-picks-config": "tsx scripts/migrate-season-picks-config.ts",
+		"seed:2027":                   "tsx scripts/seed-2027-season.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-netlify": "^4.0.0",

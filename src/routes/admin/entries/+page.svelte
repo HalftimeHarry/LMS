@@ -1,10 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { createEntriesController } from '$lib/controllers';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const ctrl = createEntriesController(data.entries as any[]);
+	// Keep controller in sync when page data reloads after form actions
+	$effect(() => ctrl.setEntries(data.entries as any[]));
 
 	const statusOptions = [
 		{ value: 'pending_payment', label: 'Pending Payment' },
@@ -76,22 +81,22 @@
 	// Entry type — default lms
 	let entryType = $state('lms');
 
-	// Client-side entry search
-	let entrySearch = $state('');
-	const visibleEntries = $derived(
-		entrySearch.trim() === ''
-			? entries
-			: entries.filter((e) =>
-				`${e.entryName} ${e.expand?.user?.displayName ?? ''} ${e.expand?.user?.email ?? ''}`
-					.toLowerCase()
-					.includes(entrySearch.toLowerCase())
-			)
-	);
+	// Client-side search and pool type filter delegated to controller
+	const visibleEntries = $derived(ctrl.filtered);
 
 	function updateFilter(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
 		params.set(key, value);
 		goto(`?${params.toString()}`, { replaceState: true });
+	}
+
+	// Bulk set inactive
+	let bulkConfirm = $state(false);
+	async function handleBulkInactive() {
+		if (!bulkConfirm) { bulkConfirm = true; return; }
+		bulkConfirm = false;
+		const result = await ctrl.bulkSetInactive();
+		if (result.success) await invalidateAll();
 	}
 </script>
 
@@ -121,6 +126,7 @@
 				<option value={opt.value}>{opt.label}</option>
 			{/each}
 		</select>
+
 		<button
 			onclick={() => showCreateForm = !showCreateForm}
 			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
@@ -291,30 +297,51 @@
 		<input
 			type="text"
 			placeholder="Search entries or player name…"
-			bind:value={entrySearch}
+			bind:value={ctrl.search}
 			class="w-full rounded border border-gray-700 bg-gray-900 py-1.5 pl-9 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
 		/>
-		{#if entrySearch}
-			<button onclick={() => entrySearch = ''} class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear">✕</button>
+		{#if ctrl.search}
+			<button onclick={() => ctrl.search = ''} class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear">✕</button>
 		{/if}
 	</div>
-	<p class="text-sm text-gray-500">
-		{visibleEntries.length}{visibleEntries.length !== entries.length ? ` of ${entries.length}` : ''} entr{entries.length === 1 ? 'y' : 'ies'}
-	</p>
+	<div class="flex items-center gap-3">
+		<p class="text-sm text-gray-500">
+			{visibleEntries.length}{visibleEntries.length !== entries.length ? ` of ${entries.length}` : ''} entr{entries.length === 1 ? 'y' : 'ies'}
+		</p>
+		{#if visibleEntries.length > 0}
+			<label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300">
+				<input
+					type="checkbox"
+					checked={ctrl.allSelected}
+					onchange={() => ctrl.allSelected ? ctrl.clearSelection() : ctrl.selectAll()}
+					class="accent-[#c9a84c]"
+				/>
+				Select all
+			</label>
+		{/if}
+	</div>
 </div>
+
 
 {#if visibleEntries.length === 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
-		<p class="text-gray-400">{entrySearch ? 'No entries match your search.' : 'No entries match this filter.'}</p>
+		<p class="text-gray-400">{ctrl.search ? 'No entries match your search.' : 'No entries match this filter.'}</p>
 	</div>
 {:else}
 	<div class="flex flex-col gap-3">
 		{#each visibleEntries as entry, i}
 
 			<div class="flex items-stretch gap-3">
-				<!-- Row number -->
-				<div class="flex w-9 shrink-0 items-center justify-center self-stretch rounded-full border border-[rgba(201,168,76,0.4)] bg-black/60 text-sm font-bold text-[#c9a84c]">
-					{i + 1}
+				<!-- Checkbox + row number -->
+				<div class="flex w-9 shrink-0 flex-col items-center justify-center gap-1 self-stretch">
+					<input
+						type="checkbox"
+						checked={ctrl.selectedIds.has(entry.id)}
+						onchange={() => ctrl.toggleSelect(entry.id)}
+						class="h-4 w-4 cursor-pointer accent-[#c9a84c]"
+						aria-label="Select entry"
+					/>
+					<span class="text-xs font-bold text-[#c9a84c]">{i + 1}</span>
 				</div>
 
 				<!-- Card -->
