@@ -18,16 +18,23 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const season = entry.expand?.season ?? null;
 
-	// All open weeks for this season, sorted ascending
-	let openWeeks: any[] = [];
+	// Load open weeks (pickable) AND locked/results_pending/complete weeks (read-only)
+	let allWeeks: any[] = [];
 	if (season) {
-		openWeeks = await pb
+		allWeeks = await pb
 			.collection('weekly_settings')
-			.getFullList({ filter: `season = "${season.id}" && status = "open"`, sort: 'week' })
+			.getFullList({
+				filter: `season = "${season.id}" && (status = "open" || status = "locked" || status = "results_pending" || status = "complete")`,
+				sort: 'week',
+				expand: 'biggestFavoriteTeam'
+			})
 			.catch(() => []);
 	}
 
-	// All NFL teams
+	const openWeeks   = allWeeks.filter(w => w.status === 'open');
+	const closedWeeks = allWeeks.filter(w => w.status !== 'open');
+
+	// All NFL teams (only needed for the open-week picker)
 	const teams = openWeeks.length
 		? await pb.collection('nfl_teams').getFullList({ sort: 'name' }).catch(() => [])
 		: [];
@@ -50,14 +57,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		pickByWeek[p.week] = p;
 	}
 
-	// For each week, compute which team IDs are already used in OTHER weeks.
-	// A team used in week N is unavailable in all other weeks — unless that
-	// week's pick is changed (so we exclude the current week from the used set).
+	// For each open week, compute which team IDs are already used in OTHER weeks
 	const usedByWeek: Record<string, string[]> = {};
 	for (const week of openWeeks) {
 		const usedElsewhere = new Set<string>();
 		for (const [wId, pick] of Object.entries(pickByWeek)) {
-			if (wId === week.id) continue; // exclude this week's own pick
+			if (wId === week.id) continue;
 			for (const t of pick.expand?.pickedTeams ?? []) {
 				usedElsewhere.add(t.id);
 			}
@@ -69,14 +74,136 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		? 1
 		: (season?.secondHalfPicksPerWeek ?? 1);
 
+	const isLms = entry.entryType === 'lms';
+
+	// ── Odds for open weeks ───────────────────────────────────────────────────
+	// Fetch active game_odds for every open week in one query, then group by week id.
+	const oddsRaw: any[] = openWeeks.length
+		? await pb.collection('game_odds').getFullList({
+				filter: `season = "${season.id}" && isActive = true && (${openWeeks.map(w => `week = ${w.week}`).join(' || ')})`,
+				expand: 'homeTeam,awayTeam',
+				sort:   'gameTime'
+			}).catch(() => [])
+		: [];
+
+	// Group odds by weekly_settings id (match on week number)
+	const weekNumToId: Record<number, string> = {};
+	for (const w of openWeeks) weekNumToId[w.week] = w.id;
+
+	const oddsByWeek: Record<string, any[]> = {};
+	for (const g of oddsRaw) {
+		const wid = weekNumToId[g.week];
+		if (!wid) continue;
+		if (!oddsByWeek[wid]) oddsByWeek[wid] = [];
+		oddsByWeek[wid].push(g);
+	}
+
+	// Build a teamId → spread map for each week (used to annotate the team picker)
+	// spread value = how favored that team is (negative = underdog, positive = favorite)
+	// For LMS: we want to highlight the biggest FAVORITE (most likely to win = safest loser pick)
+	// For 2nd Half: we want to highlight the biggest FAVORITE (most likely to win)
+	const teamSpreadByWeek: Record<string, Record<string, number>> = {};
+	for (const [wid, games] of Object.entries(oddsByWeek)) {
+		teamSpreadByWeek[wid] = {};
+		for (const g of games) {
+			const homeId = g.expand?.homeTeam?.id;
+			const awayId = g.expand?.awayTeam?.id;
+			if (homeId) teamSpreadByWeek[wid][homeId] = -(g.homeSpread ?? 0); // positive = favored
+			if (awayId) teamSpreadByWeek[wid][awayId] =  (g.homeSpread ?? 0); // away spread = -homeSpread
+		}
+	}
+
+	// Compute 3 recommendations per open week
+	// LMS: top 3 biggest favorites (most negative homeSpread when home, most positive when away)
+	//      — avoid teams already used by this entry
+	// 2nd Half: top 3 biggest favorites (same logic — pick winners)
+	const usedTeamIds = new Set<string>();
+	for (const pick of Object.values(pickByWeek)) {
+		for (const t of pick.expand?.pickedTeams ?? []) usedTeamIds.add(t.id);
+	}
+
+	const recommendationsByWeek: Record<string, Array<{
+		teamId: string; abbreviation: string; city: string; name: string;
+		spread: number; moneyline: number | null; opponent: string; isHome: boolean;
+		isAutoPick: boolean; alreadyUsed: boolean;
+	}>> = {};
+
+	for (const [wid, games] of Object.entries(oddsByWeek)) {
+		const week = openWeeks.find(w => w.id === wid);
+		const autoPickTeamId = week?.biggestFavoriteTeam ?? null;
+
+		// Build candidate list — one entry per team per game
+		const candidates: any[] = [];
+		for (const g of games) {
+			const home = g.expand?.homeTeam;
+			const away = g.expand?.awayTeam;
+			if (!home || !away) continue;
+
+			// Effective spread from each team's perspective (positive = favored)
+			const homeEffective = -(g.homeSpread ?? 0);
+			const awayEffective =  (g.homeSpread ?? 0);
+
+			candidates.push({
+				teamId:      home.id,
+				abbreviation:home.abbreviation,
+				city:        home.city,
+				name:        home.name,
+				spread:      homeEffective,
+				moneyline:   g.homeMoneyline ?? null,
+				opponent:    `${away.abbreviation}`,
+				isHome:      true,
+				isAutoPick:  home.id === autoPickTeamId,
+				alreadyUsed: usedTeamIds.has(home.id),
+			});
+			candidates.push({
+				teamId:      away.id,
+				abbreviation:away.abbreviation,
+				city:        away.city,
+				name:        away.name,
+				spread:      awayEffective,
+				moneyline:   g.awayMoneyline ?? null,
+				opponent:    `${home.abbreviation}`,
+				isHome:      false,
+				isAutoPick:  away.id === autoPickTeamId,
+				alreadyUsed: usedTeamIds.has(away.id),
+			});
+		}
+
+		// Sort by spread descending (biggest favorite first), then pick top 3 not already used
+		// Always include the auto-pick team if set, even if already used
+		candidates.sort((a, b) => b.spread - a.spread);
+
+		const recs: typeof candidates = [];
+		// First pass: top 3 available (not already used)
+		for (const c of candidates) {
+			if (recs.length >= 3) break;
+			if (!c.alreadyUsed) recs.push(c);
+		}
+		// If auto-pick team isn't already in recs, prepend it (it's the default fallback)
+		if (autoPickTeamId) {
+			const autoInRecs = recs.some(r => r.teamId === autoPickTeamId);
+			if (!autoInRecs) {
+				const autoCand = candidates.find(c => c.teamId === autoPickTeamId);
+				if (autoCand) recs.unshift(autoCand);
+				if (recs.length > 3) recs.pop();
+			}
+		}
+
+		recommendationsByWeek[wid] = recs;
+	}
+
 	return {
 		entry,
 		season,
-		openWeeks:    openWeeks as any[],
-		teams:        teams     as any[],
+		openWeeks:    openWeeks    as any[],
+		closedWeeks:  closedWeeks  as any[],
+		teams:        teams        as any[],
 		pickByWeek,
 		usedByWeek,
-		picksRequired
+		picksRequired,
+		oddsByWeek,
+		teamSpreadByWeek,
+		recommendationsByWeek,
 	};
 };
 
@@ -130,7 +257,7 @@ export const actions: Actions = {
 			});
 		}
 
-		// Enforce once-per-season rule: check no picked team is already used in another week
+		// Enforce once-per-season rule
 		const otherPicks = await pb.collection('picks').getFullList({
 			filter: `entry = "${entryId}"`,
 			expand: 'pickedTeams'
@@ -138,7 +265,7 @@ export const actions: Actions = {
 
 		const usedElsewhere = new Set<string>();
 		for (const p of otherPicks) {
-			if (p.week === weekId) continue; // skip the week being updated
+			if (p.week === weekId) continue;
 			for (const t of p.expand?.pickedTeams ?? []) {
 				usedElsewhere.add(t.id);
 			}
@@ -146,7 +273,6 @@ export const actions: Actions = {
 
 		const conflict = teams.find((id) => usedElsewhere.has(id));
 		if (conflict) {
-			// Fetch team name for a helpful error message
 			const team = await pb.collection('nfl_teams').getOne(conflict).catch(() => null);
 			const name = team ? `${team.city} ${team.name}` : 'That team';
 			return fail(400, { error: `${name} is already used in another week. Each team can only be picked once per season.` });

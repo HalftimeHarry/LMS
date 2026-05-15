@@ -1,156 +1,392 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { teamLogoUrl } from '$lib/teamLogos';
 	import type { PageData } from './$types';
+
 	let { data }: { data: PageData } = $props();
 
-	const lmsEntries        = data.lmsEntries        as any[];
-	const secondHalfEntries = data.secondHalfEntries as any[];
+	const activeSeason = $derived(data.activeSeason as any);
+	const weeks        = $derived(data.weeks        as any[]);
+	const entries      = $derived(data.entries      as any[]);
+	const pickGrid     = $derived(data.pickGrid     as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
+	const currentWeek  = $derived(data.currentWeek  as any);
+	const poolType     = $derived(data.poolType     as 'lms' | 'second_half');
+	const userId       = $derived(data.userId       as string);
 
+	const isLms = $derived(poolType === 'lms');
+
+	// ── Week buckets ──────────────────────────────────────────────────────────
+	const visibleWeeks = $derived(
+		weeks.filter(w => w.status === 'locked' || w.status === 'results_pending' || w.status === 'complete')
+	);
+	const openWeeks = $derived(weeks.filter(w => w.status === 'open'));
+
+	// ── Filters (client-side) ─────────────────────────────────────────────────
+	let searchText   = $state('');
+	let statusFilter = $state<'all' | 'active' | 'eliminated'>('all');
+
+	const filteredEntries = $derived(() => {
+		let list = [...entries] as any[];
+
+		// Status filter
+		if (statusFilter !== 'all') {
+			list = list.filter(e => e.status === statusFilter);
+		}
+
+		// Search — match entry name or player display name
+		const q = searchText.trim().toLowerCase();
+		if (q) {
+			list = list.filter(e =>
+				e.entryName.toLowerCase().includes(q) ||
+				(e.expand?.user?.displayName ?? '').toLowerCase().includes(q)
+			);
+		}
+
+		// Sort: active first, then winners, then eliminated (by survival week desc)
+		list.sort((a, b) => {
+			if (a.status === 'active'   && b.status !== 'active')   return -1;
+			if (b.status === 'active'   && a.status !== 'active')   return 1;
+			if (a.status === 'winner'   && b.status !== 'winner')   return -1;
+			if (b.status === 'winner'   && a.status !== 'winner')   return 1;
+			if (a.eliminatedWeek && b.eliminatedWeek) return b.eliminatedWeek - a.eliminatedWeek;
+			return a.entryName.localeCompare(b.entryName);
+		});
+
+		return list;
+	});
+
+	const activeCount = $derived(entries.filter((e: any) => e.status === 'active').length);
+
+	// ── Pool switcher ─────────────────────────────────────────────────────────
+	function switchPool(type: string) {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.set('pool', type);
+		goto(`?${params.toString()}`, { replaceState: true });
+	}
+
+	// ── Style maps ────────────────────────────────────────────────────────────
 	const statusColors: Record<string, string> = {
-		active:    'bg-green-950/60 text-green-400 border-green-800',
-		eliminated:'bg-red-950/60 text-red-400 border-red-800',
-		winner:    'bg-[rgba(201,168,76,0.15)] text-[#c9a84c] border-[rgba(201,168,76,0.4)]',
+		active:    'text-green-400',
+		eliminated:'text-red-400',
+		winner:    'text-[#c9a84c]',
 	};
 
-	const statusLabel: Record<string, string> = {
-		active:    'Active',
-		eliminated:'Eliminated',
-		winner:    'Winner 🏆',
+	const weekStatusDot: Record<string, string> = {
+		locked:          'bg-yellow-500',
+		results_pending: 'bg-orange-500',
+		complete:        'bg-gray-600',
+		open:            'bg-blue-500',
 	};
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="text-2xl font-bold text-white">Standings</h1>
-	{#if data.activeSeason}
-		<span class="rounded border border-[rgba(201,168,76,0.3)] px-3 py-1 text-sm text-[#c9a84c]">
-			{data.activeSeason.name}
-			{#if data.currentWeek} · Week {data.currentWeek.week}{/if}
-		</span>
-	{/if}
+<!-- ── Header card ─────────────────────────────────────────────────────────── -->
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+	<div>
+		<h1 class="text-2xl font-bold text-white">Standings</h1>
+		{#if activeSeason}
+			<p class="mt-1 text-sm text-gray-500">
+				{activeSeason.name}{#if currentWeek} · Week {currentWeek.week}{/if}
+			</p>
+		{/if}
+	</div>
+
+	<!-- Pool toggle -->
+	<div class="flex overflow-hidden rounded border border-gray-700">
+		<button type="button" onclick={() => switchPool('lms')}
+			class="px-4 py-1.5 text-sm font-medium transition
+				{poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+			LMS
+		</button>
+		<button type="button" onclick={() => switchPool('second_half')}
+			class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition
+				{poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+			2nd Half
+		</button>
+	</div>
 </div>
 
-{#if !data.activeSeason}
+{#if !activeSeason}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
 		<p class="text-gray-400">No active season yet. Check back soon.</p>
 	</div>
 
+{:else if entries.length === 0}
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
+		<p class="text-gray-400">No {isLms ? 'LMS' : 'Second Half'} entries yet.</p>
+	</div>
+
 {:else}
 
-	<!-- LMS standings -->
-	<section class="mb-10">
-		<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
-			LMS — Full Season
-			<span class="rounded border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs text-[#c9a84c]">
-				Pick the Loser
-			</span>
-			<span class="ml-auto text-sm font-normal text-gray-500">
-				{lmsEntries.filter((e) => e.status === 'active').length} remaining
-				/ {lmsEntries.length} total
-			</span>
-		</h2>
-
-		{#if lmsEntries.length === 0}
-			<div class="rounded-xl border border-gray-800 bg-black/50 p-8 text-center">
-				<p class="text-gray-500">No LMS entries yet.</p>
-			</div>
-		{:else}
-			<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-							<th class="px-4 py-3 w-10">#</th>
-							<th class="px-4 py-3">Entry</th>
-							<th class="px-4 py-3">Player</th>
-							<th class="px-4 py-3">Status</th>
-							<th class="px-4 py-3 text-right">Eliminated</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each lmsEntries as entry, i}
-							<tr class="border-b border-gray-800/50 transition hover:bg-white/[0.02]
-								{entry.status === 'eliminated' ? 'opacity-50' : ''}">
-								<td class="px-4 py-3 text-gray-600">{i + 1}</td>
-								<td class="px-4 py-3 font-medium text-white">{entry.entryName}</td>
-								<td class="px-4 py-3 text-gray-400">
-									{entry.expand?.user?.displayName ?? '—'}
-								</td>
-								<td class="px-4 py-3">
-									<span class="rounded border px-2 py-0.5 text-xs font-medium {statusColors[entry.status] ?? 'border-gray-700 text-gray-400'}">
-										{statusLabel[entry.status] ?? entry.status}
-									</span>
-								</td>
-								<td class="px-4 py-3 text-right text-xs text-gray-500">
-									{#if entry.eliminatedWeek}
-										Week {entry.eliminatedWeek}
-									{:else}
-										—
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+	<!-- ── Summary bar ──────────────────────────────────────────────────────── -->
+	<div class="mb-5 flex flex-wrap items-center gap-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-3 backdrop-blur-sm">
+		<div class="text-center">
+			<p class="text-xl font-bold text-white">{activeCount}</p>
+			<p class="text-xs text-gray-500">Still alive</p>
+		</div>
+		<div class="text-center">
+			<p class="text-xl font-bold text-gray-400">{entries.length}</p>
+			<p class="text-xs text-gray-500">Total entries</p>
+		</div>
+		<div class="text-center">
+			<p class="text-xl font-bold text-[#c9a84c]">{visibleWeeks.length}</p>
+			<p class="text-xs text-gray-500">Weeks past deadline</p>
+		</div>
+		{#if openWeeks.length > 0}
+			{@const ow       = openWeeks[0]}
+			{@const autoPick = ow.expand?.biggestFavoriteTeam}
+			<div class="ml-auto flex flex-wrap items-center gap-3 rounded-lg border border-blue-900 bg-blue-950/30 px-3 py-2">
+				<div class="flex items-center gap-2 text-sm text-blue-400">
+					<span class="h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse"></span>
+					<span>Week {ow.week} open — picks hidden until deadline</span>
+				</div>
+				{#if autoPick}
+					<div class="flex items-center gap-1.5 border-l border-blue-900 pl-3 text-xs text-gray-400">
+						<span class="text-gray-500">Auto-pick:</span>
+						<img
+							src={teamLogoUrl(autoPick.abbreviation)}
+							alt="{autoPick.city} {autoPick.name}"
+							class="h-5 w-5 object-contain"
+						/>
+						<span class="text-gray-300">{autoPick.city} {autoPick.name}</span>
+					</div>
+				{/if}
 			</div>
 		{/if}
-	</section>
+	</div>
 
-	<!-- Second Half standings -->
-	<section>
-		<h2 class="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
-			Second Half
-			<span class="rounded border border-blue-800 bg-blue-950/60 px-2 py-0.5 text-xs text-blue-400">
-				Pick the Winner
-			</span>
-			<span class="ml-auto text-sm font-normal text-gray-500">
-				{secondHalfEntries.filter((e) => e.status === 'active').length} remaining
-				/ {secondHalfEntries.length} total
-			</span>
-		</h2>
+	<!-- ── Filters ──────────────────────────────────────────────────────────── -->
+	<div class="mb-4 flex flex-wrap items-center gap-3">
+		<!-- Search -->
+		<div class="relative">
+			<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+			</svg>
+			<input
+				type="text"
+				placeholder="Search entry or player…"
+				bind:value={searchText}
+				class="rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none w-52"
+			/>
+		</div>
 
-		{#if secondHalfEntries.length === 0}
-			<div class="rounded-xl border border-gray-800 bg-black/50 p-8 text-center">
-				<p class="text-gray-500">No Second Half entries yet.</p>
-			</div>
-		{:else}
-			<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-							<th class="px-4 py-3 w-10">#</th>
-							<th class="px-4 py-3">Entry</th>
-							<th class="px-4 py-3">Player</th>
-							<th class="px-4 py-3">Status</th>
-							<th class="px-4 py-3 text-right">Eliminated</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each secondHalfEntries as entry, i}
-							<tr class="border-b border-gray-800/50 transition hover:bg-white/[0.02]
-								{entry.status === 'eliminated' ? 'opacity-50' : ''}">
-								<td class="px-4 py-3 text-gray-600">{i + 1}</td>
-								<td class="px-4 py-3 font-medium text-white">{entry.entryName}</td>
-								<td class="px-4 py-3 text-gray-400">
-									{entry.expand?.user?.displayName ?? '—'}
-								</td>
-								<td class="px-4 py-3">
-									<span class="rounded border px-2 py-0.5 text-xs font-medium {statusColors[entry.status] ?? 'border-gray-700 text-gray-400'}">
-										{statusLabel[entry.status] ?? entry.status}
-									</span>
-								</td>
-								<td class="px-4 py-3 text-right text-xs text-gray-500">
-									{#if entry.eliminatedWeek}
-										Week {entry.eliminatedWeek}
+		<!-- Status filter -->
+		<div class="flex overflow-hidden rounded border border-gray-700 text-xs font-medium">
+			{#each [['all', 'All'], ['active', 'Active'], ['eliminated', 'Eliminated']] as [val, label]}
+				<button
+					type="button"
+					onclick={() => statusFilter = val as any}
+					class="px-3 py-1.5 transition
+						{statusFilter === val
+							? val === 'active' ? 'bg-green-900 text-green-300'
+							: val === 'eliminated' ? 'bg-red-950 text-red-400'
+							: 'bg-gray-700 text-white'
+							: 'bg-gray-900 text-gray-500 hover:text-gray-300'}
+						{val !== 'all' ? 'border-l border-gray-700' : ''}"
+				>
+					{label}
+					{#if val === 'active'}
+						<span class="ml-1 opacity-60">{activeCount}</span>
+					{:else if val === 'eliminated'}
+						<span class="ml-1 opacity-60">{entries.filter((e: any) => e.status === 'eliminated').length}</span>
+					{:else}
+						<span class="ml-1 opacity-60">{entries.length}</span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
+		{#if searchText || statusFilter !== 'all'}
+			<button
+				type="button"
+				onclick={() => { searchText = ''; statusFilter = 'all'; }}
+				class="text-xs text-gray-600 hover:text-gray-400"
+			>
+				Clear filters
+			</button>
+		{/if}
+
+		<span class="ml-auto text-xs text-gray-600">
+			{filteredEntries().length} of {entries.length} shown
+		</span>
+	</div>
+
+	{#if visibleWeeks.length === 0 && openWeeks.length === 0}
+		<!-- Season not started -->
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
+			<p class="text-gray-400">No weeks set up yet. Check back when the season starts.</p>
+		</div>
+
+	{:else}
+		<!-- ── Pick grid ─────────────────────────────────────────────────────── -->
+		<div class="overflow-x-auto rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+			<table class="min-w-full text-sm">
+				<thead>
+					<tr class="border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500">
+						<!-- Sticky entry column -->
+						<th class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-3 text-left w-44">Entry</th>
+						<th class="px-3 py-3 text-left whitespace-nowrap">Status</th>
+
+						<!-- Past-deadline weeks — picks visible to all -->
+						{#each visibleWeeks as week}
+							<th class="px-3 py-3 text-center whitespace-nowrap">
+								<div class="flex flex-col items-center gap-1">
+									<span>Wk {week.week}</span>
+									<span class="h-1.5 w-1.5 rounded-full {weekStatusDot[week.status] ?? 'bg-gray-700'}"></span>
+								</div>
+							</th>
+						{/each}
+
+						<!-- Open weeks — picks hidden (own pick shown with eye icon) -->
+						{#each openWeeks as week}
+							<th class="px-3 py-3 text-center whitespace-nowrap">
+								<div class="flex flex-col items-center gap-1 text-blue-500/50">
+									<span>Wk {week.week}</span>
+									<span class="h-1.5 w-1.5 rounded-full bg-blue-500/40"></span>
+								</div>
+							</th>
+						{/each}
+					</tr>
+				</thead>
+				<tbody>
+					{#each filteredEntries() as entry}
+						{@const isElim  = entry.status === 'eliminated'}
+						{@const isMe    = entry.user === userId}
+						<tr class="border-b border-gray-800/40 transition hover:bg-white/[0.02]
+							{isElim ? 'opacity-50' : ''}
+							{isMe   ? 'bg-[rgba(201,168,76,0.03)]' : ''}">
+
+							<!-- Entry name (sticky) -->
+							<td class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-2.5
+								{isMe ? 'border-l-2 border-[#c9a84c]/40' : ''}">
+								<p class="font-medium leading-tight {isMe ? 'text-[#c9a84c]' : 'text-white'}">
+									{entry.entryName}
+									{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
+								</p>
+								<p class="text-xs text-gray-500">{entry.expand?.user?.displayName ?? ''}</p>
+							</td>
+
+							<!-- Status -->
+							<td class="px-3 py-2.5 whitespace-nowrap">
+								<span class="text-xs font-medium {statusColors[entry.status] ?? 'text-gray-400'}">
+									{entry.status === 'active'
+										? '● Active'
+										: entry.status === 'winner'
+											? '🏆'
+											: `Out Wk ${entry.eliminatedWeek ?? '?'}`}
+								</span>
+							</td>
+
+							<!-- Past-deadline pick cells (visible to everyone) -->
+							{#each visibleWeeks as week}
+								{@const cell = pickGrid[entry.id]?.[week.id]}
+								<td class="px-2 py-2 text-center align-middle">
+									{#if cell}
+										<div class="flex flex-col items-center gap-0.5">
+											{#each cell.teams as abbr}
+												<img
+													src={teamLogoUrl(abbr)}
+													alt={abbr}
+													title="{abbr}{cell.isAutoPick ? ' (auto-pick)' : ''}"
+													class="h-6 w-6 object-contain {cell.isAutoPick ? 'opacity-40 grayscale' : ''}"
+												/>
+											{/each}
+											{#if cell.isAutoPick}
+												<span class="text-[9px] leading-none text-orange-500">auto</span>
+											{/if}
+										</div>
+									{:else if isElim && entry.eliminatedWeek && week.week >= entry.eliminatedWeek}
+										<span class="text-gray-700 text-xs">—</span>
 									{:else}
-										—
+										<!-- Missed pick — show pending auto-pick team faded -->
+										{@const autoPick = week.expand?.biggestFavoriteTeam}
+										{#if autoPick}
+											<div class="flex flex-col items-center gap-0.5" title="Auto-pick pending: {autoPick.abbreviation}">
+												<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation}
+													class="h-6 w-6 object-contain opacity-20" />
+												<span class="text-[9px] leading-none text-orange-700">?</span>
+											</div>
+										{:else}
+											<span class="text-[10px] text-red-900">✗</span>
+										{/if}
 									{/if}
 								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</section>
+							{/each}
+
+							<!-- Open week cells -->
+							{#each openWeeks as week}
+								{@const cell = pickGrid[entry.id]?.[week.id]}
+								<td class="px-2 py-2 text-center align-middle">
+									{#if isMe && cell}
+										<!-- Own pick — visible only to the owner -->
+										<div class="flex flex-col items-center gap-0.5">
+											{#each cell.teams as abbr}
+												<div class="relative">
+													<img
+														src={teamLogoUrl(abbr)}
+														alt={abbr}
+														title="Your pick: {abbr}"
+														class="h-6 w-6 object-contain"
+													/>
+												</div>
+											{/each}
+											<!-- Small "you" indicator -->
+											<span class="text-[9px] leading-none text-[#c9a84c]/60">you</span>
+										</div>
+									{:else if isMe && !cell}
+										<!-- Own entry, no pick yet -->
+										<a href="/dashboard/entries/{entry.id}"
+											class="text-[10px] text-yellow-600 hover:text-yellow-400 underline underline-offset-2">
+											Pick
+										</a>
+									{:else}
+										<!-- Other entries — hidden until deadline -->
+										<span class="text-gray-800 text-xs select-none">🔒</span>
+									{/if}
+								</td>
+							{/each}
+
+						</tr>
+					{/each}
+
+					{#if filteredEntries().length === 0}
+						<tr>
+							<td colspan={2 + visibleWeeks.length + openWeeks.length}
+								class="px-4 py-8 text-center text-sm text-gray-600">
+								No entries match your filters.
+							</td>
+						</tr>
+					{/if}
+				</tbody>
+			</table>
+		</div>
+
+		<!-- ── Legend ────────────────────────────────────────────────────────── -->
+		<div class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/75 px-4 py-3 text-xs text-gray-600 backdrop-blur-sm">
+			<span class="flex items-center gap-1.5">
+				<span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>Locked
+			</span>
+			<span class="flex items-center gap-1.5">
+				<span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span>Results pending
+			</span>
+			<span class="flex items-center gap-1.5">
+				<span class="h-1.5 w-1.5 rounded-full bg-gray-600"></span>Complete
+			</span>
+			<span class="flex items-center gap-1.5">
+				<img src={teamLogoUrl('DAL')} alt="" class="h-3.5 w-3.5 opacity-20 grayscale" />
+				Auto-pick pending
+			</span>
+			<span class="flex items-center gap-1.5">
+				<span class="text-[#c9a84c]/60 text-[10px]">you</span>
+				Your entry / pick
+			</span>
+			<span class="flex items-center gap-1.5">
+				<span class="text-gray-800">🔒</span>
+				Hidden until deadline
+			</span>
+		</div>
+	{/if}
 
 {/if}

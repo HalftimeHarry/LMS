@@ -2,6 +2,28 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import { SeasonProvider, EntryProvider, WeekProvider } from '$lib/providers';
 import type { PageServerLoad } from './$types';
 
+function buildStats(entries: any[], season: any, totalUsers: number) {
+	const paidLms        = entries.filter(e => e.paid && e.entryType === 'lms'         && e.paymentMethod !== 'free');
+	const paidSecondHalf = entries.filter(e => e.paid && e.entryType === 'second_half' && e.paymentMethod !== 'free');
+	const freeEntries    = entries.filter(e => e.paid && e.paymentMethod === 'free');
+	return {
+		totalUsers,
+		totalEntries:      entries.length,
+		lmsEntries:        entries.filter(e => e.entryType === 'lms').length,
+		secondHalfEntries: entries.filter(e => e.entryType === 'second_half').length,
+		paidEntries:       entries.filter(e => e.paid).length,
+		freeEntries:       freeEntries.length,
+		pendingPayment:    entries.filter(e => e.status === 'pending_payment').length,
+		activeEntries:     entries.filter(e => e.status === 'active').length,
+		eliminatedEntries: entries.filter(e => e.status === 'eliminated').length,
+		lmsPot:            paidLms.length        * (season?.lmsEntryFee        ?? 0),
+		secondHalfPot:     paidSecondHalf.length * (season?.secondHalfEntryFee ?? 0),
+		potEstimate:
+			paidLms.length        * (season?.lmsEntryFee        ?? 0) +
+			paidSecondHalf.length * (season?.secondHalfEntryFee ?? 0)
+	};
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	const pb = await pbAdmin();
 
@@ -9,48 +31,49 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const entryProvider  = new EntryProvider(pb);
 	const weekProvider   = new WeekProvider(pb);
 
-	const seasons = await seasonProvider.getAll();
-	const activeSeason = seasons.find(s => s.status === 'active' || s.status === 'open') ?? null;
+	const seasons      = await seasonProvider.getAll();
+	const activeSeasons = seasons.filter(s => s.status === 'active' || s.status === 'open');
+	// Default selected season: first LMS one, fallback to first active
+	const activeSeason = activeSeasons.find(s => !s.name?.toLowerCase().includes('second half'))
+		?? activeSeasons[0]
+		?? null;
 
-	const [allEntries, users, currentWeek, pendingPaymentEntries] = await Promise.all([
-		entryProvider.getStatsFields(activeSeason?.id),
-		pb.collection('users').getList(1, 1, { fields: 'id' }),
-		activeSeason ? weekProvider.getCurrentWeek(activeSeason.id) : Promise.resolve(null),
-		activeSeason
-			? entryProvider.getAll({ seasonId: activeSeason.id, status: 'pending_payment' })
-			: Promise.resolve([])
+	const [users] = await Promise.all([
+		pb.collection('users').getList(1, 1, { fields: 'id' })
 	]);
 
-	const seasonEntries  = allEntries; // already filtered to activeSeason by getStatsFields
+	// Load stats + pending entries for every active season in parallel
+	const seasonDataMap: Record<string, {
+		stats: ReturnType<typeof buildStats>;
+		currentWeek: any;
+		pendingPaymentEntries: any[];
+	}> = {};
 
-	const paidLms        = seasonEntries.filter(e => e.paid && e.entryType === 'lms'         && e.paymentMethod !== 'free');
-	const paidSecondHalf = seasonEntries.filter(e => e.paid && e.entryType === 'second_half' && e.paymentMethod !== 'free');
-	const freeEntries    = seasonEntries.filter(e => e.paid && e.paymentMethod === 'free');
+	await Promise.all(activeSeasons.map(async (season) => {
+		const [entries, currentWeek, pendingEntries] = await Promise.all([
+			entryProvider.getStatsFields(season.id),
+			weekProvider.getCurrentWeek(season.id),
+			entryProvider.getAll({ seasonId: season.id, status: 'pending_payment' })
+		]);
+		seasonDataMap[season.id] = {
+			stats:                buildStats(entries, season, users.totalItems),
+			currentWeek,
+			pendingPaymentEntries: pendingEntries.slice(0, 5)
+		};
+	}));
 
-	const stats = {
-		totalUsers:        users.totalItems,
-		totalEntries:      seasonEntries.length,
-		lmsEntries:        seasonEntries.filter(e => e.entryType === 'lms').length,
-		secondHalfEntries: seasonEntries.filter(e => e.entryType === 'second_half').length,
-		paidEntries:       seasonEntries.filter(e => e.paid).length,
-		freeEntries:       freeEntries.length,
-		pendingPayment:    seasonEntries.filter(e => e.status === 'pending_payment').length,
-		activeEntries:     seasonEntries.filter(e => e.status === 'active').length,
-		eliminatedEntries: seasonEntries.filter(e => e.status === 'eliminated').length,
-		lmsPot:            paidLms.length        * (activeSeason?.lmsEntryFee        ?? 0),
-		secondHalfPot:     paidSecondHalf.length * (activeSeason?.secondHalfEntryFee ?? 0),
-		potEstimate:
-			paidLms.length        * (activeSeason?.lmsEntryFee        ?? 0) +
-			paidSecondHalf.length * (activeSeason?.secondHalfEntryFee ?? 0)
-	};
+	const defaultData = activeSeason ? seasonDataMap[activeSeason.id] : null;
 
 	return {
-		role: locals.role as string,
+		role:          locals.role as string,
 		seasons,
+		activeSeasons,
 		activeSeason,
-		currentWeek,
-		pendingPaymentEntries: pendingPaymentEntries.slice(0, 5), // top 5 for quick action
-		pendingPaymentCount:   stats.pendingPayment,
-		stats
+		seasonDataMap,
+		// Top-level defaults (for the initially selected season)
+		currentWeek:           defaultData?.currentWeek           ?? null,
+		pendingPaymentEntries: defaultData?.pendingPaymentEntries  ?? [],
+		pendingPaymentCount:   defaultData?.stats.pendingPayment   ?? 0,
+		stats:                 defaultData?.stats                  ?? buildStats([], null, users.totalItems)
 	};
 };

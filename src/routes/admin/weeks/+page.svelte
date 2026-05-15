@@ -151,14 +151,26 @@
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<label for="secondHalfPicksPerWeek" class="text-xs text-gray-400">2nd Half picks override</label>
+				<div class="flex items-center gap-1.5">
+					<label for="secondHalfPicksPerWeek" class="text-xs text-gray-400">2nd Half picks override</label>
+					<span
+						title="Second Half players normally pick the same number of teams every week (set on the season). Use this to override that count for a specific week only — e.g. bump to 2 picks for a playoff week or drop to 1 for a short week. Leave blank to use the season default."
+						class="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-600 text-[10px] text-gray-500 hover:border-gray-400 hover:text-gray-300"
+					>?</span>
+				</div>
 				<select id="secondHalfPicksPerWeek" name="secondHalfPicksPerWeek"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
 					<option value="">Season default</option>
-					<option value="1">1</option>
-					<option value="2">2</option>
-					<option value="3">3</option>
+					<option value="1">1 pick</option>
+					<option value="2">2 picks</option>
+					<option value="3">3 picks</option>
 				</select>
+				<p class="text-xs text-gray-600">
+					Overrides the season default for this week only.
+					{#if data.activeSeason?.secondHalfPicksPerWeek}
+						Season default: {data.activeSeason.secondHalfPicksPerWeek} pick{data.activeSeason.secondHalfPicksPerWeek > 1 ? 's' : ''}.
+					{/if}
+				</p>
 			</div>
 
 			<div class="flex flex-col gap-1">
@@ -224,6 +236,19 @@
 							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[week.status] ?? ''}">
 								{week.status.replace('_', ' ')}
 							</span>
+
+
+							<!-- Unlock (locked → open) -->
+							{#if week.status === 'locked'}
+								<form method="POST" action="?/setStatus" use:enhance>
+									<input type="hidden" name="id" value={week.id} />
+									<input type="hidden" name="status" value="open" />
+									<button type="submit"
+										class="rounded border border-gray-600 px-3 py-1 text-xs text-gray-400 transition hover:border-gray-400 hover:text-white">
+										↩ Unlock
+									</button>
+								</form>
+							{/if}
 
 							<!-- Advance status -->
 							{#if week.status !== 'complete'}
