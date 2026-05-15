@@ -20,6 +20,13 @@
 	};
 
 	let createLoading = $state(false);
+	let bulkLoading   = $state(false);
+
+	const startWeek = $derived(ctrl.poolType === 'second_half' ? 10 : 1);
+	const missingWeeks = $derived(
+		Array.from({ length: 18 - startWeek + 1 }, (_, i) => i + startWeek)
+			.filter(w => !(data.existingWeekNumbers ?? []).includes(w))
+	);
 
 	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -87,6 +94,31 @@
 	</div>
 {:else}
 
+	<!-- Bulk create banner -->
+	{#if missingWeeks.length > 0}
+		<div class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-yellow-800 bg-yellow-950/30 px-4 py-3">
+			<p class="text-sm text-yellow-300">
+				<span class="font-semibold">{missingWeeks.length} week{missingWeeks.length === 1 ? '' : 's'} missing</span>
+				<span class="text-yellow-500"> — weeks {missingWeeks[0]}–{missingWeeks[missingWeeks.length - 1]} not yet created</span>
+			</p>
+			<form
+				method="POST"
+				action="?/bulkCreateWeeks"
+				use:enhance={() => {
+					bulkLoading = true;
+					return async ({ update }) => { await update(); bulkLoading = false; };
+				}}
+			>
+				<input type="hidden" name="seasonId"  value={data.activeSeason.id} />
+				<input type="hidden" name="poolType"  value={ctrl.poolType} />
+				<button type="submit" disabled={bulkLoading}
+					class="rounded bg-yellow-600 px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-yellow-400 disabled:opacity-50">
+					{bulkLoading ? 'Creating…' : `Bulk create ${missingWeeks.length} week${missingWeeks.length === 1 ? '' : 's'}`}
+				</button>
+			</form>
+		</div>
+	{/if}
+
 	<!-- Create week form -->
 	<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 		<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Add Week</h2>
@@ -150,11 +182,27 @@
 	{:else}
 		<div class="flex flex-col gap-3">
 			{#each ctrl.filtered as week}
+				{@const pickCount   = (data.pickCountsByWeek ?? {})[week.id] ?? 0}
+				{@const activeCount = data.activeEntryCount ?? 0}
+				{@const missing     = Math.max(0, activeCount - pickCount)}
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
 						<div>
-							<p class="font-semibold text-white">Week {week.week}</p>
+							<div class="flex items-center gap-3">
+								<p class="font-semibold text-white">Week {week.week}</p>
+								{#if activeCount > 0}
+									<span class="rounded border px-2 py-0.5 text-xs
+										{missing === 0
+											? 'border-green-800 text-green-400'
+											: missing <= 3
+												? 'border-yellow-800 text-yellow-400'
+												: 'border-red-900 text-red-400'}">
+										{pickCount}/{activeCount} picks
+										{#if missing > 0}· {missing} missing{/if}
+									</span>
+								{/if}
+							</div>
 							<p class="mt-0.5 text-sm text-gray-400">
 								Deadline: {new Date(week.deadline).toLocaleString('en-US', {
 									weekday: 'short', month: 'short', day: 'numeric',
@@ -166,7 +214,6 @@
 									Auto-pick: {week.expand.biggestFavoriteTeam.city} {week.expand.biggestFavoriteTeam.name}
 								</p>
 							{/if}
-
 							{#if week.notes}
 								<p class="mt-1 text-xs text-gray-500">{week.notes}</p>
 							{/if}

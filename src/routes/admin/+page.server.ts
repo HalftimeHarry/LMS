@@ -1,22 +1,29 @@
 import { pbAdmin } from '$lib/server/pb-admin';
+import { SeasonProvider, EntryProvider, WeekProvider } from '$lib/providers';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const pb = await pbAdmin();
 
-	const [seasons, allEntries, users] = await Promise.all([
-		pb.collection('seasons').getFullList({ sort: '-year' }),
-		pb.collection('entries').getFullList({ fields: 'id,status,paid,paymentMethod,season,entryType' }),
-		pb.collection('users').getList(1, 1, { fields: 'id' })
+	const seasonProvider = new SeasonProvider(pb);
+	const entryProvider  = new EntryProvider(pb);
+	const weekProvider   = new WeekProvider(pb);
+
+	const seasons = await seasonProvider.getAll();
+	const activeSeason = seasons.find(s => s.status === 'active' || s.status === 'open') ?? null;
+
+	const [allEntries, users, currentWeek, pendingPaymentEntries] = await Promise.all([
+		entryProvider.getStatsFields(activeSeason?.id),
+		pb.collection('users').getList(1, 1, { fields: 'id' }),
+		activeSeason ? weekProvider.getCurrentWeek(activeSeason.id) : Promise.resolve(null),
+		activeSeason
+			? entryProvider.getAll({ seasonId: activeSeason.id, status: 'pending_payment' })
+			: Promise.resolve([])
 	]);
 
-	const activeSeason = seasons.find(s => s.status === 'active' || s.status === 'open') ?? null;
-	const seasonEntries = activeSeason
-		? allEntries.filter(e => e.season === activeSeason.id)
-		: allEntries;
+	const seasonEntries  = allEntries; // already filtered to activeSeason by getStatsFields
 
-	// Free entries count as paid but contribute $0 to the pot
-	const paidLms        = seasonEntries.filter(e => e.paid && e.entryType === 'lms' && e.paymentMethod !== 'free');
+	const paidLms        = seasonEntries.filter(e => e.paid && e.entryType === 'lms'         && e.paymentMethod !== 'free');
 	const paidSecondHalf = seasonEntries.filter(e => e.paid && e.entryType === 'second_half' && e.paymentMethod !== 'free');
 	const freeEntries    = seasonEntries.filter(e => e.paid && e.paymentMethod === 'free');
 
@@ -30,7 +37,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		pendingPayment:    seasonEntries.filter(e => e.status === 'pending_payment').length,
 		activeEntries:     seasonEntries.filter(e => e.status === 'active').length,
 		eliminatedEntries: seasonEntries.filter(e => e.status === 'eliminated').length,
-		// Pot only counts paying entries — free entries are excluded
 		lmsPot:            paidLms.length        * (activeSeason?.lmsEntryFee        ?? 0),
 		secondHalfPot:     paidSecondHalf.length * (activeSeason?.secondHalfEntryFee ?? 0),
 		potEstimate:
@@ -42,6 +48,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		role: locals.role as string,
 		seasons,
 		activeSeason,
+		currentWeek,
+		pendingPaymentEntries: pendingPaymentEntries.slice(0, 5), // top 5 for quick action
+		pendingPaymentCount:   stats.pendingPayment,
 		stats
 	};
 };
