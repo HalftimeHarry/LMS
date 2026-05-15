@@ -27,7 +27,7 @@
 
 	const paymentMethods = ['check', 'venmo', 'paypal', 'zelle', 'cash', 'free'];
 
-	let selectedMethod: Record<string, string> = {};
+	let selectedMethod: Record<string, string> = $state({});
 	let createLoading = $state(false);
 	let showCreateForm = $state(false);
 
@@ -36,9 +36,9 @@
 	let selectedUserId = $state('');
 	let dropdownOpen   = $state(false);
 
-	const participants = data.participants as any[];
-	const seasons      = data.seasons      as any[];
-	const entries      = data.entries      as any[];
+	const participants = $derived(data.participants as any[]);
+	const seasons      = $derived(data.seasons      as any[]);
+	const entries      = $derived(data.entries      as any[]);
 
 	const filteredParticipants = $derived(
 		playerSearch.trim() === ''
