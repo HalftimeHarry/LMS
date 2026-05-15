@@ -6,10 +6,11 @@
 	let loading = $state(false);
 
 	// Track selected season and entry type to show the correct fee
-	let selectedSeasonId = $state(data.seasons[0]?.id ?? '');
+	const seasons = data.seasons as any[];
+	let selectedSeasonId = $state(seasons[0]?.id ?? '');
 	let entryType = $state(data.defaultEntryType);
 
-	const selectedSeason = $derived(data.seasons.find(s => s.id === selectedSeasonId));
+	const selectedSeason = $derived(seasons.find((s: any) => s.id === selectedSeasonId));
 	const seasonIsActive = $derived(selectedSeason?.status === 'active');
 
 	// Fee shown in the info blurb
@@ -51,7 +52,7 @@
 			<select id="seasonId" name="seasonId" required
 				bind:value={selectedSeasonId}
 				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
-				{#each data.seasons as season}
+				{#each seasons as season}
 					<option value={season.id}>{season.name}</option>
 				{/each}
 			</select>

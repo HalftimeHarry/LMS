@@ -7,7 +7,7 @@
 	// Group by conference → division
 	const grouped = $derived(() => {
 		const map: Record<string, Record<string, Team[]>> = {};
-		for (const team of data.teams as Team[]) {
+		for (const team of data.teams as unknown as Team[]) {
 			if (!map[team.conference]) map[team.conference] = {};
 			if (!map[team.conference][team.division]) map[team.conference][team.division] = [];
 			map[team.conference][team.division].push(team);

@@ -4,6 +4,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
+	if (locals.role === 'super_admin' || locals.role === 'pool_admin') redirect(302, '/admin');
 
 	let pb: Awaited<ReturnType<typeof pbAdmin>>;
 	try {

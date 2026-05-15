@@ -11,29 +11,31 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"seed:teams": "tsx scripts/seed-nfl-teams.ts",
-		"setup:pb":            "tsx scripts/setup-pocketbase.ts",
-		"migrate:entry-types": "tsx scripts/migrate-entry-types.ts"
+		"setup:pb": "tsx scripts/setup-pocketbase.ts",
+		"migrate:entry-types": "tsx scripts/migrate-entry-types.ts",
+		"migrate:season-picks-config": "tsx scripts/migrate-season-picks-config.ts"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-netlify": "^4.0.0",
 		"@sveltejs/kit": "^2.57.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/vite": "^4.0.0",
-		"tsx": "^4.19.0",
+		"@types/node": "^25.7.0",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
 		"tailwindcss": "^4.0.0",
+		"tsx": "^4.19.0",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7"
 	},
 	"dependencies": {
 		"bits-ui": "^1.0.0",
-		"dotenv": "^16.4.5",
-		"zod": "^3.23.8",
 		"clsx": "^2.1.1",
+		"dotenv": "^16.4.5",
 		"lucide-svelte": "^0.468.0",
 		"pocketbase": "^0.26.9",
 		"tailwind-merge": "^2.5.5",
-		"tailwind-variants": "^0.3.0"
+		"tailwind-variants": "^0.3.0",
+		"zod": "^3.23.8"
 	}
 }

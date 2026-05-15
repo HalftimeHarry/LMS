@@ -17,9 +17,10 @@
 		winner:          'Winner',
 	};
 
-	const active    = $derived(data.entries.filter((e: { status: string }) => e.status === 'active'));
-	const pending   = $derived(data.entries.filter((e: { status: string }) => e.status === 'pending_payment'));
-	const eliminated= $derived(data.entries.filter((e: { status: string }) => e.status === 'eliminated'));
+	const allEntries = data.entries as any[];
+	const active     = $derived(allEntries.filter((e) => e.status === 'active'));
+	const pending    = $derived(allEntries.filter((e) => e.status === 'pending_payment'));
+	const eliminated = $derived(allEntries.filter((e) => e.status === 'eliminated'));
 </script>
 
 <svelte:head><title>My Entries — LMS Pool</title></svelte:head>
@@ -34,7 +35,7 @@
 	{/if}
 </div>
 
-{#if data.entries.length === 0}
+{#if allEntries.length === 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
 		<p class="text-gray-400">You have no entries yet.</p>
 		{#if data.seasons.length > 0}
@@ -62,7 +63,7 @@
 
 	<!-- Entry list -->
 	<div class="flex flex-col gap-3">
-		{#each data.entries as entry}
+		{#each allEntries as entry}
 			<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div>

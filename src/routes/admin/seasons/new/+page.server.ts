@@ -9,26 +9,27 @@ export const actions: Actions = {
 
 		const raw    = await request.formData();
 		const parsed = seasonSchema.safeParse({
-			name:                (raw.get('name') as string)?.trim(),
-			year:                raw.get('year'),
-			lmsEntryFee:         raw.get('lmsEntryFee'),
-			secondHalfEntryFee:  raw.get('secondHalfEntryFee'),
-			paymentDeadline:     raw.get('paymentDeadline')   || undefined,
-			firstPickDeadline:   raw.get('firstPickDeadline') || undefined,
-			regularSeasonOnly:   raw.get('regularSeasonOnly') === 'on',
-			notes:               (raw.get('notes') as string) || undefined
+			name:                   (raw.get('name') as string)?.trim(),
+			year:                   raw.get('year'),
+			lmsEntryFee:            raw.get('lmsEntryFee'),
+			secondHalfEntryFee:     raw.get('secondHalfEntryFee'),
+			secondHalfPicksPerWeek: raw.get('secondHalfPicksPerWeek') || 1,
+			paymentDeadline:        raw.get('paymentDeadline')   || undefined,
+			firstPickDeadline:      raw.get('firstPickDeadline') || undefined,
+			regularSeasonOnly:      raw.get('regularSeasonOnly') === 'on',
+			notes:                  (raw.get('notes') as string) || undefined
 		});
 		if (!parsed.success) {
 			return fail(400, { error: parsed.error.issues[0].message });
 		}
-		const { name, year, lmsEntryFee, secondHalfEntryFee, paymentDeadline, firstPickDeadline, regularSeasonOnly, notes } = parsed.data;
+		const { name, year, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek, paymentDeadline, firstPickDeadline, regularSeasonOnly, notes } = parsed.data;
 
 		// datetime-local sends "YYYY-MM-DDTHH:MM" — PocketBase needs full ISO with seconds
 		const toIso = (v?: string) => v ? new Date(v).toISOString().replace('T', ' ') : null;
 
 		try {
 			await pb.collection('seasons').create({
-				year, name, lmsEntryFee, secondHalfEntryFee,
+				year, name, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek,
 				status: 'setup',
 				regularSeasonOnly,
 				paymentDeadline:   toIso(paymentDeadline),

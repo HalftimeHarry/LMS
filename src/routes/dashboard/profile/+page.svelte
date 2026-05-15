@@ -12,7 +12,7 @@
 
 	const role = $derived(roleLabel[data.user.role] ?? { label: data.user.role, color: 'bg-gray-800 text-gray-400 border-gray-700' });
 
-	let displayName   = $state(data.user.displayName as string);
+	let displayName   = $state(data.user.displayName as string ?? '');
 	let profileLoading = $state(false);
 	let passwordLoading = $state(false);
 
