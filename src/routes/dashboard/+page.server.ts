@@ -25,7 +25,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
 
-	let currentWeek = null;
+	let currentWeek: any = null;
 	if (activeSeason) {
 		currentWeek = await pb.collection('weekly_settings').getFirstListItem(
 			`season = "${activeSeason.id}" && (status = "open" || status = "locked")`,
@@ -33,7 +33,35 @@ export const load: PageServerLoad = async ({ locals }) => {
 		).catch(() => null);
 	}
 
+	// Fetch all picks for active entries — current week pick (with teams) + total used team count.
 	const e = entries as any[];
+	const pickByEntry: Record<string, any> = {};
+	const usedTeamCountByEntry: Record<string, number> = {};
+
+	const activeIds = e.filter(x => x.status === 'active').map(x => x.id);
+	if (activeIds.length) {
+		const filter = activeIds.map(id => `entry = "${id}"`).join(' || ');
+
+		// All picks across all weeks — to count used teams
+		const allPicks = await pb.collection('picks').getFullList({
+			filter,
+			expand: 'pickedTeams',
+			sort:   '-id'
+		}).catch(() => []);
+
+		// Count distinct teams used per entry
+		const usedTeams: Record<string, Set<string>> = {};
+		for (const p of allPicks) {
+			if (!usedTeams[p.entry]) usedTeams[p.entry] = new Set();
+			for (const t of p.expand?.pickedTeams ?? []) usedTeams[p.entry].add(t.id);
+			// Also index the current week's pick for the badge
+			if (currentWeek && p.week === currentWeek.id) pickByEntry[p.entry] = p;
+		}
+		for (const id of activeIds) {
+			usedTeamCountByEntry[id] = usedTeams[id]?.size ?? 0;
+		}
+	}
+
 	return {
 		user: {
 			id:          locals.user.id,
@@ -45,6 +73,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		pendingEntries:    e.filter(x => x.status === 'pending_payment'),
 		eliminatedEntries: e.filter(x => x.status === 'eliminated'),
 		activeSeason,
-		currentWeek
+		currentWeek,
+		pickByEntry,
+		usedTeamCountByEntry
 	};
 };
