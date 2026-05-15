@@ -5,18 +5,18 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let loading = $state(false);
 
-	// Track selected season and entry type to show the correct fee
 	const seasons = data.seasons as any[];
 	let selectedSeasonId = $state(seasons[0]?.id ?? '');
-	let entryType = $state(data.defaultEntryType);
+	let entryType        = $state(data.defaultEntryType as 'lms' | 'second_half');
 
-	const selectedSeason = $derived(seasons.find((s: any) => s.id === selectedSeasonId));
-	const seasonIsActive = $derived(selectedSeason?.status === 'active');
+	const selectedSeason   = $derived(seasons.find((s: any) => s.id === selectedSeasonId));
+	const lmsOpen          = $derived(data.lmsOpen        as boolean);
+	const secondHalfOpen   = $derived(data.secondHalfOpen as boolean);
 
 	// Fee shown in the info blurb
 	const entryFee = $derived(
 		entryType === 'lms'
-			? (selectedSeason?.lmsEntryFee ?? '—')
+			? (selectedSeason?.lmsEntryFee        ?? '—')
 			: (selectedSeason?.secondHalfEntryFee ?? '—')
 	);
 </script>
@@ -29,6 +29,7 @@
 </div>
 
 <div class="max-w-lg rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
+
 	<p class="mb-5 text-sm text-gray-400">
 		Entry fee: <strong class="text-white">${entryFee}</strong> — paid separately to the Comish.
 		Your entry will show as <em>Pending Payment</em> until confirmed by an admin.
@@ -47,52 +48,70 @@
 		class="flex flex-col gap-4"
 	>
 		<!-- Season -->
-		<div class="flex flex-col gap-1">
-			<label for="seasonId" class="text-xs font-medium text-gray-400">Season</label>
-			<select id="seasonId" name="seasonId" required
-				bind:value={selectedSeasonId}
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
-				{#each seasons as season}
-					<option value={season.id}>{season.name}</option>
-				{/each}
-			</select>
-		</div>
+		{#if seasons.length > 1}
+			<div class="flex flex-col gap-1">
+				<label for="seasonId" class="text-xs font-medium text-gray-400">Season</label>
+				<select id="seasonId" name="seasonId" required
+					bind:value={selectedSeasonId}
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
+					{#each seasons as season}
+						<option value={season.id}>{season.name}</option>
+					{/each}
+				</select>
+			</div>
+		{:else}
+			<!-- Single season — hidden field, show name as context -->
+			<input type="hidden" name="seasonId" value={seasons[0]?.id} />
+			<p class="text-xs text-gray-500">Season: <span class="text-gray-300">{seasons[0]?.name}</span></p>
+		{/if}
 
-		<!-- Entry type -->
+		<!-- Entry type — only show what's open -->
 		<div class="flex flex-col gap-2">
-			<p class="text-xs font-medium text-gray-400">Entry type</p>
+			<p class="text-xs font-medium text-gray-400">Pool type</p>
 			<div class="grid grid-cols-2 gap-3">
-				<!-- LMS always available -->
-				<label class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition
-					{entryType === 'lms'
-						? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)]'
-						: 'border-gray-700 hover:border-gray-500'}">
+
+				<!-- LMS -->
+				<label class="flex items-start gap-3 rounded-lg border p-3 transition
+					{!lmsOpen
+						? 'cursor-not-allowed border-gray-800 opacity-40'
+						: entryType === 'lms'
+							? 'cursor-pointer border-[#c9a84c] bg-[rgba(201,168,76,0.08)]'
+							: 'cursor-pointer border-gray-700 hover:border-gray-500'}">
 					<input type="radio" name="entryType" value="lms"
-						bind:group={entryType} class="mt-0.5 accent-[#c9a84c]" />
+						bind:group={entryType}
+						disabled={!lmsOpen}
+						class="mt-0.5 accent-[#c9a84c]" />
 					<div>
 						<p class="text-sm font-semibold text-white">LMS Full Season</p>
-						<p class="text-xs text-gray-500">Starts Week 1 · ${selectedSeason?.lmsEntryFee ?? '—'}</p>
+						{#if lmsOpen}
+							<p class="text-xs text-gray-500">Pick the <strong class="text-red-400">loser</strong> · Weeks 1–18 · ${selectedSeason?.lmsEntryFee ?? '—'}</p>
+						{:else}
+							<p class="text-xs text-gray-600">Registration closed</p>
+						{/if}
 					</div>
 				</label>
 
-				<!-- Second Half only once season is active -->
+				<!-- Second Half -->
 				<label class="flex items-start gap-3 rounded-lg border p-3 transition
-					{!seasonIsActive
+					{!secondHalfOpen
 						? 'cursor-not-allowed border-gray-800 opacity-40'
 						: entryType === 'second_half'
-							? 'cursor-pointer border-[#c9a84c] bg-[rgba(201,168,76,0.08)]'
+							? 'cursor-pointer border-blue-600 bg-blue-950/30'
 							: 'cursor-pointer border-gray-700 hover:border-gray-500'}">
 					<input type="radio" name="entryType" value="second_half"
 						bind:group={entryType}
-						disabled={!seasonIsActive}
-						class="mt-0.5 accent-[#c9a84c]" />
+						disabled={!secondHalfOpen}
+						class="mt-0.5 accent-blue-500" />
 					<div>
 						<p class="text-sm font-semibold text-white">Second Half</p>
-						<p class="text-xs text-gray-500">
-							{seasonIsActive ? `Starts Week 10 · $${selectedSeason?.secondHalfEntryFee ?? '—'}` : 'Available once season starts'}
-						</p>
+						{#if secondHalfOpen}
+							<p class="text-xs text-gray-500">Pick the <strong class="text-green-400">winner</strong> · Weeks 10–18 · ${selectedSeason?.secondHalfEntryFee ?? '—'}</p>
+						{:else}
+							<p class="text-xs text-gray-600">Opens when season starts</p>
+						{/if}
 					</div>
 				</label>
+
 			</div>
 		</div>
 
@@ -107,7 +126,7 @@
 
 		<!-- Referred by -->
 		<div class="flex flex-col gap-1">
-			<label for="referredBy" class="text-xs font-medium text-gray-400">Referred by (optional)</label>
+			<label for="referredBy" class="text-xs font-medium text-gray-400">Referred by <span class="text-gray-600">(optional)</span></label>
 			<input id="referredBy" name="referredBy" type="text"
 				placeholder="Username of the player who referred you"
 				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />

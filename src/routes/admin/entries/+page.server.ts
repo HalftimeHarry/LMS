@@ -50,6 +50,8 @@ export const actions: Actions = {
 		}
 		const { seasonId, userId, entryType, count, baseName, referredBy = '' } = parsed.data;
 
+		// Admin bypasses entry window rules — no isLmsOpen/isSecondHalfOpen check here.
+		// Window enforcement only applies to participant self-registration.
 		const entryProvider = new EntryProvider(pb);
 		const existing      = await entryProvider.getAll({ seasonId, userId });
 		const offset        = existing.length;
