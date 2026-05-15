@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance, applyAction } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import type { ActionData } from './$types';
 
@@ -36,6 +36,7 @@
 				return async ({ result }) => {
 					loading = false;
 					if (result.type === 'redirect') {
+						await invalidateAll();
 						goto(result.location);
 					} else {
 						await applyAction(result);
