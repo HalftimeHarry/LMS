@@ -2,9 +2,15 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { createWeeksController } from '$lib/controllers';
 	import type { PageData, ActionData } from './$types';
+	import type { EntryType } from '$lib/providers';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const ctrl = createWeeksController(data.weeks as any[], (data.poolType ?? 'lms') as EntryType);
+	// Keep controller in sync when page data reloads
+	$effect(() => ctrl.setWeeks(data.weeks as any[]));
 
 	const statusColors: Record<string, string> = {
 		open:            'bg-blue-950/60 text-blue-400 border-blue-800',
@@ -13,38 +19,28 @@
 		complete:        'bg-gray-900 text-gray-500 border-gray-700',
 	};
 
-	const nextStatus: Record<string, { value: string; label: string }> = {
-		open:            { value: 'locked',          label: 'Lock' },
-		locked:          { value: 'results_pending', label: 'Results Pending' },
-		results_pending: { value: 'complete',        label: 'Complete' },
-		complete:        { value: 'complete',        label: 'Complete' },
-	};
-
-	// Favorite team selection per row
-	let favoriteTeam: Record<string, string> = $state({});
-	$effect(() => {
-		for (const w of data.weeks as unknown as { id: string; biggestFavoriteTeam: string }[]) {
-			if (!(w.id in favoriteTeam)) favoriteTeam[w.id] = w.biggestFavoriteTeam ?? '';
-		}
-	});
-
 	let createLoading = $state(false);
 
-	function switchSeason(id: string) {
+	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
-		params.set('season', id);
+		params.set(key, value);
 		goto(`?${params.toString()}`, { replaceState: true });
+	}
+
+	function switchSeason(id: string) { updateParam('season', id); }
+	function switchPoolType(type: EntryType) {
+		ctrl.poolType = type;
+		updateParam('poolType', type);
 	}
 
 	// Default deadline: next Thursday 3pm PST
 	function nextThursday(): string {
 		const now = new Date();
-		const day = now.getDay(); // 0=Sun … 4=Thu
+		const day = now.getDay();
 		const daysUntilThursday = (4 - day + 7) % 7 || 7;
 		const thu = new Date(now);
 		thu.setDate(now.getDate() + daysUntilThursday);
 		thu.setHours(15, 0, 0, 0);
-		// Format for datetime-local input
 		return thu.toISOString().slice(0, 16);
 	}
 </script>
@@ -53,16 +49,36 @@
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
 	<h1 class="text-2xl font-bold text-white">Weekly Settings</h1>
-	<!-- Season switcher -->
-	<select
-		value={data.activeSeason?.id ?? ''}
-		onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-		class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-	>
-		{#each data.seasons as s}
-			<option value={s.id}>{s.name}</option>
-		{/each}
-	</select>
+	<div class="flex flex-wrap items-center gap-3">
+		<select
+			value={data.activeSeason?.id ?? ''}
+			onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+		>
+			{#each data.seasons as s}
+				<option value={s.id}>{s.name}</option>
+			{/each}
+		</select>
+		<div class="flex overflow-hidden rounded border border-gray-700">
+			<button type="button" onclick={() => switchPoolType('lms')}
+				class="px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}"
+			>LMS — Pick Loser</button>
+			<button type="button" onclick={() => switchPoolType('second_half')}
+				class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}"
+			>2nd Half — Pick Winner</button>
+		</div>
+	</div>
+</div>
+
+<div class="mb-5 rounded-lg border px-4 py-3 text-sm {ctrl.poolType === 'lms' ? 'border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.06)] text-[#c9a84c]' : 'border-blue-800 bg-blue-950/40 text-blue-400'}">
+	{#if ctrl.poolType === 'lms'}
+		<strong>LMS</strong> — Players pick 1 team to <strong>lose</strong> each week. All weeks (1–18).
+	{:else}
+		<strong>Second Half</strong> — Players pick teams to <strong>win</strong>. Only weeks 10–18 shown.
+		{#if data.activeSeason?.secondHalfPicksPerWeek}
+			Season default: <strong>{data.activeSeason.secondHalfPicksPerWeek} pick{data.activeSeason.secondHalfPicksPerWeek > 1 ? 's' : ''}/week</strong>.
+		{/if}
+	{/if}
 </div>
 
 {#if !data.activeSeason}
@@ -127,13 +143,13 @@
 	</div>
 
 	<!-- Weeks list -->
-	{#if data.weeks.length === 0}
+	{#if ctrl.filtered.length === 0}
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
 			<p class="text-gray-400">No weeks set up yet for {data.activeSeason.name}.</p>
 		</div>
 	{:else}
 		<div class="flex flex-col gap-3">
-			{#each data.weeks as week}
+			{#each ctrl.filtered as week}
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
@@ -166,10 +182,10 @@
 							{#if week.status !== 'complete'}
 								<form method="POST" action="?/setStatus" use:enhance>
 									<input type="hidden" name="id" value={week.id} />
-									<input type="hidden" name="status" value={nextStatus[week.status].value} />
+									<input type="hidden" name="status" value={ctrl.nextStatus(week.status) ?? week.status} />
 									<button type="submit"
 										class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1 text-xs text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]">
-										→ {nextStatus[week.status].label}
+										→ {ctrl.advanceLabel(week.status)}
 									</button>
 								</form>
 							{/if}
@@ -179,7 +195,7 @@
 								<input type="hidden" name="id" value={week.id} />
 								<select
 									name="teamId"
-									bind:value={favoriteTeam[week.id]}
+									bind:value={ctrl.favoriteTeam[week.id]}
 									class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
 								>
 									<option value="">Auto-pick team…</option>

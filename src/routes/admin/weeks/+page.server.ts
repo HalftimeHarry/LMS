@@ -1,29 +1,32 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { fail } from '@sveltejs/kit';
+import { WeekProvider, SeasonProvider, TeamProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
+import type { EntryType } from '$lib/providers';
 
 export const load: PageServerLoad = async ({ url }) => {
-	const pb = await pbAdmin();
+	const pb       = await pbAdmin();
 	const seasonId = url.searchParams.get('season') ?? '';
+	const poolType = (url.searchParams.get('poolType') ?? 'lms') as EntryType;
+
+	const seasonProvider = new SeasonProvider(pb);
+	const weekProvider   = new WeekProvider(pb);
+	const teamProvider   = new TeamProvider(pb);
 
 	const [seasons, teams] = await Promise.all([
-		pb.collection('seasons').getFullList({ sort: '-year' }),
-		pb.collection('nfl_teams').getFullList({ sort: 'name' })
+		seasonProvider.getAll(),
+		teamProvider.getAll()
 	]);
 
 	const activeSeason = seasonId
-		? seasons.find((s) => s.id === seasonId) ?? seasons[0]
+		? seasons.find(s => s.id === seasonId) ?? seasons[0]
 		: seasons[0];
 
 	const weeks = activeSeason
-		? await pb.collection('weekly_settings').getFullList({
-				filter: `season = "${activeSeason.id}"`,
-				expand: 'biggestFavoriteTeam',
-				sort:   'week'
-		  })
+		? await weekProvider.getAll({ seasonId: activeSeason.id, poolType })
 		: [];
 
-	return { seasons, teams, weeks, activeSeason: activeSeason ?? null };
+	return { seasons, teams, weeks, activeSeason: activeSeason ?? null, poolType };
 };
 
 export const actions: Actions = {
@@ -31,18 +34,17 @@ export const actions: Actions = {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
-		const seasonId              = data.get('seasonId')  as string;
-		const week                  = Number(data.get('week'));
-		const deadline              = data.get('deadline')  as string;
-		const notes                 = (data.get('notes') as string | null) ?? '';
-		const picksOverrideRaw      = data.get('secondHalfPicksPerWeek') as string | null;
+		const seasonId               = data.get('seasonId') as string;
+		const week                   = Number(data.get('week'));
+		const deadline               = data.get('deadline') as string;
+		const notes                  = (data.get('notes') as string | null) ?? '';
+		const picksOverrideRaw       = data.get('secondHalfPicksPerWeek') as string | null;
 		const secondHalfPicksPerWeek = picksOverrideRaw ? Number(picksOverrideRaw) : null;
 
 		if (!seasonId || !week || !deadline) {
 			return fail(400, { error: 'Season, week number and deadline are required.' });
 		}
 
-		// Prevent duplicate week numbers in same season
 		const existing = await pb.collection('weekly_settings').getList(1, 1, {
 			filter: `season = "${seasonId}" && week = ${week}`
 		});
@@ -52,12 +54,8 @@ export const actions: Actions = {
 
 		try {
 			await pb.collection('weekly_settings').create({
-				season:   seasonId,
-				week,
-				deadline,
-				status:   'open',
-				notes:    notes || null,
-				// null means "use season default"; explicit value overrides for this week only
+				season: seasonId, week, deadline, status: 'open',
+				notes:  notes || null,
 				secondHalfPicksPerWeek: secondHalfPicksPerWeek ?? null
 			});
 		} catch (e: unknown) {
