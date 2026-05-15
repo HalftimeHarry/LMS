@@ -120,9 +120,25 @@ export const actions: Actions = {
 	},
 
 	deleteEntry: async ({ request }) => {
-		const pb = await pbAdmin();
+		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id   = data.get('id') as string;
+
+		// Fetch the entry with its season to check whether deletion is still allowed
+		let entry: any;
+		try {
+			entry = await pb.collection('entries').getOne(id, { expand: 'season' });
+		} catch {
+			return fail(404, { error: 'Entry not found.' });
+		}
+
+		const seasonStatus = entry.expand?.season?.status ?? '';
+		if (seasonStatus === 'active' || seasonStatus === 'complete') {
+			return fail(400, {
+				error: 'Entries cannot be deleted once the season has started. Edit the entry status instead.'
+			});
+		}
+
 		try {
 			await pb.collection('entries').delete(id);
 		} catch (e: unknown) {

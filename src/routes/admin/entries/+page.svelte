@@ -25,9 +25,9 @@
 		second_half:  'bg-blue-950/60 text-blue-400 border-blue-800',
 	};
 
-	const paymentMethods = ['check', 'venmo', 'paypal', 'zelle', 'cash'];
+	const paymentMethods = ['check', 'venmo', 'paypal', 'zelle', 'cash', 'free'];
 
-	let selectedMethod: Record<string, string> = {};
+	let selectedMethod: Record<string, string> = $state({});
 	let createLoading = $state(false);
 	let showCreateForm = $state(false);
 
@@ -36,16 +36,20 @@
 	let selectedUserId = $state('');
 	let dropdownOpen   = $state(false);
 
+	const participants = $derived(data.participants as any[]);
+	const seasons      = $derived(data.seasons      as any[]);
+	const entries      = $derived(data.entries      as any[]);
+
 	const filteredParticipants = $derived(
 		playerSearch.trim() === ''
-			? data.participants
-			: data.participants.filter((u: { displayName: string; email: string }) =>
+			? participants
+			: participants.filter((u) =>
 				`${u.displayName} ${u.email}`.toLowerCase().includes(playerSearch.toLowerCase())
 			)
 	);
 
 	const selectedUser = $derived(
-		data.participants.find((u: { id: string }) => u.id === selectedUserId)
+		participants.find((u) => u.id === selectedUserId)
 	);
 
 	function selectUser(u: { id: string; displayName: string; email: string }) {
@@ -56,8 +60,8 @@
 
 	// Default to the active/open season
 	const defaultSeason = $derived(
-		data.seasons.find((s: { status: string }) => s.status === 'open' || s.status === 'active')
-		?? data.seasons[0]
+		seasons.find((s) => s.status === 'open' || s.status === 'active')
+		?? seasons[0]
 		?? null
 	);
 	let selectedSeasonId = $state('');
@@ -76,8 +80,8 @@
 	let entrySearch = $state('');
 	const visibleEntries = $derived(
 		entrySearch.trim() === ''
-			? data.entries
-			: data.entries.filter((e: { entryName: string; expand?: { user?: { displayName?: string; email?: string } } }) =>
+			? entries
+			: entries.filter((e) =>
 				`${e.entryName} ${e.expand?.user?.displayName ?? ''} ${e.expand?.user?.email ?? ''}`
 					.toLowerCase()
 					.includes(entrySearch.toLowerCase())
@@ -295,7 +299,7 @@
 		{/if}
 	</div>
 	<p class="text-sm text-gray-500">
-		{visibleEntries.length}{visibleEntries.length !== data.entries.length ? ` of ${data.entries.length}` : ''} entr{data.entries.length === 1 ? 'y' : 'ies'}
+		{visibleEntries.length}{visibleEntries.length !== entries.length ? ` of ${entries.length}` : ''} entr{entries.length === 1 ? 'y' : 'ies'}
 	</p>
 </div>
 
@@ -318,8 +322,12 @@
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<!-- Entry info -->
 					<div>
-
-						<p class="font-semibold text-white">{entry.entryName}</p>
+						<div class="flex flex-wrap items-center gap-2">
+							<p class="font-semibold text-white">{entry.entryName}</p>
+							<span class="rounded border px-2 py-0.5 text-xs font-medium {entryTypeBadge[entry.entryType] ?? 'border-gray-700 text-gray-400'}">
+								{entry.entryType === 'lms' ? 'LMS' : '2nd Half'}
+							</span>
+						</div>
 
 						<p class="mt-0.5 text-sm text-gray-400">
 							{entry.expand?.user?.displayName ?? entry.expand?.user?.email ?? 'Unknown user'}
@@ -330,8 +338,8 @@
 						{/if}
 						{#if entry.paid && entry.paymentMethod}
 							<p class="mt-1 text-xs text-green-400">
-								Paid via {entry.paymentMethod}
-								{#if entry.paidAt} on {new Date(entry.paidAt).toLocaleDateString()}{/if}
+								{entry.paymentMethod === 'free' ? 'Free entry' : `Paid via ${entry.paymentMethod}`}
+								{#if entry.paidAt && entry.paymentMethod !== 'free'} on {new Date(entry.paidAt).toLocaleDateString()}{/if}
 							</p>
 						{/if}
 					</div>
@@ -374,6 +382,7 @@
 						{/if}
 
 						<!-- Delete -->
+
 						<form method="POST" action="?/deleteEntry" use:enhance>
 							<input type="hidden" name="id" value={entry.id} />
 							<button
@@ -382,6 +391,7 @@
 								class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
 							>Delete</button>
 						</form>
+
 					</div>
 				</div>
 				</div><!-- /card -->

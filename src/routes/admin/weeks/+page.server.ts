@@ -31,10 +31,12 @@ export const actions: Actions = {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
-		const seasonId   = data.get('seasonId')  as string;
-		const week       = Number(data.get('week'));
-		const deadline   = data.get('deadline')  as string;
-		const notes      = (data.get('notes') as string | null) ?? '';
+		const seasonId              = data.get('seasonId')  as string;
+		const week                  = Number(data.get('week'));
+		const deadline              = data.get('deadline')  as string;
+		const notes                 = (data.get('notes') as string | null) ?? '';
+		const picksOverrideRaw      = data.get('secondHalfPicksPerWeek') as string | null;
+		const secondHalfPicksPerWeek = picksOverrideRaw ? Number(picksOverrideRaw) : null;
 
 		if (!seasonId || !week || !deadline) {
 			return fail(400, { error: 'Season, week number and deadline are required.' });
@@ -54,7 +56,9 @@ export const actions: Actions = {
 				week,
 				deadline,
 				status:   'open',
-				notes:    notes || null
+				notes:    notes || null,
+				// null means "use season default"; explicit value overrides for this week only
+				secondHalfPicksPerWeek: secondHalfPicksPerWeek ?? null
 			});
 		} catch (e: unknown) {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to create week.' });

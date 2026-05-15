@@ -42,14 +42,27 @@
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div class="flex flex-col gap-1">
 				<label for="lmsEntryFee" class="text-xs font-medium text-gray-400">LMS entry fee ($)</label>
+				<p class="text-xs text-gray-500">Pick the loser — 1 pick/week, full season</p>
 				<input id="lmsEntryFee" name="lmsEntryFee" type="number" required placeholder="100" min="1"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 			</div>
 			<div class="flex flex-col gap-1">
 				<label for="secondHalfEntryFee" class="text-xs font-medium text-gray-400">Second Half entry fee ($)</label>
+				<p class="text-xs text-gray-500">Pick the winner — starts Week 10</p>
 				<input id="secondHalfEntryFee" name="secondHalfEntryFee" type="number" required placeholder="50" min="1"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 			</div>
+		</div>
+
+		<div class="flex flex-col gap-1">
+			<label for="secondHalfPicksPerWeek" class="text-xs font-medium text-gray-400">Second Half picks per week</label>
+			<p class="text-xs text-gray-500">Default 1. Increase to 2 or 3 to reduce tie risk over the shorter period.</p>
+			<select id="secondHalfPicksPerWeek" name="secondHalfPicksPerWeek"
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
+				<option value="1" selected>1 pick per week</option>
+				<option value="2">2 picks per week</option>
+				<option value="3">3 picks per week</option>
+			</select>
 		</div>
 
 		<div class="grid gap-4 sm:grid-cols-2">

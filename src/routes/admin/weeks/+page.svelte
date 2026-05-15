@@ -23,7 +23,7 @@
 	// Favorite team selection per row
 	let favoriteTeam: Record<string, string> = $state({});
 	$effect(() => {
-		for (const w of data.weeks as { id: string; biggestFavoriteTeam: string }[]) {
+		for (const w of data.weeks as unknown as { id: string; biggestFavoriteTeam: string }[]) {
 			if (!(w.id in favoriteTeam)) favoriteTeam[w.id] = w.biggestFavoriteTeam ?? '';
 		}
 	});
@@ -103,6 +103,17 @@
 			</div>
 
 			<div class="flex flex-col gap-1">
+				<label for="secondHalfPicksPerWeek" class="text-xs text-gray-400">2nd Half picks override</label>
+				<select id="secondHalfPicksPerWeek" name="secondHalfPicksPerWeek"
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
+					<option value="">Season default</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+				</select>
+			</div>
+
+			<div class="flex flex-col gap-1">
 				<label for="notes" class="text-xs text-gray-400">Notes</label>
 				<input id="notes" name="notes" type="text" placeholder="Optional"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
@@ -139,6 +150,7 @@
 									Auto-pick: {week.expand.biggestFavoriteTeam.city} {week.expand.biggestFavoriteTeam.name}
 								</p>
 							{/if}
+
 							{#if week.notes}
 								<p class="mt-1 text-xs text-gray-500">{week.notes}</p>
 							{/if}

@@ -1,0 +1,1 @@
+export const PUBLIC_POCKETBASE_URL = 'http://localhost:8090';

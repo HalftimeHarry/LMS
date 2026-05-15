@@ -17,10 +17,13 @@
 		{ label: 'LMS Entries',     value: data.stats.lmsEntries,        color: 'text-white' },
 		{ label: 'Second Half',     value: data.stats.secondHalfEntries, color: 'text-white' },
 		{ label: 'Paid',            value: data.stats.paidEntries,       color: 'text-green-400' },
+		{ label: 'Free Entries',    value: data.stats.freeEntries,       color: 'text-blue-400' },
 		{ label: 'Pending Payment', value: data.stats.pendingPayment,    color: 'text-yellow-400' },
 		{ label: 'Active',          value: data.stats.activeEntries,     color: 'text-green-400' },
 		{ label: 'Eliminated',      value: data.stats.eliminatedEntries, color: 'text-red-400' },
-		{ label: 'Pot Estimate',    value: `$${data.stats.potEstimate.toLocaleString()}`, color: 'text-[#c9a84c]' },
+		{ label: 'LMS Pot',         value: `$${(data.stats.lmsPot ?? 0).toLocaleString()}`,         color: 'text-[#c9a84c]' },
+		{ label: '2nd Half Pot',    value: `$${(data.stats.secondHalfPot ?? 0).toLocaleString()}`,  color: 'text-[#c9a84c]' },
+		{ label: 'Total Pot',       value: `$${(data.stats.potEstimate ?? 0).toLocaleString()}`,    color: 'text-[#c9a84c]' },
 	]);
 
 	// Extra stats only super_admin needs
