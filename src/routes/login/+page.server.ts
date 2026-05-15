@@ -1,11 +1,8 @@
 import PocketBase from 'pocketbase';
 import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
 import { redirect, fail } from '@sveltejs/kit';
+import { roleHome } from '$lib/server/role-utils';
 import type { Actions, PageServerLoad } from './$types';
-
-function roleHome(role: string | null) {
-	return role === 'super_admin' || role === 'pool_admin' ? '/admin' : '/dashboard';
-}
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) redirect(302, roleHome(locals.role));
