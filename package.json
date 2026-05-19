@@ -46,6 +46,7 @@
     "vitest": "^4.1.6"
   },
   "dependencies": {
+    "@netlify/functions": "^5.2.2",
     "bits-ui": "^1.0.0",
     "clsx": "^2.1.1",
     "dotenv": "^16.4.5",

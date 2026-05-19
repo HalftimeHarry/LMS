@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
+	import InfoTip from '$lib/components/InfoTip.svelte';
 	import { createWeeksController } from '$lib/controllers';
 	import type { PageData, ActionData } from './$types';
 	import type { EntryType } from '$lib/providers';
@@ -19,14 +20,48 @@
 		complete:        'bg-gray-900 text-gray-500 border-gray-700',
 	};
 
-	let createLoading = $state(false);
-	let bulkLoading   = $state(false);
+	let bulkLoading      = $state(false);
+	let advanceLoading   = $state(false);
+	let advanceLog       = $state<string[]>([]);
+	let seasonActionMsg  = $state('');
+	let seasonActionBusy = $state(false);
 
-	const startWeek = $derived(ctrl.poolType === 'second_half' ? 10 : 1);
-	const missingWeeks = $derived(
-		Array.from({ length: 18 - startWeek + 1 }, (_, i) => i + startWeek)
-			.filter(w => !(data.existingWeekNumbers ?? []).includes(w))
-	);
+	async function runSeasonAction(action: 'startSeason' | 'resetSeason') {
+		if (!data.activeSeason) return;
+		const label = action === 'startSeason' ? 'start' : 'reset';
+		if (!confirm(`${label === 'reset' ? 'Reset' : 'Start'} "${data.activeSeason.name}"? ${label === 'reset' ? 'All picks and results will be cleared and deadlines pushed forward.' : 'Deadlines will be pushed forward from now.'}`)) return;
+		seasonActionBusy = true;
+		seasonActionMsg  = '';
+		const fd = new FormData();
+		fd.append('seasonId', data.activeSeason.id);
+		try {
+			const res  = await fetch(`?/${action}`, { method: 'POST', body: fd });
+			const json = await res.json().catch(() => ({}));
+			seasonActionMsg = json?.data?.message ?? (res.ok ? 'Done.' : json?.data?.error ?? 'Failed.');
+			if (res.ok) await invalidateAll();
+		} finally {
+			seasonActionBusy = false;
+		}
+	}
+
+	// Relative time formatter
+	function relativeTime(ms: number): string {
+		const abs = Math.abs(ms);
+		if (abs < 60_000)          return 'just now';
+		if (abs < 3_600_000)       return `${Math.round(abs / 60_000)}m`;
+		if (abs < 86_400_000)      return `${Math.round(abs / 3_600_000)}h`;
+		return `${Math.round(abs / 86_400_000)}d`;
+	}
+
+	const now         = $derived(data.serverNow as number);
+	const nextActions = $derived(data.nextActions as { weekNum: number; at: number; action: string }[]);
+	const isTestSeason = $derived(data.isTestSeason as boolean);
+
+	const actionLabel: Record<string, string> = {
+		lock:     'Picks lock',
+		results:  'Results simulated',
+		complete: 'Week completes',
+	};
 
 	function updateParam(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -40,51 +75,124 @@
 		updateParam('poolType', type);
 	}
 
-	// Default deadline: next Thursday 3pm PST
-	function nextThursday(): string {
-		const now = new Date();
-		const day = now.getDay();
-		const daysUntilThursday = (4 - day + 7) % 7 || 7;
-		const thu = new Date(now);
-		thu.setDate(now.getDate() + daysUntilThursday);
-		thu.setHours(15, 0, 0, 0);
-		return thu.toISOString().slice(0, 16);
-	}
+
 </script>
 
-<svelte:head><title>Weekly Settings — Admin</title></svelte:head>
+<svelte:head><title>Season Settings — Admin</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="text-2xl font-bold text-white">Weekly Settings</h1>
-	<div class="flex flex-wrap items-center gap-3">
-		<select
-			value={data.activeSeason?.id ?? ''}
-			onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			{#each data.seasons as s}
-				<option value={s.id}>{s.name}</option>
-			{/each}
-		</select>
-		<div class="flex overflow-hidden rounded border border-gray-700">
-			<button type="button" onclick={() => switchPoolType('lms')}
-				class="px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}"
-			>LMS — Pick Loser</button>
-			<button type="button" onclick={() => switchPoolType('second_half')}
-				class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}"
-			>2nd Half — Pick Winner</button>
-		</div>
-	</div>
+<div class="mb-4">
+	<h1 class="text-2xl font-bold text-white">Season Settings</h1>
+	<p class="mt-1 text-sm text-gray-500">Verify week deadlines and monitor the pick schedule. In production, weeks advance automatically. Use <span class="text-gray-300">▶ Advance now</span> in dev to trigger transitions manually.</p>
 </div>
 
-<div class="mb-5 rounded-lg border px-4 py-3 text-sm {ctrl.poolType === 'lms' ? 'border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.06)] text-[#c9a84c]' : 'border-blue-800 bg-blue-950/40 text-blue-400'}">
+<!-- Filter + context card -->
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+
+	<!-- Row 1: season selector + pool toggle -->
+	<div class="flex flex-wrap items-center justify-between gap-3">
+		<div class="flex flex-wrap items-center gap-3">
+			<div class="flex flex-col gap-1">
+				<span class="text-xs text-gray-500">Season</span>
+				<select
+					value={data.activeSeason?.id ?? ''}
+					onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+				>
+					{#each data.seasons as s}
+						<option value={s.id}>{s.name}</option>
+					{/each}
+				</select>
+			</div>
+
+			<div class="flex flex-col gap-1">
+				<span class="text-xs text-gray-500">Pool type</span>
+				<div class="flex overflow-hidden rounded border border-gray-700">
+					<button type="button" onclick={() => switchPoolType('lms')}
+						class="px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}"
+					>LMS</button>
+					<button type="button" onclick={() => switchPoolType('second_half')}
+						class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}"
+					>2nd Half</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Viewing label -->
+		<div class="text-right">
+			<p class="text-xs text-gray-500">Viewing</p>
+			<p class="text-sm font-semibold text-white">
+				{data.activeSeason?.name ?? '—'}
+			</p>
+		</div>
+	</div>
+
+	<!-- Test season controls -->
+	{#if isTestSeason}
+		<div class="mt-4 flex flex-wrap items-center gap-3 border-t border-[rgba(201,168,76,0.15)] pt-4">
+			<div class="flex items-center gap-1.5">
+				<span class="text-xs text-gray-500 shrink-0">Test controls:</span>
+				<InfoTip text="These controls only appear for [TEST] seasons. Start season pushes all week deadlines forward from now without touching picks or entries. Reset season clears all picks and results, restores eliminated entries, and restarts the clock — use this for a clean test run." />
+			</div>
+
+			<button
+				onclick={() => runSeasonAction('startSeason')}
+				disabled={seasonActionBusy}
+				class="rounded border border-green-800 bg-green-950/40 px-4 py-1.5 text-xs font-semibold text-green-400 transition hover:bg-green-950/70 disabled:opacity-40"
+			>▶ Start season</button>
+
+			<button
+				onclick={() => runSeasonAction('resetSeason')}
+				disabled={seasonActionBusy}
+				class="rounded border border-orange-800 bg-orange-950/40 px-4 py-1.5 text-xs font-semibold text-orange-400 transition hover:bg-orange-950/70 disabled:opacity-40"
+			>↺ Reset season</button>
+
+			{#if seasonActionBusy}
+				<span class="text-xs text-gray-400 animate-pulse">Working…</span>
+			{/if}
+			{#if seasonActionMsg}
+				<span class="text-xs {seasonActionMsg.toLowerCase().includes('fail') || seasonActionMsg.toLowerCase().includes('error') ? 'text-red-400' : 'text-green-400'}">{seasonActionMsg}</span>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Divider -->
+	<div class="my-4 border-t border-[rgba(201,168,76,0.15)]"></div>
+
+	<!-- Row 2: pool rules context -->
 	{#if ctrl.poolType === 'lms'}
-		<strong>LMS</strong> — Players pick 1 team to <strong>lose</strong> each week. All weeks (1–18).
+		<div class="flex flex-wrap gap-4">
+			<div class="flex items-center gap-2">
+				<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">LMS</span>
+				<span class="text-sm text-gray-300">Last Man / Last Woman Standing</span>
+			</div>
+			<div class="flex flex-wrap gap-3 text-xs text-gray-500">
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Pick:</span> 1 team to <span class="text-red-400 font-medium ml-1">lose</span></span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Weeks:</span> 1 – 18</span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Frequency:</span> 1 pick / week</span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Eliminated:</span> picked team wins</span>
+			</div>
+		</div>
 	{:else}
-		<strong>Second Half</strong> — Players pick teams to <strong>win</strong>. Only weeks 10–18 shown.
-		{#if data.activeSeason?.secondHalfPicksPerWeek}
-			Season default: <strong>{data.activeSeason.secondHalfPicksPerWeek} pick{data.activeSeason.secondHalfPicksPerWeek > 1 ? 's' : ''}/week</strong>.
-		{/if}
+		<div class="flex flex-wrap gap-4">
+			<div class="flex items-center gap-2">
+				<span class="rounded border border-blue-800 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">2nd Half</span>
+				<span class="text-sm text-gray-300">Second Half Survivor</span>
+			</div>
+			<div class="flex flex-wrap gap-3 text-xs text-gray-500">
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Pick:</span> teams to <span class="text-green-400 font-medium ml-1">win</span></span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Entries open:</span> week 6</span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Wks 6–9:</span> 1 pick</span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Wks 10–18:</span> 2 picks</span>
+				<span class="text-gray-700">·</span>
+				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Eliminated:</span> any picked team loses</span>
+			</div>
+		</div>
 	{/if}
 </div>
 
@@ -94,96 +202,76 @@
 	</div>
 {:else}
 
-	<!-- Bulk create banner -->
-	{#if missingWeeks.length > 0}
-		<div class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-yellow-800 bg-yellow-950/30 px-4 py-3">
-			<p class="text-sm text-yellow-300">
-				<span class="font-semibold">{missingWeeks.length} week{missingWeeks.length === 1 ? '' : 's'} missing</span>
-				<span class="text-yellow-500"> — weeks {missingWeeks[0]}–{missingWeeks[missingWeeks.length - 1]} not yet created</span>
-			</p>
-			<form
-				method="POST"
-				action="?/bulkCreateWeeks"
-				use:enhance={() => {
-					bulkLoading = true;
-					return async ({ update }) => { await update(); bulkLoading = false; };
-				}}
-			>
-				<input type="hidden" name="seasonId"  value={data.activeSeason.id} />
-				<input type="hidden" name="poolType"  value={ctrl.poolType} />
-				<button type="submit" disabled={bulkLoading}
-					class="rounded bg-yellow-600 px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-yellow-400 disabled:opacity-50">
-					{bulkLoading ? 'Creating…' : `Bulk create ${missingWeeks.length} week${missingWeeks.length === 1 ? '' : 's'}`}
-				</button>
-			</form>
-		</div>
-	{/if}
-
-	<!-- Create week form -->
+	<!-- Schedule timeline card -->
 	<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
-		<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Add Week</h2>
-
-		{#if form?.error}
-			<p class="mb-3 rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{form.error}</p>
-		{/if}
-
-		<form
-			method="POST"
-			action="?/createWeek"
-			use:enhance={() => {
-				createLoading = true;
-				return async ({ update }) => { await update(); createLoading = false; };
-			}}
-			class="flex flex-wrap items-end gap-3"
-		>
-			<input type="hidden" name="seasonId" value={data.activeSeason.id} />
-
-			<div class="flex flex-col gap-1">
-				<label for="week" class="text-xs text-gray-400">Week #</label>
-				<input id="week" name="week" type="number" min="1" max="18" required placeholder="1"
-					class="w-20 rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
-			</div>
-
-			<div class="flex flex-col gap-1">
-				<label for="deadline" class="text-xs text-gray-400">Deadline (PST)</label>
-				<input id="deadline" name="deadline" type="datetime-local" required value={nextThursday()}
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
-			</div>
-
-			<div class="flex flex-col gap-1">
-				<div class="flex items-center gap-1.5">
-					<label for="secondHalfPicksPerWeek" class="text-xs text-gray-400">2nd Half picks override</label>
-					<span
-						title="Second Half players normally pick the same number of teams every week (set on the season). Use this to override that count for a specific week only — e.g. bump to 2 picks for a playoff week or drop to 1 for a short week. Leave blank to use the season default."
-						class="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-600 text-[10px] text-gray-500 hover:border-gray-400 hover:text-gray-300"
-					>?</span>
-				</div>
-				<select id="secondHalfPicksPerWeek" name="secondHalfPicksPerWeek"
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
-					<option value="">Season default</option>
-					<option value="1">1 pick</option>
-					<option value="2">2 picks</option>
-					<option value="3">3 picks</option>
-				</select>
-				<p class="text-xs text-gray-600">
-					Overrides the season default for this week only.
-					{#if data.activeSeason?.secondHalfPicksPerWeek}
-						Season default: {data.activeSeason.secondHalfPicksPerWeek} pick{data.activeSeason.secondHalfPicksPerWeek > 1 ? 's' : ''}.
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<h2 class="text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Schedule</h2>
+				<p class="mt-0.5 text-xs text-gray-500">
+					{#if isTestSeason}
+						Test season — weeks advance automatically in production every 2 min. Use the button below in dev.
+					{:else}
+						Real season — picks lock automatically at each week's deadline. Results must be entered manually.
 					{/if}
 				</p>
 			</div>
 
-			<div class="flex flex-col gap-1">
-				<label for="notes" class="text-xs text-gray-400">Notes</label>
-				<input id="notes" name="notes" type="text" placeholder="Optional"
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
-			</div>
+			<!-- Manual advance (test seasons only) -->
+			{#if isTestSeason}
+				<form method="POST" action="?/advanceNow"
+					use:enhance={() => {
+						advanceLoading = true; advanceLog = [];
+						return async ({ result, update }) => {
+							await update({ reset: false });
+							advanceLoading = false;
+							if (result.type === 'success') advanceLog = (result.data as any)?.advanceLog ?? [];
+						};
+					}}
+				>
+					<input type="hidden" name="seasonId" value={data.activeSeason.id} />
+					<button type="submit" disabled={advanceLoading}
+						class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-4 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
+						{advanceLoading ? 'Running…' : '▶ Advance now'}
+					</button>
+				</form>
+			{/if}
+		</div>
 
-			<button type="submit" disabled={createLoading}
-				class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
-				{createLoading ? 'Adding…' : '+ Add Week'}
-			</button>
-		</form>
+		<!-- Advance log output -->
+		{#if advanceLog.length}
+			<div class="mb-4 rounded border border-gray-800 bg-gray-950 p-3">
+				{#each advanceLog as line}
+					<p class="font-mono text-xs text-green-400">{line}</p>
+				{/each}
+			</div>
+		{/if}
+
+		<!-- Upcoming transitions -->
+		{#if nextActions.length}
+			<div class="flex flex-col gap-2">
+				{#each nextActions.slice(0, 6) as evt}
+					{@const isPast = now > evt.at}
+					{@const diff   = evt.at - now}
+					<div class="flex items-center gap-3 rounded border {isPast ? 'border-red-900/50 bg-red-950/20' : 'border-gray-800 bg-gray-950/40'} px-3 py-2">
+						<span class="w-16 shrink-0 text-xs font-semibold {isPast ? 'text-red-400' : 'text-gray-300'}">
+							Week {evt.weekNum}
+						</span>
+						<span class="flex-1 text-xs text-gray-400">{actionLabel[evt.action] ?? evt.action}</span>
+						<span class="text-xs font-mono {isPast ? 'text-red-400' : 'text-[#c9a84c]'}">
+							{isPast ? `${relativeTime(diff)} overdue` : `in ${relativeTime(diff)}`}
+						</span>
+						<span class="text-xs text-gray-600">
+							{new Date(evt.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+						</span>
+					</div>
+				{/each}
+				{#if nextActions.length > 6}
+					<p class="text-xs text-gray-600 pl-1">+{nextActions.length - 6} more upcoming transitions</p>
+				{/if}
+			</div>
+		{:else}
+			<p class="text-sm text-gray-500">All weeks complete.</p>
+		{/if}
 	</div>
 
 	<!-- Weeks list -->
@@ -197,12 +285,14 @@
 				{@const pickCount   = (data.pickCountsByWeek ?? {})[week.id] ?? 0}
 				{@const activeCount = data.activeEntryCount ?? 0}
 				{@const missing     = Math.max(0, activeCount - pickCount)}
+				{@const picksThisWeek = ctrl.poolType === 'second_half' ? (week.week >= 10 ? 2 : 1) : 1}
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
 						<div>
 							<div class="flex items-center gap-3">
 								<p class="font-semibold text-white">Week {week.week}</p>
+
 								{#if activeCount > 0}
 									<span class="rounded border px-2 py-0.5 text-xs
 										{missing === 0
@@ -236,6 +326,7 @@
 							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[week.status] ?? ''}">
 								{week.status.replace('_', ' ')}
 							</span>
+
 
 
 							<!-- Unlock (locked → open) -->
@@ -280,6 +371,7 @@
 									Set
 								</button>
 							</form>
+
 
 							<!-- Delete (open weeks only) -->
 							{#if week.status === 'open'}

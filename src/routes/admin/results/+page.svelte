@@ -3,6 +3,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import type { PageData, ActionData } from './$types';
+	import InfoTip from '$lib/components/InfoTip.svelte';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -155,18 +156,24 @@
 <svelte:head><title>Results — Admin</title></svelte:head>
 
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="text-2xl font-bold text-white">Week Results</h1>
+	<div>
+		<h1 class="text-2xl font-bold text-white">Week Results</h1>
+		<p class="mt-1 text-sm text-gray-500">Record game outcomes after each week locks. Mark each game as a home win, away win, or tie — the system then determines which entries are eliminated based on their picks.</p>
+	</div>
 
 	<!-- Season selector -->
-	<select
-		value={activeSeason?.id ?? ''}
-		onchange={(e) => updateSeason((e.target as HTMLSelectElement).value)}
-		class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-	>
-		{#each seasons as s}
-			<option value={s.id}>{s.name}</option>
-		{/each}
-	</select>
+	<div class="flex items-center gap-1.5">
+		<select
+			value={activeSeason?.id ?? ''}
+			onchange={(e) => updateSeason((e.target as HTMLSelectElement).value)}
+			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+		>
+			{#each seasons as s}
+				<option value={s.id}>{s.name}</option>
+			{/each}
+		</select>
+		<InfoTip text="Select the season to record results for. Test seasons show simulated results automatically — real seasons require manual entry here." />
+	</div>
 </div>
 
 {#if !activeSeason}
@@ -219,32 +226,38 @@
 
 		<!-- Lock + auto-pick button -->
 		{#if weekStatus === 'open'}
-			<form method="POST" action="?/lockWeek" use:enhance={() => {
-				lockLoading = true;
-				return async ({ update }) => { await update(); lockLoading = false; await invalidateAll(); };
-			}}>
-				<input type="hidden" name="weekId"   value={weekSetting.id} />
-				<input type="hidden" name="seasonId" value={activeSeason.id} />
-				<input type="hidden" name="weekNum"  value={data.weekNum} />
-				<button type="submit" disabled={lockLoading}
-					class="rounded border border-yellow-700 bg-yellow-950/60 px-4 py-1.5 text-sm font-medium text-yellow-400 transition hover:bg-yellow-950 disabled:opacity-50">
-					{lockLoading ? 'Locking…' : '🔒 Lock Week + Auto-pick'}
-				</button>
-			</form>
+			<div class="flex items-center gap-1.5">
+				<form method="POST" action="?/lockWeek" use:enhance={() => {
+					lockLoading = true;
+					return async ({ update }) => { await update(); lockLoading = false; await invalidateAll(); };
+				}}>
+					<input type="hidden" name="weekId"   value={weekSetting.id} />
+					<input type="hidden" name="seasonId" value={activeSeason.id} />
+					<input type="hidden" name="weekNum"  value={data.weekNum} />
+					<button type="submit" disabled={lockLoading}
+						class="rounded border border-yellow-700 bg-yellow-950/60 px-4 py-1.5 text-sm font-medium text-yellow-400 transition hover:bg-yellow-950 disabled:opacity-50">
+						{lockLoading ? 'Locking…' : '🔒 Lock Week + Auto-pick'}
+					</button>
+				</form>
+				<InfoTip text="Closes picks for this week and assigns the auto-pick team to any entry that didn't submit. In production this happens automatically at the deadline — use this to lock early if needed." />
+			</div>
 		{/if}
 
 		<!-- Complete button -->
 		{#if weekStatus === 'results_pending'}
-			<form method="POST" action="?/completeWeek" use:enhance={() => {
-				completeLoading = true;
-				return async ({ update }) => { await update(); completeLoading = false; await invalidateAll(); };
-			}}>
-				<input type="hidden" name="weekId" value={weekSetting.id} />
-				<button type="submit" disabled={completeLoading}
-					class="rounded border border-green-700 bg-green-950/60 px-4 py-1.5 text-sm font-medium text-green-400 transition hover:bg-green-950 disabled:opacity-50">
-					{completeLoading ? 'Completing…' : '✓ Mark Week Complete'}
-				</button>
-			</form>
+			<div class="flex items-center gap-1.5">
+				<form method="POST" action="?/completeWeek" use:enhance={() => {
+					completeLoading = true;
+					return async ({ update }) => { await update(); completeLoading = false; await invalidateAll(); };
+				}}>
+					<input type="hidden" name="weekId" value={weekSetting.id} />
+					<button type="submit" disabled={completeLoading}
+						class="rounded border border-green-700 bg-green-950/60 px-4 py-1.5 text-sm font-medium text-green-400 transition hover:bg-green-950 disabled:opacity-50">
+						{completeLoading ? 'Completing…' : '✓ Mark Week Complete'}
+					</button>
+				</form>
+				<InfoTip text="Processes all pick results, eliminates entries that picked incorrectly, and closes this week. Do this after all game results have been entered above." />
+			</div>
 		{/if}
 	</div>
 </div>

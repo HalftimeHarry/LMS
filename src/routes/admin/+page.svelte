@@ -2,9 +2,44 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
+	import InfoTip from '$lib/components/InfoTip.svelte';
 	let { data }: { data: PageData } = $props();
 
 	const isSuperAdmin = $derived(data.role === 'super_admin');
+
+	// Test seasons
+	const testSeasons   = $derived((data.seasons as any[]).filter((s: any) => s.name?.includes('[TEST]')));
+	const testSeasons1h = $derived(testSeasons.filter((s: any) => s.name?.includes('(1h/week)')));
+	const testSeasons1d = $derived(testSeasons.filter((s: any) => s.name?.includes('(1d/week)')));
+
+	// Test season management
+	let testBusy    = $state(false);
+	let testMessage = $state('');
+	let testError   = $state('');
+
+	async function submitTestAction(action: string, formData: FormData) {
+		testBusy    = true;
+		testMessage = '';
+		testError   = '';
+		try {
+			const res  = await fetch(`?/${action}`, { method: 'POST', body: formData });
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				testError = json?.data?.error ?? 'Action failed.';
+			} else {
+				testMessage = action === 'clearTestSeason'
+					? 'Season cleared.'
+					: action === 'seedTestSeason'
+					? 'Test season seeded — weeks advancing automatically.'
+					: 'Reset complete — fresh test season ready.';
+				await invalidateAll();
+			}
+		} catch (e: any) {
+			testError = e.message;
+		} finally {
+			testBusy = false;
+		}
+	}
 
 	// Which season is currently selected in the overview
 	let selectedSeasonId = $state((data.activeSeason as any)?.id ?? '');
@@ -13,15 +48,11 @@
 		(data.seasons as any[]).find(s => s.id === selectedSeasonId) ?? data.activeSeason
 	);
 	const selectedData = $derived(
-		(data.seasonDataMap as any)[selectedSeasonId] ?? {
-			stats: stats,
-			currentWeek: currentWeek,
-			pendingPaymentEntries: pendingPaymentEntries
-		}
+		(data.seasonDataMap as any)[selectedSeasonId] ?? null
 	);
-	const stats       = $derived(selectedData.stats);
-	const currentWeek = $derived(selectedData.currentWeek);
-	const pendingPaymentEntries = $derived(selectedData.pendingPaymentEntries);
+	const stats                 = $derived(selectedData?.stats                 ?? null);
+	const currentWeek           = $derived(selectedData?.currentWeek           ?? null);
+	const pendingPaymentEntries = $derived(selectedData?.pendingPaymentEntries ?? []);
 
 	const seasonStatusColors: Record<string, string> = {
 		setup:    'border-gray-700 bg-gray-900 text-gray-400',
@@ -62,6 +93,14 @@
 	const visibleSeasons = $derived(
 		allSeasons.filter(s => getSeasonGroup(s) === seasonGroup)
 	);
+
+	// Auto-select the first active season when switching groups
+	$effect(() => {
+		const first = visibleSeasons.find(s =>
+			(data.activeSeasons as any[]).some((a: any) => a.id === s.id)
+		);
+		if (first) selectedSeasonId = (first as any).id;
+	});
 </script>
 
 <svelte:head><title>Admin — LMS Pool</title></svelte:head>
@@ -104,7 +143,10 @@
 
 			<!-- Pool toggles -->
 			<div class="mt-4 border-t border-[rgba(201,168,76,0.15)] pt-4">
-				<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-[rgba(201,168,76,0.5)]">Pool Toggles</p>
+				<div class="mb-3 flex items-center gap-2">
+					<p class="text-xs font-semibold uppercase tracking-wider text-[rgba(201,168,76,0.5)]">Pool Toggles</p>
+					<InfoTip text="Enable or disable each pool type. Disabling a pool hides it from players but keeps all data intact. Use this to open registration for one pool at a time." />
+				</div>
 				<div class="flex flex-wrap gap-4">
 
 					<!-- LMS toggle -->
@@ -139,30 +181,13 @@
 						</button>
 					</form>
 
-					<!-- 2nd Half config inline -->
-					<form method="POST" action="/admin/seasons?/updatePoolConfig" use:enhance={() => () => invalidateAll()}
-						class="flex flex-wrap items-center gap-2 text-xs text-gray-400">
-						<input type="hidden" name="id" value={s.id} />
-						<span class="text-gray-600">2nd Half opens week</span>
-						<input type="number" name="secondHalfStartWeek"
-							value={s.secondHalfStartWeek ?? 6} min="1" max="18"
-							class="w-14 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-white focus:border-blue-500 focus:outline-none" />
-						<span class="text-gray-600">· picks ↑ week</span>
-						<input type="number" name="secondHalfPicksStartWeek"
-							value={s.secondHalfPicksStartWeek ?? 10} min="1" max="18"
-							class="w-14 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-white focus:border-blue-500 focus:outline-none" />
-						<span class="text-gray-600">·</span>
-						<select name="secondHalfPicksPerWeek"
-							class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white focus:border-blue-500 focus:outline-none">
-							{#each [1,2,3] as n}
-								<option value={n} selected={n === (s.secondHalfPicksPerWeek ?? 2)}>{n} pick{n > 1 ? 's' : ''}/wk</option>
-							{/each}
-						</select>
-						<button type="submit"
-							class="rounded border border-gray-700 px-3 py-1 text-gray-400 transition hover:border-blue-600 hover:text-blue-400">
-							Save
-						</button>
-					</form>
+					<!-- 2nd Half config summary — edit in Season Settings -->
+					{#if s.secondHalfEnabled !== false}
+						<p class="self-center text-xs text-gray-600">
+							opens wk {s.secondHalfStartWeek ?? 6}
+							· {s.secondHalfPicksPerWeek ?? 2} pick{(s.secondHalfPicksPerWeek ?? 2) > 1 ? 's' : ''}/wk
+						</p>
+					{/if}
 
 				</div>
 			</div>
@@ -268,28 +293,40 @@
 
 		<!-- Pot cards -->
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
-			<p class="text-xs text-gray-500">Total Pot</p>
+			<div class="flex items-center gap-1.5">
+				<p class="text-xs text-gray-500">Total Pot</p>
+				<InfoTip text="Estimated prize pool based on paid entries × entry fee. LMS and 2nd Half pools are tracked separately." />
+			</div>
 			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${stats.potEstimate.toLocaleString()}</p>
 			<p class="mt-1 text-xs text-gray-600">LMS ${stats.lmsPot.toLocaleString()} · 2H ${stats.secondHalfPot.toLocaleString()}</p>
 		</div>
 
 		<!-- Entry counts -->
 		<div class="rounded-xl border border-gray-800 bg-black/75 p-4 backdrop-blur-sm">
-			<p class="text-xs text-gray-500">Total Entries</p>
+			<div class="flex items-center gap-1.5">
+				<p class="text-xs text-gray-500">Total Entries</p>
+				<InfoTip text="All entries regardless of payment status. One player can hold multiple entries. LMS and 2nd Half entries are counted separately." />
+			</div>
 			<p class="mt-1 text-2xl font-bold text-white">{stats.totalEntries}</p>
 			<p class="mt-1 text-xs text-gray-600">LMS {stats.lmsEntries} · 2H {stats.secondHalfEntries}</p>
 		</div>
 
 		<!-- Payment status -->
 		<div class="rounded-xl border border-green-900 bg-black/75 p-4 backdrop-blur-sm">
-			<p class="text-xs text-gray-500">Paid</p>
+			<div class="flex items-center gap-1.5">
+				<p class="text-xs text-gray-500">Paid</p>
+				<InfoTip text="Entries marked as paid (cash, Venmo, etc.) or complimentary. Pending entries have not yet paid — they can still pick but should be resolved before week 1 locks." />
+			</div>
 			<p class="mt-1 text-2xl font-bold text-green-400">{stats.paidEntries}</p>
 			<p class="mt-1 text-xs text-gray-600">{stats.freeEntries} free · {stats.pendingPayment} pending</p>
 		</div>
 
 		<!-- Active / eliminated -->
 		<div class="rounded-xl border border-gray-800 bg-black/75 p-4 backdrop-blur-sm">
-			<p class="text-xs text-gray-500">Active / Eliminated</p>
+			<div class="flex items-center gap-1.5">
+				<p class="text-xs text-gray-500">Active / Eliminated</p>
+				<InfoTip text="Active entries are still in the pool. An entry is eliminated when the player picks a team that wins (LMS) or loses (2nd Half). Eliminated entries remain visible for record-keeping." />
+			</div>
 			<p class="mt-1 text-2xl font-bold text-white">
 				<span class="text-green-400">{stats.activeEntries}</span>
 				<span class="text-gray-600"> / </span>
@@ -303,7 +340,10 @@
 
 <!-- Quick actions -->
 <div class="mb-8">
-	<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</h2>
+	<div class="mb-3 flex items-center gap-2">
+		<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</h2>
+		<InfoTip text="Shortcuts to the most common admin tasks for the currently selected season." />
+	</div>
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 		<a href="/admin/entries?status=pending_payment"
 			class="flex items-center justify-between rounded-xl border border-yellow-900 bg-black/75 px-4 py-3 transition hover:border-yellow-700 backdrop-blur-sm">
@@ -324,7 +364,7 @@
 		<a href="/admin/weeks"
 			class="flex items-center justify-between rounded-xl border border-gray-800 bg-black/75 px-4 py-3 transition hover:border-gray-600 backdrop-blur-sm">
 			<div>
-				<p class="text-sm font-medium text-white">Weekly Settings</p>
+				<p class="text-sm font-medium text-white">Season Settings</p>
 				<p class="text-xs text-gray-500">
 					{#if currentWeek}
 						Week {(currentWeek as any).week} is {(currentWeek as any).status}
@@ -348,77 +388,116 @@
 	</div>
 </div>
 
-<!-- Test season panel — only shown when test seasons exist -->
-{#if (data.seasons as any[]).some(s => s.name?.includes('[TEST]'))}
-	{@const testSeasons1h = (data.seasons as any[]).filter(s => s.name?.includes('[TEST]') && s.name?.includes('(1h/week)'))}
-	{@const testSeasons1d = (data.seasons as any[]).filter(s => s.name?.includes('[TEST]') && s.name?.includes('(1d/week)'))}
-	<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950/20 p-5">
-		<div class="mb-4 flex items-center justify-between gap-3">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-wider text-orange-400">Test Seasons Active</p>
-				<p class="mt-0.5 text-xs text-gray-500">Run the scheduler from your terminal to start the countdown. Clean up when done.</p>
-			</div>
+<!-- Test season management panel -->
+<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950/20 p-5">
+
+	<div class="mb-4 flex items-center justify-between gap-3">
+		<div>
+			<p class="text-xs font-semibold uppercase tracking-wider text-orange-400">Test Seasons</p>
+			<p class="mt-0.5 text-xs text-gray-500">
+				{#if testSeasons.length}
+					{testSeasons.length / 2} active pair{testSeasons.length > 2 ? 's' : ''} — weeks advance automatically every 2 minutes.
+				{:else}
+					No test seasons running. Seed one to start testing.
+				{/if}
+			</p>
+		</div>
+		{#if testSeasons.length}
 			<a href="/admin/results" class="rounded border border-orange-700 bg-orange-950/60 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950">
 				Record Results →
 			</a>
-		</div>
-
-		<div class="grid gap-4 sm:grid-cols-2">
-			{#if testSeasons1h.length}
-				<div class="rounded-lg border border-orange-800/40 bg-black/40 p-4">
-					<p class="mb-2 text-xs font-semibold text-orange-400">18-Hour Test <span class="font-mono text-orange-600">(1h/week)</span></p>
-					<div class="mb-3 flex flex-col gap-1">
-						{#each testSeasons1h as s}
-							<p class="font-mono text-xs text-gray-400">
-								<span class="text-gray-600">ID:</span> {s.id}
-								<span class="ml-2 text-gray-600">{s.name.toLowerCase().includes('second half') ? '2H' : 'LMS'}</span>
-							</p>
-						{/each}
-					</div>
-					<div class="rounded border border-gray-800 bg-gray-950 p-3 font-mono text-xs text-green-400">
-						<p class="text-gray-600 mb-1"># Start countdown (run in terminal):</p>
-						<p>node scripts/start-test-season.js --interval=1h</p>
-					</div>
-					<div class="mt-2 text-xs text-gray-600">
-						T+0 open · T+40m picks lock · T+58m results · T+1h next week
-					</div>
-				</div>
-			{/if}
-
-			{#if testSeasons1d.length}
-				<div class="rounded-lg border border-orange-800/40 bg-black/40 p-4">
-					<p class="mb-2 text-xs font-semibold text-orange-400">24-Hour Test <span class="font-mono text-orange-600">(1d/week)</span></p>
-					<div class="mb-3 flex flex-col gap-1">
-						{#each testSeasons1d as s}
-							<p class="font-mono text-xs text-gray-400">
-								<span class="text-gray-600">ID:</span> {s.id}
-								<span class="ml-2 text-gray-600">{s.name.toLowerCase().includes('second half') ? '2H' : 'LMS'}</span>
-							</p>
-						{/each}
-					</div>
-					<div class="rounded border border-gray-800 bg-gray-950 p-3 font-mono text-xs text-green-400">
-						<p class="text-gray-600 mb-1"># Start countdown (run in terminal):</p>
-						<p>node scripts/start-test-season.js --interval=1d</p>
-					</div>
-					<div class="mt-2 text-xs text-gray-600">
-						T+0 open · T+20h picks lock · T+23h 58m results · T+24h next week
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		<div class="mt-4 flex flex-wrap gap-3 border-t border-orange-800/30 pt-4">
-			<div class="rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-400">
-				<span class="text-gray-600"># Clean up all test data:</span><br/>
-				node scripts/clear-test-season.js --all
-			</div>
-			<div class="rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-400">
-				<span class="text-gray-600"># Seed new test seasons:</span><br/>
-				node scripts/seed-test-season.js --interval=1h
-			</div>
-		</div>
+		{/if}
 	</div>
-{/if}
+
+	<!-- Active test season pairs -->
+	{#if testSeasons.length}
+		<div class="mb-4 grid gap-3 sm:grid-cols-2">
+			{#each [{ label: '1h / week', tag: '(1h/week)', seasons: testSeasons1h, interval: '1h', timing: 'T+0 open · T+40m lock · T+58m results · T+1h next week' },
+			        { label: '1d / week', tag: '(1d/week)', seasons: testSeasons1d, interval: '1d', timing: 'T+0 open · T+20h lock · T+23h 58m results · T+24h next week' }] as group}
+				{#if group.seasons.length}
+					<div class="rounded-lg border border-orange-800/40 bg-black/40 p-4">
+						<div class="mb-3 flex items-center justify-between">
+							<p class="text-xs font-semibold text-orange-400">{group.label}</p>
+							<span class="rounded bg-green-950/60 px-2 py-0.5 text-xs text-green-400">running</span>
+						</div>
+
+						<!-- Season rows -->
+						<div class="mb-3 flex flex-col gap-2">
+							{#each group.seasons as s}
+								{@const isLMS = !s.name.toLowerCase().includes('second half')}
+								<div class="flex items-center justify-between gap-2 rounded border border-gray-800 bg-gray-950/60 px-3 py-2">
+									<div>
+										<span class="text-xs font-medium text-gray-300">{isLMS ? 'LMS' : '2nd Half'}</span>
+										<span class="ml-2 font-mono text-xs text-gray-600">{s.id}</span>
+									</div>
+									<!-- Clear single season -->
+									<button
+										disabled={testBusy}
+										onclick={() => {
+											if (!confirm(`Clear "${s.name}"? This deletes all entries, picks and results.`)) return;
+											const fd = new FormData();
+											fd.append('seasonId', s.id);
+											submitTestAction('clearTestSeason', fd);
+										}}
+										class="rounded border border-red-900/60 px-2 py-0.5 text-xs text-red-500 transition hover:bg-red-950/40 disabled:opacity-40"
+									>Clear</button>
+								</div>
+							{/each}
+						</div>
+
+						<p class="mb-3 text-xs text-gray-600">{group.timing}</p>
+
+						<!-- Reset pair -->
+						<button
+							disabled={testBusy}
+							onclick={() => {
+								if (!confirm(`Reset all ${group.label} test seasons? Current data will be deleted and a fresh pair seeded.`)) return;
+								const fd = new FormData();
+								fd.append('interval', group.interval);
+								for (const s of group.seasons) fd.append('seasonId', s.id);
+								submitTestAction('resetTestSeason', fd);
+							}}
+							class="w-full rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+						>{testBusy ? 'Working…' : `↺ Reset ${group.label} pair`}</button>
+					</div>
+				{/if}
+			{/each}
+		</div>
+	{/if}
+
+	<!-- Seed new pair -->
+	<div class="flex flex-wrap items-center gap-3 {testSeasons.length ? 'border-t border-orange-800/30 pt-4' : ''}">
+		<p class="text-xs text-gray-500 shrink-0">Seed new pair:</p>
+		<button
+			disabled={testBusy}
+			onclick={() => {
+				const fd = new FormData();
+				fd.append('interval', '1h');
+				submitTestAction('seedTestSeason', fd);
+			}}
+			class="rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+		>{testBusy ? 'Working…' : '+ 1h / week'}</button>
+		<button
+			disabled={testBusy}
+			onclick={() => {
+				const fd = new FormData();
+				fd.append('interval', '1d');
+				submitTestAction('seedTestSeason', fd);
+			}}
+			class="rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+		>{testBusy ? 'Working…' : '+ 1d / week'}</button>
+
+		{#if testBusy}
+			<span class="text-xs text-orange-400 animate-pulse">Working…</span>
+		{/if}
+		{#if testMessage}
+			<span class="text-xs text-green-400">{testMessage}</span>
+		{/if}
+		{#if testError}
+			<span class="text-xs text-red-400">{testError}</span>
+		{/if}
+	</div>
+</div>
 
 <!-- Pending payment quick list -->
 {#if stats.pendingPayment > 0}

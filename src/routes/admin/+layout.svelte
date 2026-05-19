@@ -11,19 +11,21 @@
 					{ href: '/admin',           label: 'Overview' },
 					{ href: '/admin/seasons',   label: 'Seasons' },
 					{ href: '/admin/entries',   label: 'Entries' },
-					{ href: '/admin/weeks',     label: 'Weekly Settings' },
+					{ href: '/admin/weeks',     label: 'Season Settings' },
 					{ href: '/admin/results',   label: 'Results' },
 					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
+					{ href: '/admin/duties',    label: 'Admin Duties' },
 					{ href: '/admin/teams',     label: 'NFL Teams' },
 			  ]
 			: [
 					{ href: '/admin',           label: 'Overview' },
 					{ href: '/admin/entries',   label: 'Entries & Payments' },
-					{ href: '/admin/weeks',     label: 'Weekly Settings' },
+					{ href: '/admin/weeks',     label: 'Season Settings' },
 					{ href: '/admin/results',   label: 'Results' },
 					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
+					{ href: '/admin/duties',    label: 'Admin Duties' },
 			  ]
 	);
 </script>
