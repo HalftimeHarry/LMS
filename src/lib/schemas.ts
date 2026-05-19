@@ -13,7 +13,14 @@ export const seasonSchema = z.object({
 	paymentDeadline:         z.string().optional(),
 	firstPickDeadline:       z.string().optional(),
 	regularSeasonOnly:       z.boolean().default(true),
-	notes:                   z.string().optional()
+	notes:                   z.string().optional(),
+	// Pool toggles — admin can independently open/close each pool
+	lmsEnabled:              z.boolean().default(true),
+	secondHalfEnabled:       z.boolean().default(true),
+	// Week number when 2nd Half registration opens (default 6)
+	secondHalfStartWeek:     z.coerce.number().int().min(1).max(18).default(6),
+	// Week number when 2nd Half picks increase to secondHalfPicksPerWeek (default 10)
+	secondHalfPicksStartWeek: z.coerce.number().int().min(1).max(18).default(10),
 });
 
 export const entryRequestSchema = z.object({
@@ -24,12 +31,13 @@ export const entryRequestSchema = z.object({
 });
 
 export const adminCreateEntriesSchema = z.object({
-	seasonId:   z.string().min(1, 'Season is required'),
-	userId:     z.string().min(1, 'Player is required'),
-	entryType:  entryTypeSchema,
-	count:      z.coerce.number().int().min(1).max(20).default(1),
-	baseName:   z.string().min(2, 'Entry name must be at least 2 characters').max(50),
-	referredBy: z.string().max(50).optional()
+	seasonId:      z.string().min(1, 'Season is required'),
+	userId:        z.string().min(1, 'Player is required'),
+	entryType:     entryTypeSchema,
+	count:         z.coerce.number().int().min(1).max(20).default(1),
+	baseName:      z.string().min(2, 'Entry name must be at least 2 characters').max(50),
+	referredBy:    z.string().max(50).optional(),
+	complimentary: z.coerce.boolean().default(false)
 });
 
 export const paymentSchema = z.object({

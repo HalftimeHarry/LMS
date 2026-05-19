@@ -2,17 +2,22 @@ import type PocketBase from 'pocketbase';
 import { BaseProvider } from './BaseProvider';
 
 export interface Season {
-	id:                     string;
-	name:                   string;
-	year:                   number;
-	status:                 'setup' | 'open' | 'active' | 'complete';
-	lmsEntryFee:            number;
-	secondHalfEntryFee:     number;
-	secondHalfPicksPerWeek: number;
-	regularSeasonOnly:      boolean;
-	paymentDeadline:        string | null;
-	firstPickDeadline:      string | null;
-	notes:                  string | null;
+	id:                      string;
+	name:                    string;
+	year:                    number;
+	status:                  'setup' | 'open' | 'active' | 'complete';
+	lmsEntryFee:             number;
+	secondHalfEntryFee:      number;
+	secondHalfPicksPerWeek:  number;
+	regularSeasonOnly:       boolean;
+	paymentDeadline:         string | null;
+	firstPickDeadline:       string | null;
+	notes:                   string | null;
+	// Pool toggles — may be absent on older records (treat undefined as true/default)
+	lmsEnabled?:              boolean;
+	secondHalfEnabled?:       boolean;
+	secondHalfStartWeek?:     number;   // week registration opens (default 6)
+	secondHalfPicksStartWeek?: number;  // week picks increase to secondHalfPicksPerWeek (default 10)
 }
 
 export class SeasonProvider extends BaseProvider {
@@ -43,6 +48,7 @@ export class SeasonProvider extends BaseProvider {
 
 	/**
 	 * LMS entries are open when:
+	 * - lmsEnabled is true (admin toggle)
 	 * - Season status is 'open' (pre-season registration)
 	 * - AND the firstPickDeadline has not yet passed (or is not set)
 	 *
@@ -50,17 +56,29 @@ export class SeasonProvider extends BaseProvider {
 	 * so LMS registration closes automatically.
 	 */
 	static isLmsOpen(season: Season, now = new Date()): boolean {
+		if (season.lmsEnabled === false) return false;
 		if (season.status !== 'open') return false;
 		if (!season.firstPickDeadline) return true;
 		return now < new Date(season.firstPickDeadline);
 	}
 
 	/**
-	 * Second Half entries open when the season is 'active'.
-	 * They close when the season is 'complete'.
+	 * Second Half entries open when:
+	 * - secondHalfEnabled is true (admin toggle)
+	 * - Season status is 'active'
+	 * - Current week >= secondHalfStartWeek (default 6)
+	 *
+	 * currentWeek is optional — if not provided the week check is skipped
+	 * (admin-side calls that don't have week context still work).
 	 */
-	static isSecondHalfOpen(season: Season): boolean {
-		return season.status === 'active';
+	static isSecondHalfOpen(season: Season, currentWeek?: number): boolean {
+		if (season.secondHalfEnabled === false) return false;
+		if (season.status !== 'active') return false;
+		if (currentWeek !== undefined) {
+			const startWeek = season.secondHalfStartWeek ?? 6;
+			if (currentWeek < startWeek) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -70,9 +88,20 @@ export class SeasonProvider extends BaseProvider {
 	 * - If only Second Half is open → 'second_half'
 	 * - If neither is open → null (registration closed)
 	 */
-	static defaultEntryType(season: Season, now = new Date()): 'lms' | 'second_half' | null {
+	static defaultEntryType(season: Season, now = new Date(), currentWeek?: number): 'lms' | 'second_half' | null {
 		if (SeasonProvider.isLmsOpen(season, now)) return 'lms';
-		if (SeasonProvider.isSecondHalfOpen(season)) return 'second_half';
+		if (SeasonProvider.isSecondHalfOpen(season, currentWeek)) return 'second_half';
 		return null;
+	}
+
+	/**
+	 * How many picks a Second Half entry should make in a given week.
+	 * Returns 1 before secondHalfPicksStartWeek (default 10),
+	 * then secondHalfPicksPerWeek (default 2) from that week onward.
+	 */
+	static secondHalfPicksForWeek(season: Season, weekNumber: number): number {
+		const startWeek = season.secondHalfPicksStartWeek ?? 10;
+		if (weekNumber < startWeek) return 1;
+		return season.secondHalfPicksPerWeek ?? 2;
 	}
 }

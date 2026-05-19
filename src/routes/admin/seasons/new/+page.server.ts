@@ -9,20 +9,28 @@ export const actions: Actions = {
 
 		const raw    = await request.formData();
 		const parsed = seasonSchema.safeParse({
-			name:                   (raw.get('name') as string)?.trim(),
-			year:                   raw.get('year'),
-			lmsEntryFee:            raw.get('lmsEntryFee'),
-			secondHalfEntryFee:     raw.get('secondHalfEntryFee'),
-			secondHalfPicksPerWeek: raw.get('secondHalfPicksPerWeek') || 1,
-			paymentDeadline:        raw.get('paymentDeadline')   || undefined,
-			firstPickDeadline:      raw.get('firstPickDeadline') || undefined,
-			regularSeasonOnly:      raw.get('regularSeasonOnly') === 'on',
-			notes:                  (raw.get('notes') as string) || undefined
+			name:                    (raw.get('name') as string)?.trim(),
+			year:                    raw.get('year'),
+			lmsEntryFee:             raw.get('lmsEntryFee'),
+			secondHalfEntryFee:      raw.get('secondHalfEntryFee'),
+			secondHalfPicksPerWeek:  raw.get('secondHalfPicksPerWeek') || 2,
+			paymentDeadline:         raw.get('paymentDeadline')   || undefined,
+			firstPickDeadline:       raw.get('firstPickDeadline') || undefined,
+			regularSeasonOnly:       raw.get('regularSeasonOnly') === 'on',
+			notes:                   (raw.get('notes') as string) || undefined,
+			lmsEnabled:              raw.get('lmsEnabled') === 'on',
+			secondHalfEnabled:       raw.get('secondHalfEnabled') === 'on',
+			secondHalfStartWeek:     raw.get('secondHalfStartWeek')      || 6,
+			secondHalfPicksStartWeek: raw.get('secondHalfPicksStartWeek') || 10,
 		});
 		if (!parsed.success) {
 			return fail(400, { error: parsed.error.issues[0].message });
 		}
-		const { name, year, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek, paymentDeadline, firstPickDeadline, regularSeasonOnly, notes } = parsed.data;
+		const {
+			name, year, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek,
+			paymentDeadline, firstPickDeadline, regularSeasonOnly, notes,
+			lmsEnabled, secondHalfEnabled, secondHalfStartWeek, secondHalfPicksStartWeek
+		} = parsed.data;
 
 		// datetime-local sends "YYYY-MM-DDTHH:MM" — PocketBase needs full ISO with seconds
 		const toIso = (v?: string) => v ? new Date(v).toISOString().replace('T', ' ') : null;
@@ -32,9 +40,13 @@ export const actions: Actions = {
 				year, name, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek,
 				status: 'setup',
 				regularSeasonOnly,
-				paymentDeadline:   toIso(paymentDeadline),
-				firstPickDeadline: toIso(firstPickDeadline),
-				notes:             notes ?? null
+				paymentDeadline:          toIso(paymentDeadline),
+				firstPickDeadline:        toIso(firstPickDeadline),
+				notes:                    notes ?? null,
+				lmsEnabled,
+				secondHalfEnabled,
+				secondHalfStartWeek,
+				secondHalfPicksStartWeek,
 			});
 		} catch (e: unknown) {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to create season.' });

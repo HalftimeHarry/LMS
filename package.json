@@ -22,7 +22,13 @@
     "clear:test": "node scripts/clear-test-data.js",
     "create:odds-collection": "node scripts/create-odds-collection.js",
     "seed:odds": "node scripts/seed-odds.js",
-    "seed:fake-spreads": "node scripts/seed-fake-spreads.js"
+    "seed:fake-spreads": "node scripts/seed-fake-spreads.js",
+    "test-season:seed": "node scripts/seed-test-season.js",
+    "test-season:start": "node scripts/start-test-season.js",
+    "test-season:advance": "node scripts/advance-test-season.js",
+    "test-season:clear": "node scripts/clear-test-season.js",
+    "test-season:clear-all": "node scripts/clear-test-season.js --all",
+    "test-season:list": "node scripts/clear-test-season.js --list"
   },
   "devDependencies": {
     "@sveltejs/adapter-netlify": "^4.0.0",
