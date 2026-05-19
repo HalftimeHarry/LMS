@@ -4,6 +4,9 @@ import { WeekProvider, SeasonProvider, TeamProvider, EntryProvider } from '$lib/
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryType } from '$lib/providers';
 
+const RESULTS_DELAY_MS  = 10 * 60 * 1000;
+const COMPLETE_DELAY_MS = 18 * 60 * 1000;
+
 export const load: PageServerLoad = async ({ url }) => {
 	const pb       = await pbAdmin();
 	const seasonId = url.searchParams.get('season') ?? '';
@@ -53,6 +56,34 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Existing week numbers so the UI can show how many are missing
 	const existingWeekNumbers = weeks.map(w => w.week);
 
+	// Earliest game time for week 1 — used to pre-fill the deadline field
+	let firstGameTime: string | null = null;
+	if (activeSeason) {
+		try {
+			const odds = await pb.collection('game_odds').getFirstListItem(
+				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
+				{ sort: 'gameTime', fields: 'gameTime' }
+			);
+			firstGameTime = odds.gameTime;
+		} catch { /* no odds yet */ }
+	}
+
+	// Compute next scheduled action across all weeks for the timeline display
+	const now = Date.now();
+	const nextActions = weeks
+		.filter(w => w.status !== 'complete')
+		.flatMap(w => {
+			const dl = new Date(w.deadline).getTime();
+			const events = [];
+			if (w.status === 'open')             events.push({ weekNum: w.week, at: dl,                    action: 'lock' });
+			if (w.status === 'locked')            events.push({ weekNum: w.week, at: dl + RESULTS_DELAY_MS,  action: 'results' });
+			if (w.status === 'results_pending')   events.push({ weekNum: w.week, at: dl + COMPLETE_DELAY_MS, action: 'complete' });
+			return events;
+		})
+		.sort((a, b) => a.at - b.at);
+
+	const isTestSeason = activeSeason?.name?.includes('[TEST]') ?? false;
+
 	return {
 		seasons,
 		teams,
@@ -61,7 +92,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		poolType,
 		pickCountsByWeek,
 		activeEntryCount,
-		existingWeekNumbers
+		existingWeekNumbers,
+		firstGameTime,
+		nextActions,
+		isTestSeason,
+		serverNow: now,
 	};
 };
 
@@ -70,12 +105,10 @@ export const actions: Actions = {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
-		const seasonId               = data.get('seasonId') as string;
-		const week                   = Number(data.get('week'));
-		const deadline               = data.get('deadline') as string;
-		const notes                  = (data.get('notes') as string | null) ?? '';
-		const picksOverrideRaw       = data.get('secondHalfPicksPerWeek') as string | null;
-		const secondHalfPicksPerWeek = picksOverrideRaw ? Number(picksOverrideRaw) : null;
+		const seasonId = data.get('seasonId') as string;
+		const week     = Number(data.get('week'));
+		const deadline = data.get('deadline') as string;
+		const notes    = (data.get('notes') as string | null) ?? '';
 
 		if (!seasonId || !week || !deadline) {
 			return fail(400, { error: 'Season, week number and deadline are required.' });
@@ -92,7 +125,6 @@ export const actions: Actions = {
 			await pb.collection('weekly_settings').create({
 				season: seasonId, week, deadline, status: 'open',
 				notes:  notes || null,
-				secondHalfPicksPerWeek: secondHalfPicksPerWeek ?? null
 			});
 		} catch (e: unknown) {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to create week.' });
@@ -126,6 +158,277 @@ export const actions: Actions = {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Update failed.' });
 		}
 		return { success: true };
+	},
+
+	/**
+	 * Returns the earliest gameTime from game_odds for a given season+week.
+	 * Used to auto-populate the week 1 deadline from the actual schedule.
+	 */
+	fetchFirstGame: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const data     = await request.formData();
+		const seasonId = data.get('seasonId') as string;
+		const week     = Number(data.get('week') ?? 1);
+
+		if (!seasonId) return fail(400, { error: 'seasonId required.' });
+
+		try {
+			const odds = await pb.collection('game_odds').getFirstListItem(
+				`season = "${seasonId}" && week = ${week} && isActive = true`,
+				{ sort: 'gameTime', fields: 'gameTime' }
+			);
+			return { firstGameTime: odds.gameTime };
+		} catch {
+			return fail(404, { error: `No odds found for week ${week}. Enter the deadline manually.` });
+		}
+	},
+
+	/**
+	 * Push all week deadlines forward from now so week 1 fires in the future.
+	 * Interval is derived from the season name: (1h/week) or (1d/week).
+	 * Does NOT touch entries, picks, or pick_results.
+	 */
+	startSeason: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const data     = await request.formData();
+		const seasonId = data.get('seasonId') as string;
+		if (!seasonId) return fail(400, { error: 'seasonId required.' });
+
+		const season = await pb.collection('seasons').getOne(seasonId) as any;
+		if (!season.name?.includes('[TEST]')) {
+			return fail(400, { error: 'Only test seasons can be restarted this way.' });
+		}
+
+		// Derive interval from name
+		const m = season.name.match(/\((\d+)(h|d)\/week\)/);
+		if (!m) return fail(400, { error: 'Could not determine interval from season name.' });
+		const intervalMs = m[2] === 'h'
+			? Number(m[1]) * 60 * 60 * 1000
+			: Number(m[1]) * 24 * 60 * 60 * 1000;
+
+		const now   = new Date();
+		const weeks = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${seasonId}"`, sort: '+week'
+		});
+
+		for (const week of weeks as any[]) {
+			const slotStart = new Date(now.getTime() + (week.week - 1) * intervalMs);
+			const deadline  = new Date(slotStart.getTime() + intervalMs - 20 * 60 * 1000);
+			await pb.collection('weekly_settings').update(week.id, {
+				deadline: deadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+				status:   'open',
+			});
+		}
+
+		// Update season's firstPickDeadline to match new week 1 deadline
+		const newFirstDeadline = new Date(now.getTime() + intervalMs - 20 * 60 * 1000);
+		await pb.collection('seasons').update(seasonId, {
+			firstPickDeadline: newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+			paymentDeadline:   newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+		});
+
+		return { success: true, message: `Season restarted — week 1 deadline is now in ${Math.round(intervalMs / 60000 - 20)} minutes.` };
+	},
+
+	/**
+	 * Full reset: rewind all weeks to open, restore eliminated entries to active,
+	 * delete all pick_results and picks, re-seed picks for weeks 1–3, push deadlines forward.
+	 */
+	resetSeason: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const data     = await request.formData();
+		const seasonId = data.get('seasonId') as string;
+		if (!seasonId) return fail(400, { error: 'seasonId required.' });
+
+		const season = await pb.collection('seasons').getOne(seasonId) as any;
+		if (!season.name?.includes('[TEST]')) {
+			return fail(400, { error: 'Only test seasons can be reset.' });
+		}
+
+		const m = season.name.match(/\((\d+)(h|d)\/week\)/);
+		if (!m) return fail(400, { error: 'Could not determine interval from season name.' });
+		const intervalMs = m[2] === 'h'
+			? Number(m[1]) * 60 * 60 * 1000
+			: Number(m[1]) * 24 * 60 * 60 * 1000;
+
+		const now   = new Date();
+		const weeks = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${seasonId}"`, sort: '+week'
+		});
+
+		// 1. Delete pick_results then picks
+		const picks = await pb.collection('picks').getFullList({
+			filter: weeks.map((w: any) => `week = "${w.id}"`).join(' || ')
+		});
+		const pickIds = (picks as any[]).map((p: any) => p.id);
+		if (pickIds.length) {
+			const CHUNK = 20;
+			for (let i = 0; i < pickIds.length; i += CHUNK) {
+				const chunk  = pickIds.slice(i, i + CHUNK);
+				const filter = chunk.map((id: string) => `pick = "${id}"`).join(' || ');
+				const results = await pb.collection('pick_results').getFullList({ filter });
+				for (const r of results as any[]) await pb.collection('pick_results').delete(r.id).catch(() => {});
+			}
+			for (const p of picks as any[]) await pb.collection('picks').delete(p.id).catch(() => {});
+		}
+
+		// 2. Restore all entries to active (except pending_payment — leave those)
+		const entries = await pb.collection('entries').getFullList({
+			filter: `season = "${seasonId}" && status = "eliminated"`
+		});
+		for (const e of entries as any[]) {
+			await pb.collection('entries').update(e.id, {
+				status: 'active', eliminatedWeek: 0, eliminatedReason: ''
+			}).catch(() => {});
+		}
+
+		// 3. Reset week deadlines and statuses
+		for (const week of weeks as any[]) {
+			const slotStart = new Date(now.getTime() + (week.week - 1) * intervalMs);
+			const deadline  = new Date(slotStart.getTime() + intervalMs - 20 * 60 * 1000);
+			await pb.collection('weekly_settings').update(week.id, {
+				deadline: deadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+				status:   'open',
+			});
+		}
+
+		// 4. Update season firstPickDeadline
+		const newFirstDeadline = new Date(now.getTime() + intervalMs - 20 * 60 * 1000);
+		await pb.collection('seasons').update(seasonId, {
+			firstPickDeadline: newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+			paymentDeadline:   newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
+			status: 'active',
+		});
+
+		// 5. Re-seed picks for weeks 1–3 for active entries
+		const activeEntries = await pb.collection('entries').getFullList({
+			filter: `season = "${seasonId}" && status = "active"`
+		});
+		const teams     = await pb.collection('nfl_teams').getFullList({ sort: 'name' });
+		const pickWeeks = (weeks as any[]).slice(0, 3);
+		const entryType = season.name.toLowerCase().includes('second half') ? 'second_half' : 'lms';
+		let   seeded    = 0;
+
+		function shuffle<T>(arr: T[]): T[] {
+			const a = [...arr];
+			for (let i = a.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[a[i], a[j]] = [a[j], a[i]];
+			}
+			return a;
+		}
+
+		for (const entry of activeEntries as any[]) {
+			if (Math.random() < 0.15) continue;
+			const pool = shuffle(teams as any[]);
+			let idx = 0;
+			for (const week of pickWeeks) {
+				if (week.week > 1 && Math.random() < 0.15) continue;
+				const team = pool[idx++] as any;
+				if (!team) break;
+				await pb.collection('picks').create({
+					entry: entry.id, week: week.id,
+					pickedTeams: [team.id], entryType, isAutoPick: false,
+				}).catch(() => {});
+				seeded++;
+			}
+		}
+
+		return {
+			success: true,
+			message: `Reset complete — ${entries.length} entries restored, ${pickIds.length} picks cleared, ${seeded} new picks seeded. Week 1 deadline in ${Math.round(intervalMs / 60000 - 20)} minutes.`
+		};
+	},
+
+	/**
+	 * Manually runs the advance-weeks logic for a single season.
+	 * Useful in dev where the Netlify scheduled function doesn't run.
+	 */
+	advanceNow: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const data     = await request.formData();
+		const seasonId = data.get('seasonId') as string;
+		if (!seasonId) return fail(400, { error: 'seasonId required.' });
+
+		const now    = Date.now();
+		const season = await pb.collection('seasons').getOne(seasonId);
+		const isTest = (season as any).name?.includes('[TEST]');
+		const weeks  = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${seasonId}"`, sort: '+week'
+		});
+
+		const log: string[] = [];
+
+		for (const week of weeks as any[]) {
+			const dl         = new Date(week.deadline).getTime();
+			const resultsAt  = dl + RESULTS_DELAY_MS;
+			const completeAt = dl + COMPLETE_DELAY_MS;
+
+			// Lock
+			if (now >= dl && week.status === 'open') {
+				await pb.collection('weekly_settings').update(week.id, { status: 'locked' });
+				// Auto-pick for entries that missed deadline
+				if (week.biggestFavoriteTeam) {
+					const entries = await pb.collection('entries').getFullList({
+						filter: `season = "${seasonId}" && status = "active"`
+					});
+					const existing = await pb.collection('picks').getFullList({ filter: `week = "${week.id}"` });
+					const pickedIds = new Set(existing.map((p: any) => p.entry));
+					for (const entry of entries as any[]) {
+						if (pickedIds.has(entry.id)) continue;
+						await pb.collection('picks').create({
+							entry: entry.id, week: week.id,
+							pickedTeams: [week.biggestFavoriteTeam],
+							entryType: entry.entryType, isAutoPick: true,
+						}).catch(() => {});
+					}
+				}
+				log.push(`Week ${week.week}: locked`);
+			}
+
+			// Simulate results (test seasons only)
+			if (isTest && now >= resultsAt && week.status === 'locked') {
+				const picks = await pb.collection('picks').getFullList({ filter: `week = "${week.id}"` });
+				const teams = await pb.collection('nfl_teams').getFullList({ fields: 'id' });
+				for (const pick of picks as any[]) {
+					const pickedTeams = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
+					for (const teamId of pickedTeams) {
+						const result = Math.random() < 0.5 ? 'correct' : 'incorrect';
+						const existing = await pb.collection('pick_results').getFullList({ filter: `pick = "${pick.id}" && team = "${teamId}"` });
+						if (existing.length) {
+							await pb.collection('pick_results').update(existing[0].id, { result }).catch(() => {});
+						} else {
+							await pb.collection('pick_results').create({ pick: pick.id, team: teamId, result, notes: 'auto-simulated' }).catch(() => {});
+						}
+					}
+				}
+				await pb.collection('weekly_settings').update(week.id, { status: 'results_pending' });
+				log.push(`Week ${week.week}: results simulated`);
+			}
+
+			// Complete
+			if (now >= completeAt && week.status === 'results_pending') {
+				const picks = await pb.collection('picks').getFullList({ filter: `week = "${week.id}"` });
+				let eliminated = 0;
+				for (const pick of picks as any[]) {
+					const results = await pb.collection('pick_results').getFullList({ filter: `pick = "${pick.id}"` });
+					if (!results.length || results.some((r: any) => r.result === 'incorrect')) {
+						const entry = await pb.collection('entries').getOne(pick.entry).catch(() => null);
+						if (entry && (entry as any).status === 'active') {
+							await pb.collection('entries').update(pick.entry, {
+								status: 'eliminated', eliminatedWeek: week.week, eliminatedReason: 'Picked a losing team'
+							}).catch(() => {});
+							eliminated++;
+						}
+					}
+				}
+				await pb.collection('weekly_settings').update(week.id, { status: 'complete' });
+				log.push(`Week ${week.week}: complete, ${eliminated} eliminated`);
+			}
+		}
+
+		if (!log.length) log.push('Nothing to advance — no deadlines have passed yet.');
+		return { success: true, advanceLog: log };
 	},
 
 	deleteWeek: async ({ request }) => {
@@ -179,7 +482,6 @@ export const actions: Actions = {
 					deadline: deadline.toISOString(),
 					status:   'open',
 					notes:    null,
-					secondHalfPicksPerWeek: null
 				});
 				created++;
 			} catch {

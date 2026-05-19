@@ -9,7 +9,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const pb = await pbAdmin();
 
 	const seasonFilter = url.searchParams.get('season') ?? '';
-	const statusFilter = (url.searchParams.get('status') ?? 'pending_payment') as EntryStatus | 'all';
+	const statusFilter = (url.searchParams.get('status') ?? 'all') as EntryStatus | 'all';
 	const poolType     = (url.searchParams.get('poolType') ?? 'all') as 'lms' | 'second_half' | 'all';
 
 	const entryProvider  = new EntryProvider(pb);
@@ -29,7 +29,13 @@ export const load: PageServerLoad = async ({ url }) => {
 		})
 	]);
 
-	return { entries, seasons, participants, seasonFilter, statusFilter, poolType };
+	// Map seasonId → firstPickDeadline (ISO string) so the UI can gate delete per entry
+	const deadlineMap: Record<string, string> = {};
+	for (const s of seasons) {
+		if (s.firstPickDeadline) deadlineMap[s.id] = s.firstPickDeadline;
+	}
+
+	return { entries, seasons, participants, seasonFilter, statusFilter, poolType, deadlineMap };
 };
 
 export const actions: Actions = {
@@ -125,10 +131,10 @@ export const actions: Actions = {
 			return fail(404, { error: 'Entry not found.' });
 		}
 
-		const seasonStatus = entry.expand?.season?.status ?? '';
-		if (seasonStatus === 'active' || seasonStatus === 'complete') {
+		const deadline = entry.expand?.season?.firstPickDeadline;
+		if (deadline && new Date() > new Date(deadline)) {
 			return fail(400, {
-				error: 'Entries cannot be deleted once the season has started. Edit the entry status instead.'
+				error: 'The first-game deadline has passed. Entries can no longer be deleted — change the entry status instead.'
 			});
 		}
 		try {
@@ -137,6 +143,53 @@ export const actions: Actions = {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Delete failed.' });
 		}
 		return { success: true };
+	},
+
+	bulkMarkPaid: async ({ request }) => {
+		const pb            = await pbAdmin();
+		const data          = await request.formData();
+		const ids           = data.getAll('ids') as string[];
+		const paymentMethod = data.get('paymentMethod') as string;
+
+		if (!ids.length)      return fail(400, { error: 'No entries selected.' });
+		if (!paymentMethod)   return fail(400, { error: 'Payment method required.' });
+
+		const errors: string[] = [];
+		for (const id of ids) {
+			try {
+				await pb.collection('entries').update(id, {
+					paid: true, paidAt: new Date().toISOString(), paymentMethod, status: 'active'
+				});
+			} catch (e: unknown) {
+				errors.push(`${id}: ${(e as { message?: string })?.message ?? 'failed'}`);
+			}
+		}
+		if (errors.length) return fail(400, { error: `Some updates failed: ${errors.join(', ')}` });
+		return { success: true, count: ids.length };
+	},
+
+	bulkSetStatus: async ({ request }) => {
+		const pb     = await pbAdmin();
+		const data   = await request.formData();
+		const ids    = data.getAll('ids') as string[];
+		const status = data.get('status') as string;
+
+		if (!ids.length) return fail(400, { error: 'No entries selected.' });
+		if (!status)     return fail(400, { error: 'Status required.' });
+
+		const errors: string[] = [];
+		for (const id of ids) {
+			try {
+				const patch: Record<string, unknown> = { status };
+				// Keep paid flag consistent when activating
+				if (status === 'active') patch.paid = true;
+				await pb.collection('entries').update(id, patch);
+			} catch (e: unknown) {
+				errors.push(`${id}: ${(e as { message?: string })?.message ?? 'failed'}`);
+			}
+		}
+		if (errors.length) return fail(400, { error: `Some updates failed: ${errors.join(', ')}` });
+		return { success: true, count: ids.length };
 	},
 
 	bulkSetInactive: async ({ request }) => {

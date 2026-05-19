@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
+	import InfoTip from '$lib/components/InfoTip.svelte';
 	import { createEntriesController } from '$lib/controllers';
 	import type { PageData, ActionData } from './$types';
 
@@ -85,53 +86,108 @@
 	// Client-side search and pool type filter delegated to controller
 	const visibleEntries = $derived(ctrl.filtered);
 
+	// Deadline helpers — keyed by seasonId
+	const deadlineMap = $derived(data.deadlineMap as Record<string, string>);
+	const now = Date.now();
+	function canDelete(entry: any): boolean {
+		const dl = deadlineMap[entry.season];
+		return !dl || now < new Date(dl).getTime();
+	}
+	function deadlineLabel(entry: any): string {
+		const dl = deadlineMap[entry.season];
+		if (!dl) return '';
+		const d = new Date(dl);
+		return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+	}
+
 	function updateFilter(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
 		params.set(key, value);
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 
-	// Bulk set inactive
-	let bulkConfirm = $state(false);
-	async function handleBulkInactive() {
-		if (!bulkConfirm) { bulkConfirm = true; return; }
+	// Bulk mark paid
+	let bulkPaidMethod  = $state('');
+	let bulkPaidLoading = $state(false);
+	async function handleBulkPaid() {
+		if (!bulkPaidMethod) return;
+		bulkPaidLoading = true;
+		const result = await ctrl.bulkMarkPaid(bulkPaidMethod);
+		bulkPaidLoading = false;
+		if (result.success) { bulkPaidMethod = ''; await invalidateAll(); }
+	}
+
+	// Bulk set status
+	let bulkStatusValue = $state('');
+	let bulkConfirm     = $state(false);
+	async function handleBulkStatus() {
+		if (!bulkStatusValue) return;
+		if (bulkStatusValue === 'eliminated' && !bulkConfirm) { bulkConfirm = true; return; }
 		bulkConfirm = false;
-		const result = await ctrl.bulkSetInactive();
-		if (result.success) await invalidateAll();
+		const result = await ctrl.bulkSetStatus(bulkStatusValue);
+		if (result.success) { bulkStatusValue = ''; await invalidateAll(); }
+	}
+
+	// Keep old handler alias for eliminated confirm reset
+	async function handleBulkInactive() {
+		bulkStatusValue = 'eliminated';
+		await handleBulkStatus();
 	}
 </script>
 
 <svelte:head><title>Entries — Admin</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="text-2xl font-bold text-white">Entries</h1>
-	<div class="flex flex-wrap gap-3">
+<div class="mb-2 flex flex-wrap items-center justify-between gap-4">
+	<h1 class="text-2xl font-bold text-white">Entries & Payments</h1>
+	<div class="flex flex-wrap items-center gap-3">
 		<!-- Season filter -->
-		<select
-			value={data.seasonFilter ?? ''}
-			onchange={(e) => updateFilter('season', (e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			<option value="">All seasons</option>
-			{#each data.seasons as s}
-				<option value={s.id}>{s.name}</option>
-			{/each}
-		</select>
+		<div class="flex items-center gap-1.5">
+			<select
+				value={data.seasonFilter ?? ''}
+				onchange={(e) => updateFilter('season', (e.target as HTMLSelectElement).value)}
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				<option value="">All seasons</option>
+				{#each data.seasons as s}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+			<InfoTip text="Filter entries by season. Select a specific season to see its delete deadline and focus bulk actions on that pool." />
+		</div>
 		<!-- Status filter -->
-		<select
-			value={data.statusFilter}
-			onchange={(e) => updateFilter('status', (e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			{#each statusOptions as opt}
-				<option value={opt.value}>{opt.label}</option>
-			{/each}
-		</select>
+		<div class="flex items-center gap-1.5">
+			<select
+				value={data.statusFilter}
+				onchange={(e) => updateFilter('status', (e.target as HTMLSelectElement).value)}
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each statusOptions as opt}
+					<option value={opt.value}>{opt.label}</option>
+				{/each}
+			</select>
+			<InfoTip text="pending_payment — registered but not yet paid. active — paid and in the pool. eliminated — picked incorrectly and removed from contention. Filter to pending_payment to process outstanding fees." />
+		</div>
 
 		<button
 			onclick={() => showCreateForm = !showCreateForm}
 			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
 		>+ Add Entries</button>
+	</div>
+</div>
+
+<!-- Description card -->
+<div class="mb-6 grid gap-3 sm:grid-cols-3">
+	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Manage Entries</p>
+		Add, edit, and delete player entries. Each entry is one shot at the pool — a player can hold multiple.
+	</div>
+	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Collect Payments</p>
+		Mark entries as paid once you've received the fee. Unpaid entries stay in <span class="text-yellow-400">pending_payment</span> and won't receive picks until activated.
+	</div>
+	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
+		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Use the Filters</p>
+		Filter by <span class="text-yellow-400">Pending Payment</span> to process outstanding fees, or pick a season to scope bulk actions before week 1 locks.
 	</div>
 </div>
 
@@ -307,28 +363,43 @@
 </div>
 {/if}
 
-<!-- Entry search -->
-<div class="mb-4 flex items-center gap-3">
-	<div class="relative flex-1 max-w-sm">
-		<svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-		</svg>
-		<input
-			type="text"
-			placeholder="Search entries or player name…"
-			bind:value={ctrl.search}
-			class="w-full rounded border border-gray-700 bg-gray-900 py-1.5 pl-9 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
-		/>
-		{#if ctrl.search}
-			<button onclick={() => ctrl.search = ''} class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear">✕</button>
-		{/if}
-	</div>
-	<div class="flex items-center gap-3">
-		<p class="text-sm text-gray-500">
+<!-- Search + select + bulk actions card -->
+<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
+
+	<!-- Deadline notice — shown when a single season is selected -->
+	{#if data.seasonFilter && deadlineMap[data.seasonFilter]}
+		{@const dl = deadlineMap[data.seasonFilter]}
+		{@const isPast = now > new Date(dl).getTime()}
+		<div class="mb-3 flex items-center gap-2 text-xs {isPast ? 'text-red-400' : 'text-yellow-400'}">
+			<span class="font-semibold">{isPast ? '⚠️ Delete window closed' : '🕐 Delete deadline'}:</span>
+			<span>{new Date(dl).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+			{#if isPast}<span class="text-gray-500">— use status change to remove entries</span>{/if}
+		</div>
+	{/if}
+
+	<!-- Row 1: search + count + select-all -->
+	<div class="flex flex-wrap items-center gap-3">
+		<div class="relative flex-1 min-w-48">
+			<svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+			</svg>
+			<input
+				type="text"
+				placeholder="Search entries or player name…"
+				bind:value={ctrl.search}
+				class="w-full rounded border border-gray-700 bg-gray-900 py-1.5 pl-9 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
+			/>
+			{#if ctrl.search}
+				<button onclick={() => ctrl.search = ''} class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white" aria-label="Clear">✕</button>
+			{/if}
+		</div>
+
+		<p class="text-sm text-gray-500 shrink-0">
 			{visibleEntries.length}{visibleEntries.length !== entries.length ? ` of ${entries.length}` : ''} entr{entries.length === 1 ? 'y' : 'ies'}
 		</p>
+
 		{#if visibleEntries.length > 0}
-			<label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300">
+			<label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 shrink-0">
 				<input
 					type="checkbox"
 					checked={ctrl.allSelected}
@@ -339,8 +410,64 @@
 			</label>
 		{/if}
 	</div>
-</div>
 
+	<!-- Row 2: bulk actions — only when entries are selected -->
+	{#if ctrl.selectedIds.size > 0}
+		<div class="mt-3 flex flex-wrap items-center gap-3 border-t border-[rgba(201,168,76,0.2)] pt-3">
+			<span class="text-sm font-semibold text-[#c9a84c]">{ctrl.selectedIds.size} selected</span>
+			<div class="h-4 w-px bg-[rgba(201,168,76,0.3)]"></div>
+
+			<!-- Bulk mark paid -->
+			<div class="flex items-center gap-2">
+				<select
+					bind:value={bulkPaidMethod}
+					class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+				>
+					<option value="">Method…</option>
+					{#each paymentMethods as m}
+						<option value={m}>{m}</option>
+					{/each}
+				</select>
+				<button
+					onclick={handleBulkPaid}
+					disabled={!bulkPaidMethod || bulkPaidLoading}
+					class="rounded border border-green-800 bg-green-950/40 px-3 py-1 text-xs font-medium text-green-400 transition hover:bg-green-950/70 disabled:opacity-40"
+				>{bulkPaidLoading ? 'Marking…' : 'Mark All Paid'}</button>
+				<InfoTip text="Marks all selected entries as paid using the chosen method and sets their status to active. Select a payment method first." />
+			</div>
+
+			<div class="h-4 w-px bg-[rgba(201,168,76,0.3)]"></div>
+
+			<!-- Bulk set status -->
+			<div class="flex items-center gap-2">
+				<select
+					bind:value={bulkStatusValue}
+					class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+				>
+					<option value="">Set status…</option>
+					{#each statusOptions as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+				<button
+					onclick={handleBulkStatus}
+					disabled={!bulkStatusValue || ctrl.bulkLoading}
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-1 text-xs font-medium text-gray-300 transition hover:bg-gray-800 disabled:opacity-40"
+				>{ctrl.bulkLoading ? 'Updating…' : 'Apply'}</button>
+				<InfoTip text="Override the status of all selected entries. Use 'eliminated' to remove entries that shouldn't continue, or 'active' to reinstate entries after a correction." />
+			</div>
+
+			<button
+				onclick={() => { ctrl.clearSelection(); bulkConfirm = false; bulkPaidMethod = ''; bulkStatusValue = ''; }}
+				class="ml-auto text-xs text-gray-500 hover:text-gray-300"
+			>Clear selection</button>
+
+			{#if ctrl.bulkError}
+				<p class="w-full text-xs text-red-400">{ctrl.bulkError}</p>
+			{/if}
+		</div>
+	{/if}
+</div>
 
 {#if visibleEntries.length === 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
@@ -350,24 +477,28 @@
 	<div class="flex flex-col gap-3">
 		{#each visibleEntries as entry, i}
 
-			<div class="flex items-stretch gap-3">
-				<!-- Checkbox + row number -->
-				<div class="flex w-9 shrink-0 flex-col items-center justify-center gap-1 self-stretch">
-					<input
-						type="checkbox"
-						checked={ctrl.selectedIds.has(entry.id)}
-						onchange={() => ctrl.toggleSelect(entry.id)}
-						class="h-4 w-4 cursor-pointer accent-[#c9a84c]"
-						aria-label="Select entry"
-					/>
-					<span class="text-xs font-bold text-[#c9a84c]">{i + 1}</span>
-				</div>
-
-				<!-- Card -->
-				<div class="min-w-0 flex-1 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+			<!-- Card -->
+			<div
+				class="min-w-0 rounded-xl border p-5 backdrop-blur-sm transition
+					{ctrl.selectedIds.has(entry.id)
+						? 'border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.06)]'
+						: 'border-[rgba(201,168,76,0.3)] bg-black/75'}"
+			>
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<!-- Entry info -->
-					<div>
+					<div class="flex items-start gap-3">
+						<!-- Checkbox + row number -->
+						<div class="flex flex-col items-center gap-1 pt-0.5">
+							<input
+								type="checkbox"
+								checked={ctrl.selectedIds.has(entry.id)}
+								onchange={() => ctrl.toggleSelect(entry.id)}
+								class="h-4 w-4 cursor-pointer accent-[#c9a84c]"
+								aria-label="Select entry"
+							/>
+							<span class="text-xs font-bold text-[#c9a84c]">{i + 1}</span>
+						</div>
+						<div>
 						<div class="flex flex-wrap items-center gap-2">
 							<p class="font-semibold text-white">{entry.entryName}</p>
 							<span class="rounded border px-2 py-0.5 text-xs font-medium {entryTypeBadge[entry.entryType] ?? 'border-gray-700 text-gray-400'}">
@@ -398,7 +529,11 @@
 
 						{#if !entry.paid}
 							<!-- Mark paid -->
-							<form method="POST" action="?/markPaid" use:enhance class="flex items-center gap-2">
+							<form method="POST" action="?/markPaid"
+								use:enhance={() => async ({ update }) => { await update(); await invalidateAll(); }}
+								class="flex items-center gap-2"
+							>
+							<InfoTip text="Record payment for this entry. Select the method the player used to pay, then click Mark Paid. This sets the entry to active and records the payment date." />
 								<input type="hidden" name="id" value={entry.id} />
 								<select
 									name="paymentMethod"
@@ -418,7 +553,9 @@
 							</form>
 						{:else}
 							<!-- Mark unpaid -->
-							<form method="POST" action="?/markUnpaid" use:enhance>
+							<form method="POST" action="?/markUnpaid"
+								use:enhance={() => async ({ update }) => { await update(); await invalidateAll(); }}
+							>
 								<input type="hidden" name="id" value={entry.id} />
 								<button type="submit"
 									class="rounded border border-gray-700 px-3 py-1 text-xs text-gray-400 transition hover:bg-gray-800">
@@ -427,21 +564,28 @@
 							</form>
 						{/if}
 
-						<!-- Delete -->
-
-						<form method="POST" action="?/deleteEntry" use:enhance>
-							<input type="hidden" name="id" value={entry.id} />
-							<button
-								type="submit"
-								onclick={(e) => { if (!confirm(`Delete "${entry.entryName}"?`)) e.preventDefault(); }}
-								class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
-							>Delete</button>
-						</form>
+						<!-- Delete — only before first-game deadline -->
+						{#if canDelete(entry)}
+							<form method="POST" action="?/deleteEntry"
+								use:enhance={() => async ({ update }) => { await update(); await invalidateAll(); }}
+							>
+								<input type="hidden" name="id" value={entry.id} />
+								<button
+									type="submit"
+									onclick={(e) => { if (!confirm(`Delete "${entry.entryName}"?`)) e.preventDefault(); }}
+									class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
+								>Delete</button>
+							</form>
+						{:else}
+							<span class="rounded border border-gray-800 px-3 py-1 text-xs text-gray-600" title="Delete window closed — deadline passed">
+								Locked
+							</span>
+						{/if}
 
 					</div>
-				</div>
-				</div><!-- /card -->
-			</div><!-- /row -->
+					</div><!-- /entry text -->
+				</div><!-- /entry info + checkbox -->
+			</div><!-- /card -->
 		{/each}
 	</div>
 {/if}

@@ -1,6 +1,8 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { SeasonProvider, EntryProvider, WeekProvider } from '$lib/providers';
-import type { PageServerLoad } from './$types';
+import { seedTestSeasonPair, clearTestSeason } from '$lib/server/test-season';
+import { fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
 
 function buildStats(entries: any[], season: any, totalUsers: number) {
 	const paidLms        = entries.filter(e => e.paid && e.entryType === 'lms'         && e.paymentMethod !== 'free');
@@ -76,4 +78,57 @@ export const load: PageServerLoad = async ({ locals }) => {
 		pendingPaymentCount:   defaultData?.stats.pendingPayment   ?? 0,
 		stats:                 defaultData?.stats                  ?? buildStats([], null, users.totalItems)
 	};
+};
+
+export const actions: Actions = {
+	// Seed a new test season pair (LMS + Second Half)
+	seedTestSeason: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const formData = await request.formData();
+		const interval = (formData.get('interval') ?? '1h') as '1h' | '1d';
+		if (interval !== '1h' && interval !== '1d') {
+			return fail(400, { error: 'Invalid interval. Use 1h or 1d.' });
+		}
+		try {
+			const result = await seedTestSeasonPair(pb, interval);
+			return { success: true, ...result };
+		} catch (e: unknown) {
+			return fail(500, { error: (e as Error).message });
+		}
+	},
+
+	// Clear a single test season and all its data
+	clearTestSeason: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const formData = await request.formData();
+		const seasonId = formData.get('seasonId') as string;
+		if (!seasonId) return fail(400, { error: 'seasonId required.' });
+		try {
+			const result = await clearTestSeason(pb, seasonId);
+			return { success: true, ...result };
+		} catch (e: unknown) {
+			return fail(500, { error: (e as Error).message });
+		}
+	},
+
+	// Clear all test seasons then seed a fresh pair
+	resetTestSeason: async ({ request }) => {
+		const pb       = await pbAdmin();
+		const formData = await request.formData();
+		const interval = (formData.get('interval') ?? '1h') as '1h' | '1d';
+		const seasonIds = formData.getAll('seasonId') as string[];
+
+		// Clear existing test seasons
+		for (const id of seasonIds) {
+			try { await clearTestSeason(pb, id); } catch { /* skip */ }
+		}
+
+		// Seed fresh
+		try {
+			const result = await seedTestSeasonPair(pb, interval);
+			return { success: true, ...result };
+		} catch (e: unknown) {
+			return fail(500, { error: (e as Error).message });
+		}
+	},
 };

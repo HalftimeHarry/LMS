@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
+	import InfoTip from '$lib/components/InfoTip.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -22,7 +23,10 @@
 <svelte:head><title>Seasons — Admin</title></svelte:head>
 
 <div class="mb-6 flex items-center justify-between">
-	<h1 class="text-2xl font-bold text-white">Seasons</h1>
+	<div>
+		<h1 class="text-2xl font-bold text-white">Seasons</h1>
+		<p class="mt-1 text-sm text-gray-500">Each season runs one full NFL year. A season moves through four stages: <span class="text-gray-300">setup → open → active → complete</span>. Players can register once a season is open.</p>
+	</div>
 	<a
 		href="/admin/seasons/new"
 		class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
@@ -56,29 +60,33 @@
 						{/if}
 					</div>
 
-					<div class="flex items-center gap-3">
-						<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[season.status] ?? 'bg-gray-800 text-gray-400'}">
-							{season.status}
-						</span>
+					<div class="flex flex-wrap items-center gap-3">
+						<div class="flex items-center gap-1.5">
+							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[season.status] ?? 'bg-gray-800 text-gray-400'}">
+								{season.status}
+							</span>
+							<InfoTip text="setup — not visible to players yet. open — registration live, players can sign up. active — picks are being collected each week. complete — season has ended." />
+						</div>
 
 						<!-- Advance status -->
 						{#if season.status !== 'complete'}
-							<form method="POST" action="?/setStatus" use:enhance>
-								<input type="hidden" name="id" value={season.id} />
-								<input type="hidden" name="status" value={nextStatus[season.status]} />
-								<button
-									type="submit"
-									class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1 text-xs text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]"
-								>
-									→ {nextStatus[season.status]}
-								</button>
-							</form>
+							<div class="flex items-center gap-1.5">
+								<form method="POST" action="?/setStatus" use:enhance>
+									<input type="hidden" name="id" value={season.id} />
+									<input type="hidden" name="status" value={nextStatus[season.status]} />
+									<button
+										type="submit"
+										class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1 text-xs text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]"
+									>→ {nextStatus[season.status]}</button>
+								</form>
+								<InfoTip text="Move this season to the next stage. Make sure weeks and entry fees are configured before advancing to open." />
+							</div>
 						{/if}
 
 						<a
 							href="/admin/weeks?season={season.id}"
 							class="rounded border border-gray-700 px-3 py-1 text-xs text-gray-300 transition hover:bg-gray-800"
-						>Weeks</a>
+						>Season Settings</a>
 
 						<!-- Delete (only setup seasons) -->
 						{#if season.status === 'setup'}

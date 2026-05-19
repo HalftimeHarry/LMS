@@ -69,14 +69,10 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 		filtered().length > 0 && filtered().every(e => selectedIds.has(e.id))
 	);
 
-	// ── Bulk: set not_active (eliminated) ────────────────────────────────────
-	/**
-	 * Submits a bulk status change to the server action ?/bulkSetInactive.
-	 * Passes the selected entry ids as a FormData array.
-	 * Caller should invalidate/reload after this resolves.
-	 */
-	async function bulkSetInactive(): Promise<{ success: boolean; error?: string }> {
-		if (selectedIds.size === 0) return { success: false, error: 'No entries selected.' };
+	// ── Bulk: mark paid ───────────────────────────────────────────────────────
+	async function bulkMarkPaid(paymentMethod: string): Promise<{ success: boolean; error?: string }> {
+		if (selectedIds.size === 0)  return { success: false, error: 'No entries selected.' };
+		if (!paymentMethod)          return { success: false, error: 'Payment method required.' };
 
 		bulkLoading = true;
 		bulkError   = null;
@@ -84,8 +80,9 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 		try {
 			const fd = new FormData();
 			for (const id of selectedIds) fd.append('ids', id);
+			fd.append('paymentMethod', paymentMethod);
 
-			const res  = await fetch('?/bulkSetInactive', { method: 'POST', body: fd });
+			const res  = await fetch('?/bulkMarkPaid', { method: 'POST', body: fd });
 			const json = await res.json().catch(() => ({}));
 
 			if (!res.ok) {
@@ -102,6 +99,39 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 			bulkLoading = false;
 		}
 	}
+
+	// ── Bulk: set status ─────────────────────────────────────────────────────
+	async function bulkSetStatus(status: string): Promise<{ success: boolean; error?: string }> {
+		if (selectedIds.size === 0) return { success: false, error: 'No entries selected.' };
+
+		bulkLoading = true;
+		bulkError   = null;
+
+		try {
+			const fd = new FormData();
+			for (const id of selectedIds) fd.append('ids', id);
+			fd.append('status', status);
+
+			const res  = await fetch('?/bulkSetStatus', { method: 'POST', body: fd });
+			const json = await res.json().catch(() => ({}));
+
+			if (!res.ok) {
+				bulkError = json?.data?.error ?? 'Bulk action failed.';
+				return { success: false, error: bulkError ?? undefined };
+			}
+
+			clearSelection();
+			return { success: true };
+		} catch (e: unknown) {
+			bulkError = (e as Error)?.message ?? 'Unexpected error.';
+			return { success: false, error: bulkError ?? undefined };
+		} finally {
+			bulkLoading = false;
+		}
+	}
+
+	// Keep for backwards compat
+	async function bulkSetInactive() { return bulkSetStatus('eliminated'); }
 
 	// ── Sync entries when page data reloads ──────────────────────────────────
 	function setEntries(next: Entry[]) {
@@ -135,6 +165,8 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 		toggleSelect,
 		selectAll,
 		clearSelection,
+		bulkMarkPaid,
+		bulkSetStatus,
 		bulkSetInactive,
 		setEntries
 	};
