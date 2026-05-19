@@ -79,7 +79,8 @@
 	});
 
 	// Entry type — default lms
-	let entryType = $state('lms');
+	let entryType     = $state('lms');
+	let complimentary = $state(false);
 
 	// Client-side search and pool type filter delegated to controller
 	const visibleEntries = $derived(ctrl.filtered);
@@ -162,6 +163,7 @@
 				selectedSeasonId = defaultSeason?.id ?? '';
 				baseName = 'Entry';
 				entryType = 'lms';
+				complimentary = false;
 			};
 		}}
 		class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
@@ -273,13 +275,30 @@
 				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 		</div>
 
+		<!-- Complimentary -->
+		<div class="flex items-center gap-3 sm:col-span-2 lg:col-span-1">
+			<label class="flex cursor-pointer items-center gap-2.5">
+				<input
+					type="checkbox"
+					name="complimentary"
+					value="true"
+					bind:checked={complimentary}
+					class="h-4 w-4 rounded border-gray-600 bg-gray-900 accent-[#c9a84c]"
+				/>
+				<span class="text-sm text-gray-300">Complimentary entry</span>
+			</label>
+			{#if complimentary}
+				<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs text-green-400">Free — no payment required</span>
+			{/if}
+		</div>
+
 		<!-- Submit -->
 		<div class="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
 			<button type="submit" disabled={createLoading || !selectedUserId}
 				class="rounded bg-[#c9a84c] px-6 py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
 				{createLoading ? 'Creating…' : 'Create entries'}
 			</button>
-			<button type="button" onclick={() => { showCreateForm = false; playerSearch = ''; selectedUserId = ''; selectedSeasonId = defaultSeason?.id ?? ''; baseName = 'Entry'; }}
+			<button type="button" onclick={() => { showCreateForm = false; playerSearch = ''; selectedUserId = ''; selectedSeasonId = defaultSeason?.id ?? ''; baseName = 'Entry'; complimentary = false; }}
 				class="rounded border border-gray-700 px-4 py-2.5 text-sm text-gray-400 transition hover:bg-gray-800">
 				Cancel
 			</button>

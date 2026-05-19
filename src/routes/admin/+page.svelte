@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 	let { data }: { data: PageData } = $props();
 
@@ -34,6 +36,32 @@
 		active:   'Active — accepting 2nd Half entries',
 		complete: 'Complete'
 	};
+
+	// Season group filter for the "All Seasons" list
+	// Groups: 'real' | '1h' | '1d'
+	type SeasonGroup = 'real' | '1h' | '1d';
+
+	function getSeasonGroup(season: any): SeasonGroup {
+		if (!season.name?.includes('[TEST]')) return 'real';
+		const m = season.name.match(/\((\d+)(h|d)\/week\)/);
+		if (!m) return 'real';
+		return m[2] === 'h' ? '1h' : '1d';
+	}
+
+	const allSeasons = $derived(data.seasons as any[]);
+
+	// Only show groups that actually have seasons
+	const hasGroup = $derived({
+		real: allSeasons.some(s => getSeasonGroup(s) === 'real'),
+		'1h': allSeasons.some(s => getSeasonGroup(s) === '1h'),
+		'1d': allSeasons.some(s => getSeasonGroup(s) === '1d'),
+	});
+
+	let seasonGroup = $state<SeasonGroup>('real');
+
+	const visibleSeasons = $derived(
+		allSeasons.filter(s => getSeasonGroup(s) === seasonGroup)
+	);
 </script>
 
 <svelte:head><title>Admin — LMS Pool</title></svelte:head>
@@ -73,6 +101,71 @@
 					</a>
 				</div>
 			</div>
+
+			<!-- Pool toggles -->
+			<div class="mt-4 border-t border-[rgba(201,168,76,0.15)] pt-4">
+				<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-[rgba(201,168,76,0.5)]">Pool Toggles</p>
+				<div class="flex flex-wrap gap-4">
+
+					<!-- LMS toggle -->
+					<form method="POST" action="/admin/seasons?/togglePool" use:enhance={() => () => invalidateAll()}>
+						<input type="hidden" name="id"   value={s.id} />
+						<input type="hidden" name="pool" value="lms" />
+						<input type="hidden" name="enabled" value={s.lmsEnabled === false ? 'true' : 'false'} />
+						<button type="submit"
+							class="flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition
+								{s.lmsEnabled !== false
+									? 'border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.12)] text-[#c9a84c] hover:bg-[rgba(201,168,76,0.2)]'
+									: 'border-gray-700 bg-gray-900 text-gray-500 hover:bg-gray-800'}">
+							<span class="h-2 w-2 rounded-full {s.lmsEnabled !== false ? 'bg-[#c9a84c]' : 'bg-gray-600'}"></span>
+							LMS Pool
+							<span class="text-xs opacity-70">{s.lmsEnabled !== false ? 'ON' : 'OFF'}</span>
+						</button>
+					</form>
+
+					<!-- 2nd Half toggle -->
+					<form method="POST" action="/admin/seasons?/togglePool" use:enhance={() => () => invalidateAll()}>
+						<input type="hidden" name="id"   value={s.id} />
+						<input type="hidden" name="pool" value="second_half" />
+						<input type="hidden" name="enabled" value={s.secondHalfEnabled === false ? 'true' : 'false'} />
+						<button type="submit"
+							class="flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition
+								{s.secondHalfEnabled !== false
+									? 'border-blue-700 bg-blue-950/50 text-blue-400 hover:bg-blue-950/80'
+									: 'border-gray-700 bg-gray-900 text-gray-500 hover:bg-gray-800'}">
+							<span class="h-2 w-2 rounded-full {s.secondHalfEnabled !== false ? 'bg-blue-400' : 'bg-gray-600'}"></span>
+							2nd Half Pool
+							<span class="text-xs opacity-70">{s.secondHalfEnabled !== false ? 'ON' : 'OFF'}</span>
+						</button>
+					</form>
+
+					<!-- 2nd Half config inline -->
+					<form method="POST" action="/admin/seasons?/updatePoolConfig" use:enhance={() => () => invalidateAll()}
+						class="flex flex-wrap items-center gap-2 text-xs text-gray-400">
+						<input type="hidden" name="id" value={s.id} />
+						<span class="text-gray-600">2nd Half opens week</span>
+						<input type="number" name="secondHalfStartWeek"
+							value={s.secondHalfStartWeek ?? 6} min="1" max="18"
+							class="w-14 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-white focus:border-blue-500 focus:outline-none" />
+						<span class="text-gray-600">· picks ↑ week</span>
+						<input type="number" name="secondHalfPicksStartWeek"
+							value={s.secondHalfPicksStartWeek ?? 10} min="1" max="18"
+							class="w-14 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-white focus:border-blue-500 focus:outline-none" />
+						<span class="text-gray-600">·</span>
+						<select name="secondHalfPicksPerWeek"
+							class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white focus:border-blue-500 focus:outline-none">
+							{#each [1,2,3] as n}
+								<option value={n} selected={n === (s.secondHalfPicksPerWeek ?? 2)}>{n} pick{n > 1 ? 's' : ''}/wk</option>
+							{/each}
+						</select>
+						<button type="submit"
+							class="rounded border border-gray-700 px-3 py-1 text-gray-400 transition hover:border-blue-600 hover:text-blue-400">
+							Save
+						</button>
+					</form>
+
+				</div>
+			</div>
 		</div>
 	</div>
 {:else}
@@ -87,18 +180,36 @@
 
 <!-- All seasons list -->
 <div class="mb-8">
-	<div class="mb-3 flex items-center justify-between">
-		<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">All Seasons</h2>
-		{#if isSuperAdmin}
-			<a href="/admin/seasons/new" class="text-xs text-[#c9a84c] hover:underline">+ New season</a>
-		{/if}
+	<div class="mb-3 flex items-center justify-between gap-3">
+		<h2 class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c] shrink-0">All Seasons</h2>
+		<div class="flex items-center gap-3">
+			<select
+				bind:value={seasonGroup}
+				class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-1.5 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#if hasGroup.real}
+					<option value="real">2026 – 2027 Season</option>
+				{/if}
+				{#if hasGroup['1h']}
+					<option value="1h">18 Hour Testing</option>
+				{/if}
+				{#if hasGroup['1d']}
+					<option value="1d">24 Hour Testing</option>
+				{/if}
+			</select>
+			{#if isSuperAdmin}
+				<a href="/admin/seasons/new" class="text-xs text-[#c9a84c] hover:underline shrink-0">+ New season</a>
+			{/if}
+		</div>
 	</div>
 	<div class="grid gap-3 sm:grid-cols-2">
-		{#each data.seasons as s}
+		{#each visibleSeasons as s}
 			{@const season = s as any}
 			{@const isSecondHalf = season.name?.toLowerCase().includes('second half')}
 			{@const isActive = (data.activeSeasons as any[]).some(a => a.id === season.id)}
 			{@const isSelected = selectedSeasonId === season.id}
+			{@const isTest = season.name?.includes('[TEST]')}
+			{@const testInterval = isTest ? (season.name?.match(/\(([^)]+)\/week\)/)?.[1] ?? null) : null}
 			<button
 				type="button"
 				onclick={() => { if (isActive) selectedSeasonId = season.id; }}
@@ -119,13 +230,22 @@
 				></div>
 
 				<div class="relative flex items-center justify-between gap-3 px-5 py-4">
-					<div>
+					<div class="min-w-0 flex-1">
 						<p class="text-xs font-semibold uppercase tracking-widest {isSecondHalf ? 'text-blue-500/60' : 'text-[rgba(201,168,76,0.6)]'}">
-							{isSecondHalf ? 'Second Half' : 'LMS'}
+							{isSecondHalf ? 'Second Half' : 'LMS'}{isTest ? ' · TEST' : ''}
 						</p>
-						<p class="mt-0.5 font-bold text-white">{season.name}</p>
+						<p class="mt-0.5 font-bold text-white truncate">
+							{isTest
+								? season.name.replace('[TEST] ', '').replace(/\s*\([^)]+\/week\)\s*\d{4}-\d{2}-\d{2}T[\d:]+/, '').trim()
+								: season.name}
+						</p>
 					</div>
-					<div class="flex flex-col items-end gap-1.5">
+					<div class="flex flex-col items-end gap-1.5 shrink-0">
+						{#if testInterval}
+							<span class="rounded border border-orange-800 bg-orange-950/60 px-2 py-0.5 text-xs font-mono font-semibold text-orange-400">
+								{testInterval}/wk
+							</span>
+						{/if}
 						<span class="rounded border px-2.5 py-1 text-xs font-medium {seasonStatusColors[season.status] ?? 'border-gray-700 text-gray-400'}">
 							{season.status}
 						</span>
@@ -227,6 +347,78 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Test season panel — only shown when test seasons exist -->
+{#if (data.seasons as any[]).some(s => s.name?.includes('[TEST]'))}
+	{@const testSeasons1h = (data.seasons as any[]).filter(s => s.name?.includes('[TEST]') && s.name?.includes('(1h/week)'))}
+	{@const testSeasons1d = (data.seasons as any[]).filter(s => s.name?.includes('[TEST]') && s.name?.includes('(1d/week)'))}
+	<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950/20 p-5">
+		<div class="mb-4 flex items-center justify-between gap-3">
+			<div>
+				<p class="text-xs font-semibold uppercase tracking-wider text-orange-400">Test Seasons Active</p>
+				<p class="mt-0.5 text-xs text-gray-500">Run the scheduler from your terminal to start the countdown. Clean up when done.</p>
+			</div>
+			<a href="/admin/results" class="rounded border border-orange-700 bg-orange-950/60 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950">
+				Record Results →
+			</a>
+		</div>
+
+		<div class="grid gap-4 sm:grid-cols-2">
+			{#if testSeasons1h.length}
+				<div class="rounded-lg border border-orange-800/40 bg-black/40 p-4">
+					<p class="mb-2 text-xs font-semibold text-orange-400">18-Hour Test <span class="font-mono text-orange-600">(1h/week)</span></p>
+					<div class="mb-3 flex flex-col gap-1">
+						{#each testSeasons1h as s}
+							<p class="font-mono text-xs text-gray-400">
+								<span class="text-gray-600">ID:</span> {s.id}
+								<span class="ml-2 text-gray-600">{s.name.toLowerCase().includes('second half') ? '2H' : 'LMS'}</span>
+							</p>
+						{/each}
+					</div>
+					<div class="rounded border border-gray-800 bg-gray-950 p-3 font-mono text-xs text-green-400">
+						<p class="text-gray-600 mb-1"># Start countdown (run in terminal):</p>
+						<p>node scripts/start-test-season.js --interval=1h</p>
+					</div>
+					<div class="mt-2 text-xs text-gray-600">
+						T+0 open · T+40m picks lock · T+58m results · T+1h next week
+					</div>
+				</div>
+			{/if}
+
+			{#if testSeasons1d.length}
+				<div class="rounded-lg border border-orange-800/40 bg-black/40 p-4">
+					<p class="mb-2 text-xs font-semibold text-orange-400">24-Hour Test <span class="font-mono text-orange-600">(1d/week)</span></p>
+					<div class="mb-3 flex flex-col gap-1">
+						{#each testSeasons1d as s}
+							<p class="font-mono text-xs text-gray-400">
+								<span class="text-gray-600">ID:</span> {s.id}
+								<span class="ml-2 text-gray-600">{s.name.toLowerCase().includes('second half') ? '2H' : 'LMS'}</span>
+							</p>
+						{/each}
+					</div>
+					<div class="rounded border border-gray-800 bg-gray-950 p-3 font-mono text-xs text-green-400">
+						<p class="text-gray-600 mb-1"># Start countdown (run in terminal):</p>
+						<p>node scripts/start-test-season.js --interval=1d</p>
+					</div>
+					<div class="mt-2 text-xs text-gray-600">
+						T+0 open · T+20h picks lock · T+23h 58m results · T+24h next week
+					</div>
+				</div>
+			{/if}
+		</div>
+
+		<div class="mt-4 flex flex-wrap gap-3 border-t border-orange-800/30 pt-4">
+			<div class="rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-400">
+				<span class="text-gray-600"># Clean up all test data:</span><br/>
+				node scripts/clear-test-season.js --all
+			</div>
+			<div class="rounded border border-gray-800 bg-gray-950 px-3 py-2 font-mono text-xs text-gray-400">
+				<span class="text-gray-600"># Seed new test seasons:</span><br/>
+				node scripts/seed-test-season.js --interval=1h
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Pending payment quick list -->
 {#if stats.pendingPayment > 0}

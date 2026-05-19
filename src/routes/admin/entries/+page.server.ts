@@ -38,17 +38,18 @@ export const actions: Actions = {
 		const raw = await request.formData();
 
 		const parsed = adminCreateEntriesSchema.safeParse({
-			seasonId:   raw.get('seasonId'),
-			userId:     raw.get('userId'),
-			entryType:  raw.get('entryType'),
-			count:      raw.get('count'),
-			baseName:   (raw.get('baseName') as string)?.trim(),
-			referredBy: (raw.get('referredBy') as string)?.trim() || undefined
+			seasonId:      raw.get('seasonId'),
+			userId:        raw.get('userId'),
+			entryType:     raw.get('entryType'),
+			count:         raw.get('count'),
+			baseName:      (raw.get('baseName') as string)?.trim(),
+			referredBy:    (raw.get('referredBy') as string)?.trim() || undefined,
+			complimentary: raw.get('complimentary') === 'true'
 		});
 		if (!parsed.success) {
 			return fail(400, { error: parsed.error.issues[0].message, action: 'create' });
 		}
-		const { seasonId, userId, entryType, count, baseName, referredBy = '' } = parsed.data;
+		const { seasonId, userId, entryType, count, baseName, referredBy = '', complimentary } = parsed.data;
 
 		// Admin bypasses entry window rules — no isLmsOpen/isSecondHalfOpen check here.
 		// Window enforcement only applies to participant self-registration.
@@ -63,8 +64,16 @@ export const actions: Actions = {
 					? baseName
 					: `${baseName} ${offset + i + 1}`;
 				await pb.collection('entries').create({
-					season: seasonId, user: userId, entryType, entryName,
-					status: 'pending_payment', paid: false, referredBy: referredBy || null
+					season:        seasonId,
+					user:          userId,
+					entryType,
+					entryName,
+					referredBy:    referredBy || null,
+					// Complimentary entries are immediately active — no payment step needed
+					status:        complimentary ? 'active'          : 'pending_payment',
+					paid:          complimentary ? true              : false,
+					paidAt:        complimentary ? new Date().toISOString() : null,
+					paymentMethod: complimentary ? 'free'            : null,
 				});
 				created.push(entryName);
 			}
