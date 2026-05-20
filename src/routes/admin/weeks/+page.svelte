@@ -171,7 +171,7 @@
 			{@const m = live ? Math.floor((diff % 3_600_000) / 60_000) : 0}
 			{@const s = live ? Math.floor((diff % 60_000) / 1_000) : 0}
 			<div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-5 py-3
-				{urgent ? 'border-red-800 bg-red-950/40' : live ? 'border-green-800 bg-green-950/30' : 'border-gray-700 bg-gray-900/40'}">
+				{urgent ? 'border-red-800 bg-red-950/80' : live ? 'border-green-800 bg-green-950/70' : 'border-gray-700 bg-gray-950/80'}">
 				<div class="flex items-center gap-3">
 					<span class="text-xs font-semibold uppercase tracking-wider {urgent ? 'text-red-400' : live ? 'text-green-400' : 'text-gray-500'}">
 						{live ? '● Running' : '● Deadline passed'}
@@ -192,7 +192,7 @@
 				{/if}
 			</div>
 		{:else}
-			<div class="mt-4 rounded-xl border border-gray-700 bg-gray-900/40 px-5 py-3">
+			<div class="mt-4 rounded-xl border border-gray-700 bg-gray-950/80 px-5 py-3">
 				<span class="text-sm text-gray-500">⏸ No open week — season not running or all weeks complete.</span>
 			</div>
 		{/if}
@@ -276,7 +276,7 @@
 
 		<!-- Advance log output -->
 		{#if advanceLog.length}
-			<div class="mb-4 rounded border border-gray-800 bg-gray-950 p-3">
+			<div class="mb-4 rounded border border-gray-800 bg-black p-3">
 				{#each advanceLog as line}
 					<p class="font-mono text-xs text-green-400">{line}</p>
 				{/each}
@@ -286,10 +286,10 @@
 		<!-- Upcoming transitions -->
 		{#if nextActions.length}
 			<div class="flex flex-col gap-2">
-				{#each nextActions.slice(0, 6) as evt}
+				{#each nextActions.slice(0, 2) as evt}
 					{@const isPast = now > evt.at}
 					{@const diff   = evt.at - now}
-					<div class="flex items-center gap-3 rounded border {isPast ? 'border-red-900/50 bg-red-950/20' : 'border-gray-800 bg-gray-950/40'} px-3 py-2">
+					<div class="flex items-center gap-3 rounded border {isPast ? 'border-red-900/70 bg-red-950/60' : 'border-gray-800 bg-black/80'} px-3 py-2">
 						<span class="w-16 shrink-0 text-xs font-semibold {isPast ? 'text-red-400' : 'text-gray-300'}">
 							Week {evt.weekNum}
 						</span>
@@ -302,8 +302,8 @@
 						</span>
 					</div>
 				{/each}
-				{#if nextActions.length > 6}
-					<p class="text-xs text-gray-600 pl-1">+{nextActions.length - 6} more upcoming transitions</p>
+				{#if nextActions.length > 2}
+					<p class="text-xs text-gray-600 pl-1">+{nextActions.length - 2} more upcoming transitions</p>
 				{/if}
 			</div>
 		{:else}
@@ -335,11 +335,11 @@
 						: `${String(Math.floor((deadlineDiff % 3_600_000) / 60_000)).padStart(2,'0')}:${String(Math.floor((deadlineDiff % 60_000) / 1_000)).padStart(2,'0')}`)
 					: null}
 				<div class="rounded-xl border p-5 backdrop-blur-sm
-					{week.status === 'complete'         ? 'border-green-900    bg-green-950'
-					: week.status === 'results_pending' ? 'border-purple-900   bg-purple-950/60'
-					: week.status === 'locked'          ? 'border-gray-700     bg-gray-900/60'
-					: isNextOpen                        ? 'border-purple-700   bg-purple-950/60'
-					:                                     'border-gray-800     bg-gray-950/40'}">
+					{week.status === 'complete'         ? 'border-green-900    bg-green-950/90'
+					: week.status === 'results_pending' ? 'border-purple-900   bg-purple-950/90'
+					: week.status === 'locked'          ? 'border-gray-700     bg-gray-900/90'
+					: isNextOpen                        ? 'border-purple-700   bg-purple-950/80'
+					:                                     'border-gray-800     bg-black/80'}">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
 						<div>
