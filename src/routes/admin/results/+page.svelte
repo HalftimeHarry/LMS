@@ -85,6 +85,7 @@
 	let recordLoading   = $state(false);
 	let completeLoading = $state(false);
 	let overrideLoading = $state(false);
+	let resetLoading    = $state(false);
 
 	// Override panel state
 	type OverrideTarget = { entry: any; pick: any; teams: any[] } | null;
@@ -155,24 +156,43 @@
 
 <svelte:head><title>Results — Admin</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<div>
-		<h1 class="text-2xl font-bold text-white">Week Results</h1>
-		<p class="mt-1 text-sm text-gray-500">Record game outcomes after each week locks. Mark each game as a home win, away win, or tie — the system then determines which entries are eliminated based on their picks.</p>
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+	<div class="mb-4 flex flex-wrap items-center justify-between gap-4 border-b border-[rgba(201,168,76,0.15)] pb-4">
+		<div>
+			<h1 class="text-2xl font-bold text-white">Week Results</h1>
+			<p class="mt-1 text-sm text-gray-500">Record game outcomes after each week locks. Mark each game as a home win, away win, or tie — the system then determines which entries are deactivated based on their picks.</p>
+		</div>
+		<!-- Season selector -->
+		<div class="flex items-center gap-1.5">
+			<select
+				value={activeSeason?.id ?? ''}
+				onchange={(e) => updateSeason((e.target as HTMLSelectElement).value)}
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each seasons as s}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+			<InfoTip text="Select the season to record results for. Test seasons show simulated results automatically — real seasons require manual entry here." />
+		</div>
 	</div>
 
-	<!-- Season selector -->
-	<div class="flex items-center gap-1.5">
-		<select
-			value={activeSeason?.id ?? ''}
-			onchange={(e) => updateSeason((e.target as HTMLSelectElement).value)}
-			class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-		>
-			{#each seasons as s}
-				<option value={s.id}>{s.name}</option>
-			{/each}
-		</select>
-		<InfoTip text="Select the season to record results for. Test seasons show simulated results automatically — real seasons require manual entry here." />
+	<!-- Week nav -->
+	<div class="flex flex-wrap gap-2">
+		{#each allWeeks as w}
+			<button
+				type="button"
+				onclick={() => updateWeek(w.week)}
+				class="rounded border px-3 py-1.5 text-xs font-medium transition
+					{w.week === data.weekNum
+						? 'border-[#c9a84c] bg-[rgba(201,168,76,0.15)] text-[#c9a84c]'
+						: 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-white'}
+					{w.status === 'complete' ? 'opacity-60' : ''}"
+			>
+				Wk {w.week}
+				{#if w.status === 'complete'}✓{:else if w.status === 'locked'}🔒{:else if w.status === 'results_pending'}📋{/if}
+			</button>
+		{/each}
 	</div>
 </div>
 
@@ -182,23 +202,7 @@
 	</div>
 {:else}
 
-<!-- Week nav -->
-<div class="mb-6 flex flex-wrap gap-2">
-	{#each allWeeks as w}
-		<button
-			type="button"
-			onclick={() => updateWeek(w.week)}
-			class="rounded border px-3 py-1.5 text-xs font-medium transition
-				{w.week === data.weekNum
-					? 'border-[#c9a84c] bg-[rgba(201,168,76,0.15)] text-[#c9a84c]'
-					: 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-white'}
-				{w.status === 'complete' ? 'opacity-60' : ''}"
-		>
-			Wk {w.week}
-			{#if w.status === 'complete'}✓{:else if w.status === 'locked'}🔒{:else if w.status === 'results_pending'}📋{/if}
-		</button>
-	{/each}
-</div>
+
 
 {#if !weekSetting}
 	<div class="rounded-xl border border-gray-800 bg-black/75 p-6 text-gray-500">
@@ -263,9 +267,11 @@
 </div>
 
 <!-- Action feedback -->
-{#if form?.success}
+{#if form?.success || (form as any)?.resetDone}
 	<div class="mb-4 rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
-		{#if (form as any).resultsWritten !== undefined}
+		{#if (form as any).resetDone}
+			Reset complete — {(form as any).deletedResults} pick results deleted, {(form as any).reinstated} entries reinstated.
+		{:else if (form as any).resultsWritten !== undefined}
 			Results recorded — {(form as any).resultsWritten} pick results written, {(form as any).eliminated} entries eliminated.
 		{:else if (form as any).autoPicked !== undefined}
 			Week locked — {(form as any).autoPicked} auto-picks assigned.
@@ -282,16 +288,18 @@
 
 	<!-- Game outcomes form -->
 	<div class="lg:col-span-2">
-		<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-			Game Outcomes — Week {data.weekNum}
-			<span class="ml-2 text-gray-600">({games.length} games)</span>
-		</h2>
-
 		{#if !games.length}
 			<div class="rounded-xl border border-gray-800 bg-black/75 p-6 text-sm text-gray-500">
 				No games found for this week. Add odds first via Manage Odds.
 			</div>
 		{:else}
+			<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+				<div class="border-b border-[rgba(201,168,76,0.15)] px-5 py-3">
+					<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">
+						Game Outcomes — Week {data.weekNum}
+						<span class="ml-2 text-gray-600">({games.length} games)</span>
+					</h2>
+				</div>
 			<form method="POST" action="?/recordResults" use:enhance={() => {
 				recordLoading = true;
 				return async ({ update }) => { await update(); recordLoading = false; await invalidateAll(); };
@@ -300,7 +308,7 @@
 				<input type="hidden" name="seasonId" value={activeSeason.id} />
 				<input type="hidden" name="weekNum"  value={data.weekNum} />
 
-				<div class="flex flex-col gap-2">
+				<div class="flex flex-col gap-2 px-5 pt-5">
 					{#each games as game}
 						{@const home = game.expand?.homeTeam}
 						{@const away = game.expand?.awayTeam}
@@ -359,17 +367,36 @@
 				</div>
 
 				{#if !isComplete}
-					<div class="mt-4 flex gap-3">
+					<div class="flex flex-wrap items-center gap-3 px-5 pb-5">
 						<button type="submit" disabled={recordLoading || !Object.values(outcomes).some(Boolean)}
 							class="rounded bg-[#c9a84c] px-6 py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
-							{recordLoading ? 'Saving…' : 'Save Results + Eliminate Entries'}
+							{recordLoading ? 'Saving…' : 'Save Results + Deactivate Entries'}
 						</button>
 						<p class="self-center text-xs text-gray-600">
 							{Object.values(outcomes).filter(Boolean).length}/{games.length} games entered
 						</p>
 					</div>
 				{/if}
+				<!-- Reset results — clears pick_results, reinstates eliminated entries, resets week to locked -->
+				{#if weekSetting && (weekSetting.status === 'results_pending' || weekSetting.status === 'complete' || pickResults.length > 0)}
+					<div class="mx-5 mb-5 mt-3 border-t border-gray-800 pt-3">
+						<form method="POST" action="?/resetWeekResults" use:enhance={() => {
+							if (!confirm('Reset all results for this week? Pick results will be deleted and eliminated entries reinstated.')) return () => {};
+							resetLoading = true;
+							return async ({ update }) => { await update(); resetLoading = false; await invalidateAll(); };
+						}}>
+							<input type="hidden" name="weekId"   value={weekSetting?.id} />
+							<input type="hidden" name="seasonId" value={activeSeason?.id} />
+							<button type="submit" disabled={resetLoading}
+								class="rounded border border-gray-700 bg-gray-900 px-4 py-1.5 text-xs text-gray-400 transition hover:border-red-800 hover:text-red-400 disabled:opacity-50">
+								{resetLoading ? 'Resetting…' : '↺ Reset Week Results'}
+							</button>
+							<span class="ml-2 text-xs text-gray-600">Clears results, reinstates eliminated entries, returns week to locked.</span>
+						</form>
+					</div>
+				{/if}
 			</form>
+			</div><!-- end card -->
 		{/if}
 	</div>
 

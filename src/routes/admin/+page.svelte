@@ -389,7 +389,7 @@
 </div>
 
 <!-- Test season management panel -->
-<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950/20 p-5">
+<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950 p-5">
 
 	<div class="mb-4 flex items-center justify-between gap-3">
 		<div>

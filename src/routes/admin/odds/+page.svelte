@@ -7,6 +7,7 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
+	const seasons      = $derived(data.seasons      as any[]);
 	const activeSeason = $derived(data.activeSeason as any);
 	const weekNum      = $derived(data.weekNum      as number);
 	const games        = $derived(data.games        as any[]);
@@ -69,6 +70,13 @@
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 
+	function switchSeason(id: string) {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.set('season', id);
+		params.set('week', '1');
+		goto(`?${params.toString()}`, { replaceState: true });
+	}
+
 	function spreadLabel(homeSpread: number | null, homeAbbr: string, awayAbbr: string): string {
 		if (homeSpread == null) return '—';
 		if (homeSpread === 0) return 'PK';
@@ -84,13 +92,28 @@
 
 <svelte:head><title>Manage Odds — Admin</title></svelte:head>
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
 	<div>
 		<h1 class="text-2xl font-bold text-white">Manage Odds</h1>
-		{#if activeSeason}
+		{#if activeSeason && seasons?.length <= 1}
 			<p class="mt-1 text-sm text-gray-500">{activeSeason.name}</p>
 		{/if}
 	</div>
+	{#if seasons?.length > 1}
+		<div class="flex items-center gap-2">
+			<label for="season-select" class="text-xs font-medium uppercase tracking-wider text-gray-500">Season</label>
+			<select
+				id="season-select"
+				value={activeSeason?.id ?? ''}
+				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each seasons as s}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+		</div>
+	{/if}
 </div>
 
 {#if !activeSeason}
@@ -204,7 +227,7 @@
 			{/each}
 			{#each [longestShot()] as shot}
 				{#if shot}
-					<div class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-900 bg-blue-950/20 px-4 py-3 backdrop-blur-sm">
+					<div class="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-800 bg-blue-950 px-4 py-3 backdrop-blur-sm">
 						<div class="flex items-center gap-3">
 							<img src={teamLogoUrl(shot.team?.abbreviation)} alt={shot.team?.abbreviation} class="h-9 w-9 object-contain opacity-70" />
 							<div>
@@ -345,11 +368,14 @@
 				</table>
 			</div>
 
-			<div class="mt-3 flex items-center justify-between gap-3">
-				<p class="text-xs text-gray-600">
-					Spread: negative = home favored (e.g. <code class="text-gray-400">-7</code> = home -7).
-					Moneyline: negative = favorite (e.g. <code class="text-gray-400">-350</code>).
+			<div class="mt-3 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/60 px-4 py-3 backdrop-blur-sm">
+				<p class="text-xs text-gray-500">
+					<span class="font-medium text-gray-400">Spread:</span> negative = home favored (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-7</code> = home -7).
+					&nbsp;
+					<span class="font-medium text-gray-400">Moneyline:</span> negative = favorite (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-350</code>).
 				</p>
+			</div>
+			<div class="mt-3 flex justify-end">
 				<button type="submit" disabled={savingOdds}
 					class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
 					{savingOdds ? 'Saving…' : 'Save Odds'}

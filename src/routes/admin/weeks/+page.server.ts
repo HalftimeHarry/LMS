@@ -58,6 +58,8 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Earliest game time for week 1 — used to pre-fill the deadline field
 	let firstGameTime: string | null = null;
+	// Longest shot per week — biggest underdog (most positive spread) from active odds
+	const longestShotByWeek: Record<number, { teamId: string; abbreviation: string; city: string; name: string; spread: number }> = {};
 	if (activeSeason) {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
@@ -66,6 +68,36 @@ export const load: PageServerLoad = async ({ url }) => {
 			);
 			firstGameTime = odds.gameTime;
 		} catch { /* no odds yet */ }
+
+		try {
+			const allOdds = await pb.collection('game_odds').getFullList({
+				filter: `season = "${activeSeason.id}" && isActive = true && homeSpread != null`,
+				fields: 'week,homeSpread,homeTeam,awayTeam',
+				expand: 'homeTeam,awayTeam',
+			}) as any[];
+
+			for (const g of allOdds) {
+				const w      = g.week as number;
+				const spread = g.homeSpread as number;
+				// Candidates: home team with positive spread, away team with negative spread (= underdog)
+				const candidates = [
+					{ team: g.expand?.homeTeam, spread:  spread },
+					{ team: g.expand?.awayTeam, spread: -spread },
+				];
+				for (const c of candidates) {
+					if (!c.team || c.spread <= 0) continue;
+					if (!longestShotByWeek[w] || c.spread > longestShotByWeek[w].spread) {
+						longestShotByWeek[w] = {
+							teamId:       c.team.id,
+							abbreviation: c.team.abbreviation,
+							city:         c.team.city,
+							name:         c.team.name,
+							spread:       c.spread,
+						};
+					}
+				}
+			}
+		} catch { /* odds not available */ }
 	}
 
 	// Compute next scheduled action across all weeks for the timeline display
@@ -97,6 +129,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		nextActions,
 		isTestSeason,
 		serverNow: now,
+		longestShotByWeek,
 	};
 };
 

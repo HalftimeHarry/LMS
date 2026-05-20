@@ -106,14 +106,54 @@ async function pbGetInChunks(collection: string, ids: string[], field: string): 
 // Week lifecycle
 // ---------------------------------------------------------------------------
 
+/**
+ * Derive the biggest favorite from active game odds for a given season/week.
+ * Returns the team ID with the largest absolute spread (most favored).
+ * If two teams tie, one is chosen at random.
+ */
+async function deriveBiggestFavorite(seasonId: string, weekNum: number): Promise<string | null> {
+	const games = await pbGet('game_odds',
+		`season = "${seasonId}" && week = ${weekNum} && isActive = true`
+	);
+	if (!games.length) return null;
+
+	let bestTeamId: string | null = null;
+	let bestSpread = 0; // most negative homeSpread = home is biggest favorite
+
+	for (const game of games) {
+		const spread = game.homeSpread as number | null;
+		if (spread == null) continue;
+
+		// Home team is favorite when spread < 0; away team when spread > 0
+		const homeAbs = Math.abs(spread);
+		if (homeAbs > bestSpread) {
+			bestSpread  = homeAbs;
+			bestTeamId  = spread < 0 ? game.homeTeam : game.awayTeam;
+		} else if (homeAbs === bestSpread && bestTeamId) {
+			// Tie — pick randomly between current best and this candidate
+			if (Math.random() < 0.5) {
+				bestTeamId = spread < 0 ? game.homeTeam : game.awayTeam;
+			}
+		}
+	}
+
+	return bestTeamId;
+}
+
 async function lockWeek(week: any, seasonId: string, log: string[]): Promise<void> {
 	if (week.status !== 'open') return;
 	log.push(`Week ${week.week}: locking`);
 	await pbPatch('weekly_settings', week.id, { status: 'locked' });
 
-	// Auto-pick biggestFavoriteTeam for entries that missed the deadline
-	const autoTeamId = week.biggestFavoriteTeam ?? null;
-	if (!autoTeamId) return;
+	// Derive biggest favorite from odds (ignore manually-set field)
+	const autoTeamId = await deriveBiggestFavorite(seasonId, week.week);
+	if (!autoTeamId) {
+		log.push(`  no active odds found — skipping auto-pick`);
+		return;
+	}
+
+	// Persist it back onto the week record so the UI can display it
+	await pbPatch('weekly_settings', week.id, { biggestFavoriteTeam: autoTeamId }).catch(() => {});
 
 	const entries       = await pbGet('entries', `season = "${seasonId}" && status = "active"`);
 	const existingPicks = await pbGet('picks', `week = "${week.id}"`);
@@ -133,7 +173,7 @@ async function lockWeek(week: any, seasonId: string, log: string[]): Promise<voi
 			autoPicked++;
 		} catch { /* skip individual failures */ }
 	}
-	log.push(`  auto-picked ${autoPicked} entries`);
+	log.push(`  auto-pick team: ${autoTeamId} — picked for ${autoPicked} entries`);
 }
 
 async function simulateResults(week: any, seasonId: string, log: string[]): Promise<void> {

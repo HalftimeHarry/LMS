@@ -26,8 +26,9 @@ const ADMIN_PASS  = 'MADcap(123)';
 const PICK_WEEKS  = 3;   // seed picks for first N weeks
 const PAID_RATE   = 0.65; // fraction of entries that are paid/active
 
-const args   = Object.fromEntries(process.argv.slice(2).map(a => a.replace('--', '').split('=')));
-const DRY    = 'dry-run' in args;
+const args     = Object.fromEntries(process.argv.slice(2).map(a => a.replace('--', '').split('=')));
+const DRY      = 'dry-run' in args;
+const NO_PICKS = 'no-picks' in args;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -204,40 +205,44 @@ async function main() {
       console.log(`\n    ${entryCount} entries created`);
       grandTotalEntries += entryCount;
 
-      // Seed picks for active entries, weeks 1–PICK_WEEKS
-      const activeEntries = seasonEntries.filter(e => e.status === 'active');
-      const pickWeeks     = weeks.slice(0, PICK_WEEKS);
-      console.log(`    Seeding picks for ${activeEntries.length} active entries across ${pickWeeks.length} weeks...`);
+      // Seed picks for active entries, weeks 1–PICK_WEEKS (skipped with --no-picks)
+      if (NO_PICKS) {
+        console.log(`    Skipping picks (--no-picks)`);
+      } else {
+        const activeEntries = seasonEntries.filter(e => e.status === 'active');
+        const pickWeeks     = weeks.slice(0, PICK_WEEKS);
+        console.log(`    Seeding picks for ${activeEntries.length} active entries across ${pickWeeks.length} weeks...`);
 
-      let pickCount = 0;
-      for (const entry of activeEntries) {
-        if (Math.random() < 0.15) continue; // 15% haven't submitted picks yet
+        let pickCount = 0;
+        for (const entry of activeEntries) {
+          if (Math.random() < 0.15) continue; // 15% haven't submitted picks yet
 
-        // Each entry gets a shuffled team pool — no team repeated within an entry
-        const teamPool = shuffle(teams);
-        let teamIdx    = 0;
+          // Each entry gets a shuffled team pool — no team repeated within an entry
+          const teamPool = shuffle(teams);
+          let teamIdx    = 0;
 
-        for (const week of pickWeeks) {
-          if (week.week > 1 && Math.random() < 0.15) continue; // occasional missing pick on later weeks
-          const team = teamPool[teamIdx++];
-          if (!team) break;
-          try {
-            await post(token, 'picks', {
-              entry:       entry.id,
-              week:        week.id,
-              pickedTeams: [team.id],
-              entryType,
-              isAutoPick:  false,
-            });
-            pickCount++;
-            process.stdout.write('.');
-          } catch (err) {
-            process.stdout.write('~');
+          for (const week of pickWeeks) {
+            if (week.week > 1 && Math.random() < 0.15) continue; // occasional missing pick on later weeks
+            const team = teamPool[teamIdx++];
+            if (!team) break;
+            try {
+              await post(token, 'picks', {
+                entry:       entry.id,
+                week:        week.id,
+                pickedTeams: [team.id],
+                entryType,
+                isAutoPick:  false,
+              });
+              pickCount++;
+              process.stdout.write('.');
+            } catch (err) {
+              process.stdout.write('~');
+            }
           }
         }
+        console.log(`\n    ${pickCount} picks created`);
+        grandTotalPicks += pickCount;
       }
-      console.log(`\n    ${pickCount} picks created`);
-      grandTotalPicks += pickCount;
     }
   }
 
