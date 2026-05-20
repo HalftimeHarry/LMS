@@ -195,6 +195,60 @@ export const actions: Actions = {
 	 * Mark a week complete after results have been reviewed.
 	 * Transitions: results_pending → complete
 	 */
+	/**
+	 * Reset a week back to locked state — clears all pick_results, reinstates
+	 * eliminated entries, and sets week status back to locked so results can
+	 * be re-entered from scratch.
+	 */
+	resetWeekResults: async ({ request }) => {
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+		const weekId   = data.get('weekId')   as string;
+		const seasonId = data.get('seasonId') as string;
+		if (!weekId || !seasonId) return fail(400, { error: 'weekId and seasonId required.' });
+
+		// Find all picks for this week
+		const picks = await pb.collection('picks').getFullList({
+			filter: `week = "${weekId}"`, fields: 'id'
+		}).catch(() => []) as any[];
+
+		// Delete all pick_results for those picks
+		const CHUNK = 20;
+		let deletedResults = 0;
+		for (let i = 0; i < picks.length; i += CHUNK) {
+			const chunk  = picks.slice(i, i + CHUNK);
+			const filter = chunk.map((p: any) => `pick = "${p.id}"`).join(' || ');
+			const results = await pb.collection('pick_results').getFullList({ filter }).catch(() => []) as any[];
+			for (const r of results) {
+				await pb.collection('pick_results').delete(r.id).catch(() => {});
+				deletedResults++;
+			}
+		}
+
+		// Find the week number so we can match eliminatedWeek
+		const weekRecord = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+		const weekNum = weekRecord?.week ?? 0;
+
+		// Reinstate entries eliminated this week
+		const eliminated = await pb.collection('entries').getFullList({
+			filter: `season = "${seasonId}" && status = "eliminated" && eliminatedWeek = ${weekNum}`
+		}).catch(() => []) as any[];
+		for (const e of eliminated) {
+			await pb.collection('entries').update(e.id, {
+				status: 'active', eliminatedWeek: 0, eliminatedReason: ''
+			}).catch(() => {});
+		}
+
+		// Reset week status to locked
+		await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
+
+		return {
+			resetDone: true,
+			deletedResults,
+			reinstated: eliminated.length,
+		};
+	},
+
 	completeWeek: async ({ request }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();

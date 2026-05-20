@@ -80,13 +80,12 @@
 
 <svelte:head><title>Season Settings — Admin</title></svelte:head>
 
-<div class="mb-4">
-	<h1 class="text-2xl font-bold text-white">Season Settings</h1>
-	<p class="mt-1 text-sm text-gray-500">Verify week deadlines and monitor the pick schedule. In production, weeks advance automatically. Use <span class="text-gray-300">▶ Advance now</span> in dev to trigger transitions manually.</p>
-</div>
-
 <!-- Filter + context card -->
 <div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+	<div class="mb-4 border-b border-[rgba(201,168,76,0.15)] pb-4">
+		<h1 class="text-2xl font-bold text-white">Season Settings</h1>
+		<p class="mt-1 text-sm text-gray-500">Verify week deadlines and monitor the pick schedule. In production, weeks advance automatically. Use <span class="text-gray-300">▶ Advance now</span> in dev to trigger transitions manually.</p>
+	</div>
 
 	<!-- Row 1: season selector + pool toggle -->
 	<div class="flex flex-wrap items-center justify-between gap-3">
@@ -202,39 +201,33 @@
 	</div>
 {:else}
 
-	<!-- Schedule timeline card -->
+	<!-- Schedule timeline card — test seasons only -->
+	{#if isTestSeason}
 	<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<h2 class="text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Schedule</h2>
 				<p class="mt-0.5 text-xs text-gray-500">
-					{#if isTestSeason}
-						Test season — weeks advance automatically in production every 2 min. Use the button below in dev.
-					{:else}
-						Real season — picks lock automatically at each week's deadline. Results must be entered manually.
-					{/if}
+					Test season — weeks advance automatically in production every 2 min. Use the button below in dev.
 				</p>
 			</div>
 
-			<!-- Manual advance (test seasons only) -->
-			{#if isTestSeason}
-				<form method="POST" action="?/advanceNow"
-					use:enhance={() => {
-						advanceLoading = true; advanceLog = [];
-						return async ({ result, update }) => {
-							await update({ reset: false });
-							advanceLoading = false;
-							if (result.type === 'success') advanceLog = (result.data as any)?.advanceLog ?? [];
-						};
-					}}
-				>
-					<input type="hidden" name="seasonId" value={data.activeSeason.id} />
-					<button type="submit" disabled={advanceLoading}
-						class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-4 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
-						{advanceLoading ? 'Running…' : '▶ Advance now'}
-					</button>
-				</form>
-			{/if}
+			<form method="POST" action="?/advanceNow"
+				use:enhance={() => {
+					advanceLoading = true; advanceLog = [];
+					return async ({ result, update }) => {
+						await update({ reset: false });
+						advanceLoading = false;
+						if (result.type === 'success') advanceLog = (result.data as any)?.advanceLog ?? [];
+					};
+				}}
+			>
+				<input type="hidden" name="seasonId" value={data.activeSeason.id} />
+				<button type="submit" disabled={advanceLoading}
+					class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-4 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
+					{advanceLoading ? 'Running…' : '▶ Advance now'}
+				</button>
+			</form>
 		</div>
 
 		<!-- Advance log output -->
@@ -273,6 +266,7 @@
 			<p class="text-sm text-gray-500">All weeks complete.</p>
 		{/if}
 	</div>
+	{/if}
 
 	<!-- Weeks list -->
 	{#if ctrl.filtered.length === 0}
@@ -311,10 +305,25 @@
 									hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
 								})}
 							</p>
-							{#if week.expand?.biggestFavoriteTeam}
-								<p class="mt-1 text-xs text-[#c9a84c]">
-									Auto-pick: {week.expand.biggestFavoriteTeam.city} {week.expand.biggestFavoriteTeam.name}
-								</p>
+	
+							{#if week.expand?.biggestFavoriteTeam || (data.longestShotByWeek ?? {})[week.week]}
+								<div class="mt-2 flex flex-wrap gap-2">
+									{#if week.expand?.biggestFavoriteTeam}
+										{@const fav = week.expand.biggestFavoriteTeam}
+										<span class="flex items-center gap-1.5 rounded border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.06)] px-2 py-0.5 text-xs text-[#c9a84c]">
+											<span class="font-semibold uppercase tracking-wide">LMS</span>
+											<span class="text-gray-400">{fav.city} {fav.name}</span>
+										</span>
+									{/if}
+									{#if (data.longestShotByWeek ?? {})[week.week]}
+										{@const shot = (data.longestShotByWeek ?? {})[week.week]}
+										<span class="flex items-center gap-1.5 rounded border border-blue-900 bg-blue-950/40 px-2 py-0.5 text-xs text-blue-400">
+											<span class="font-semibold uppercase tracking-wide">2H</span>
+											<span class="text-gray-400">{shot.city} {shot.name}</span>
+											<span class="text-blue-600">+{shot.spread}</span>
+										</span>
+									{/if}
+								</div>
 							{/if}
 							{#if week.notes}
 								<p class="mt-1 text-xs text-gray-500">{week.notes}</p>
@@ -353,25 +362,7 @@
 								</form>
 							{/if}
 
-							<!-- Set biggest favourite -->
-							<form method="POST" action="?/setFavorite" use:enhance class="flex items-center gap-1">
-								<input type="hidden" name="id" value={week.id} />
-								<select
-									name="teamId"
-									bind:value={ctrl.favoriteTeam[week.id]}
-									class="rounded border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
-								>
-									<option value="">Auto-pick team…</option>
-									{#each data.teams as team}
-										<option value={team.id}>{team.abbreviation} — {team.city} {team.name}</option>
-									{/each}
-								</select>
-								<button type="submit"
-									class="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 transition hover:bg-gray-800">
-									Set
-								</button>
-							</form>
-
+	
 
 							<!-- Delete (open weeks only) -->
 							{#if week.status === 'open'}

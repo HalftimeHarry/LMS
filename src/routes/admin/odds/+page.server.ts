@@ -3,14 +3,22 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
-	const pb      = await pbAdmin();
-	const weekNum = Number(url.searchParams.get('week') ?? 1);
+	const pb       = await pbAdmin();
+	const weekNum  = Number(url.searchParams.get('week') ?? 1);
+	const seasonId = url.searchParams.get('season') ?? null;
 
 	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
-	const activeSeason = seasons.find(s => s.status === 'active' || s.status === 'open') ?? seasons[0] ?? null;
+
+	// Prefer explicit ?season=, then first active/open, then first overall
+	const activeSeason = (
+		(seasonId ? seasons.find(s => s.id === seasonId) : null)
+		?? seasons.find(s => s.status === 'active' || s.status === 'open')
+		?? seasons[0]
+		?? null
+	);
 
 	if (!activeSeason) {
-		return { activeSeason: null, weekNum, games: [], teams: [], weekSummary: [] };
+		return { seasons, activeSeason: null, weekNum, games: [], teams: [], weekSummary: [] };
 	}
 
 	// All teams for display
@@ -47,6 +55,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	).catch(() => null) as any;
 
 	return {
+		seasons:     seasons     as any[],
 		activeSeason,
 		weekNum,
 		games:       games       as any[],
