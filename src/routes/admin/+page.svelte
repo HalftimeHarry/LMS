@@ -204,7 +204,7 @@
 {/if}
 
 <!-- All seasons list -->
-<div class="mb-8">
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<div class="mb-3 flex items-center justify-between gap-3">
 		<h2 class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c] shrink-0">All Seasons</h2>
 		<div class="flex items-center gap-3">
@@ -285,14 +285,14 @@
 </div>
 
 <!-- Stats grid -->
-<div class="mb-8">
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
 		{selectedSeason ? `${(selectedSeason as any).name} Stats` : 'Stats'}
 	</h2>
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
 		<!-- Pot cards -->
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
+		<div class="rounded-lg border border-[rgba(201,168,76,0.2)] bg-gray-900/60 p-4">
 			<div class="flex items-center gap-1.5">
 				<p class="text-xs text-gray-500">Total Pot</p>
 				<InfoTip text="Estimated prize pool based on paid entries × entry fee. LMS and 2nd Half pools are tracked separately." />
@@ -302,7 +302,7 @@
 		</div>
 
 		<!-- Entry counts -->
-		<div class="rounded-xl border border-gray-800 bg-black/75 p-4 backdrop-blur-sm">
+		<div class="rounded-lg border border-gray-800 bg-gray-900/60 p-4">
 			<div class="flex items-center gap-1.5">
 				<p class="text-xs text-gray-500">Total Entries</p>
 				<InfoTip text="All entries regardless of payment status. One player can hold multiple entries. LMS and 2nd Half entries are counted separately." />
@@ -312,7 +312,7 @@
 		</div>
 
 		<!-- Payment status -->
-		<div class="rounded-xl border border-green-900 bg-black/75 p-4 backdrop-blur-sm">
+		<div class="rounded-lg border border-green-900/60 bg-gray-900/60 p-4">
 			<div class="flex items-center gap-1.5">
 				<p class="text-xs text-gray-500">Paid</p>
 				<InfoTip text="Entries marked as paid (cash, Venmo, etc.) or complimentary. Pending entries have not yet paid — they can still pick but should be resolved before week 1 locks." />
@@ -322,7 +322,7 @@
 		</div>
 
 		<!-- Active / eliminated -->
-		<div class="rounded-xl border border-gray-800 bg-black/75 p-4 backdrop-blur-sm">
+		<div class="rounded-lg border border-gray-800 bg-gray-900/60 p-4">
 			<div class="flex items-center gap-1.5">
 				<p class="text-xs text-gray-500">Active / Eliminated</p>
 				<InfoTip text="Active entries are still in the pool. An entry is eliminated when the player picks a team that wins (LMS) or loses (2nd Half). Eliminated entries remain visible for record-keeping." />
@@ -339,14 +339,14 @@
 </div>
 
 <!-- Quick actions -->
-<div class="mb-8">
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<div class="mb-3 flex items-center gap-2">
 		<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</h2>
 		<InfoTip text="Shortcuts to the most common admin tasks for the currently selected season." />
 	</div>
 	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
 		<a href="/admin/entries?status=pending_payment"
-			class="flex items-center justify-between rounded-xl border border-yellow-900 bg-black/75 px-4 py-3 transition hover:border-yellow-700 backdrop-blur-sm">
+			class="flex items-center justify-between rounded-lg border border-yellow-900 bg-gray-900/60 px-4 py-3 transition hover:border-yellow-700">
 			<div>
 				<p class="text-sm font-medium text-white">Pending Payments</p>
 				<p class="text-xs text-yellow-400">{stats.pendingPayment} entr{stats.pendingPayment === 1 ? 'y' : 'ies'} awaiting payment</p>
@@ -354,7 +354,7 @@
 			<span class="text-yellow-600">→</span>
 		</a>
 		<a href="/admin/entries"
-			class="flex items-center justify-between rounded-xl border border-gray-800 bg-black/75 px-4 py-3 transition hover:border-gray-600 backdrop-blur-sm">
+			class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
 			<div>
 				<p class="text-sm font-medium text-white">All Entries</p>
 				<p class="text-xs text-gray-500">Manage entries & payments</p>
@@ -362,7 +362,7 @@
 			<span class="text-gray-600">→</span>
 		</a>
 		<a href="/admin/weeks"
-			class="flex items-center justify-between rounded-xl border border-gray-800 bg-black/75 px-4 py-3 transition hover:border-gray-600 backdrop-blur-sm">
+			class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
 			<div>
 				<p class="text-sm font-medium text-white">Season Settings</p>
 				<p class="text-xs text-gray-500">
@@ -377,7 +377,7 @@
 		</a>
 		{#if isSuperAdmin}
 			<a href="/admin/seasons/new"
-				class="flex items-center justify-between rounded-xl border border-gray-800 bg-black/75 px-4 py-3 transition hover:border-gray-600 backdrop-blur-sm">
+				class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
 				<div>
 					<p class="text-sm font-medium text-white">New Season</p>
 					<p class="text-xs text-gray-500">Create next season</p>
@@ -389,7 +389,7 @@
 </div>
 
 <!-- Test season management panel -->
-<div class="mb-8 rounded-xl border border-orange-800/50 bg-orange-950 p-5">
+<div class="mb-6 rounded-xl border border-orange-800/50 bg-black/75 p-5 backdrop-blur-sm">
 
 	<div class="mb-4 flex items-center justify-between gap-3">
 		<div>
@@ -501,8 +501,8 @@
 
 <!-- Pending payment quick list -->
 {#if stats.pendingPayment > 0}
-	<div>
-		<div class="mb-3 flex items-center justify-between">
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+		<div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
 			<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Awaiting Payment</h2>
 			{#if stats.pendingPayment > 5}
 				<a href="/admin/entries?status=pending_payment" class="text-xs text-[#c9a84c] hover:underline">
@@ -510,7 +510,7 @@
 				</a>
 			{/if}
 		</div>
-		<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+		<div class="overflow-hidden">
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -544,3 +544,4 @@
 		</div>
 	</div>
 {/if}
+
