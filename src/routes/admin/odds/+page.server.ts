@@ -3,9 +3,9 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
-	const pb       = await pbAdmin();
-	const weekNum  = Number(url.searchParams.get('week') ?? 1);
-	const seasonId = url.searchParams.get('season') ?? null;
+	const pb           = await pbAdmin();
+	const weekParam    = url.searchParams.get('week');
+	const seasonId     = url.searchParams.get('season') ?? null;
 
 	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
 
@@ -18,7 +18,16 @@ export const load: PageServerLoad = async ({ url }) => {
 	);
 
 	if (!activeSeason) {
-		return { seasons, activeSeason: null, weekNum, games: [], teams: [], weekSummary: [] };
+		return { seasons, activeSeason: null, weekNum: 1, games: [], teams: [], weekSummary: [] };
+	}
+
+	// Default to the current open week for this season when no ?week= param is set
+	let weekNum = weekParam ? Number(weekParam) : 1;
+	if (!weekParam) {
+		const openWeek = await pb.collection('weekly_settings')
+			.getFirstListItem(`season = "${activeSeason.id}" && status = "open"`, { sort: 'week' })
+			.catch(() => null) as any;
+		if (openWeek) weekNum = openWeek.week;
 	}
 
 	// All teams for display

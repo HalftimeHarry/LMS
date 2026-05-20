@@ -73,7 +73,7 @@
 	function switchSeason(id: string) {
 		const params = new URLSearchParams($page.url.searchParams);
 		params.set('season', id);
-		params.set('week', '1');
+		params.delete('week'); // let server default to the open week for this season
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 

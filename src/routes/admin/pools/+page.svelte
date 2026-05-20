@@ -68,11 +68,14 @@
 			.sort((a: any, b: any) => a.week - b.week)
 	);
 
-	// Auto-select first week when season changes
+	// Auto-select current open week (or earliest week) when season changes
 	$effect(() => {
-		selectedWeekId  = seasonWeeks[0]?.id ?? '';
-		selectedTeamId  = '';
-		eliminateTeamId = '';
+		const openWeek = seasonWeeks.find((w: any) => w.status === 'open');
+		const defaultWeek = (openWeek ?? seasonWeeks[0])?.id ?? '';
+		selectedWeekId   = defaultWeek;
+		seedPicksWeekId  = defaultWeek;
+		selectedTeamId   = '';
+		eliminateTeamId  = '';
 		selectedEntryIds = new Set();
 	});
 
