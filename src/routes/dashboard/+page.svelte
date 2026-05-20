@@ -15,6 +15,13 @@
 	const allSeasons           = $derived(data.allSeasons           as any[]);
 	const NFL_TEAMS = 32;
 
+	// Live countdown tick
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(id);
+	});
+
 	// Seasons that have at least one entry for this user, sorted real-first
 	const seasonGroups = $derived(
 		Object.entries(entriesBySeason)
@@ -122,39 +129,37 @@
 	{/if}
 </div>
 
-<!-- Stat cards — scoped to selected season -->
+<!-- Stat cards — pool-wide for selected season -->
 {#if selectedGroup}
-	{@const sg = selectedGroup}
-	{@const activeCount    = sg.entries.filter((e: any) => e.status === 'active').length}
-	{@const pendingCount   = sg.entries.filter((e: any) => e.status === 'pending_payment').length}
-	{@const eliminatedCount= sg.entries.filter((e: any) => e.status === 'eliminated').length}
+	{@const sg    = selectedGroup}
+	{@const pool  = (data.poolStatsBySeason as Record<string, any>)[sg.season.id] ?? { total: 0, active: 0, pending: 0, eliminated: 0, pot: 0 }}
 	<div class="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-			<div class="text-3xl font-bold text-green-400">{activeCount}</div>
+			<div class="text-3xl font-bold text-green-400">{pool.active}</div>
 			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-				Active Entries
-				<InfoTip text="Entries still alive in the pool. You stay active by picking correctly each week." />
+				Still Alive
+				<InfoTip text="Total entries still active in the pool across all players." />
 			</div>
 		</div>
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-			<div class="text-3xl font-bold text-yellow-400">{pendingCount}</div>
-			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-				Pending Payment
-				<InfoTip text="Entries awaiting payment confirmation from the admin. Your entry becomes active once payment is marked." />
-			</div>
-		</div>
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-			<div class="text-3xl font-bold text-red-400">{eliminatedCount}</div>
+			<div class="text-3xl font-bold text-red-400">{pool.eliminated}</div>
 			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
 				Eliminated
-				<InfoTip text="Entries knocked out. In LMS your pick must lose — if they win, you're eliminated. In 2nd Half your pick must win." />
+				<InfoTip text="Total entries knocked out of the pool so far this season." />
 			</div>
 		</div>
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-			<div class="text-3xl font-bold text-white">{sg.entries.length}</div>
+			<div class="text-3xl font-bold text-white">{pool.total}</div>
 			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
 				Total Entries
-				<InfoTip text="All entries you hold this season across LMS and 2nd Half pools combined." />
+				<InfoTip text="All entries in this season's pool across all players." />
+			</div>
+		</div>
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
+			<div class="text-3xl font-bold text-[#c9a84c]">${pool.pot.toLocaleString()}</div>
+			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
+				Amount in Pot
+				<InfoTip text="Prize pool from paid entries × entry fee. Excludes complimentary entries." />
 			</div>
 		</div>
 	</div>
@@ -163,8 +168,15 @@
 <!-- Current week + deadline — selected season only -->
 {#each seasonGroups.filter(g => g.season.id === selectedSeasonId) as group}
 	{@const season = group.season}
-	{@const cw = currentWeekBySeason[season.id]}
+	{@const cw     = currentWeekBySeason[season.id]}
 	{#if cw}
+		{@const diff   = new Date(cw.deadline).getTime() - now}
+		{@const live   = cw.status === 'open' && diff > 0}
+		{@const urgent = live && diff < 3_600_000}
+		{@const d = live ? Math.floor(diff / 86_400_000) : 0}
+		{@const h = live ? Math.floor((diff % 86_400_000) / 3_600_000) : 0}
+		{@const m = live ? Math.floor((diff % 3_600_000)  /    60_000) : 0}
+		{@const s = live ? Math.floor((diff % 60_000)     /     1_000) : 0}
 		<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
 			<div class="flex flex-wrap items-center justify-between gap-4">
 				<div>
@@ -180,16 +192,23 @@
 						</span>
 					</p>
 				</div>
-				<div class="flex items-center gap-2">
-					<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">
-						{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}
-					</span>
-					<InfoTip text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
+				<div class="flex items-center gap-3">
+					{#if live}
+						<span class="font-mono text-2xl font-bold tabular-nums {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+							{#if d > 0}{d}d {/if}{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}
+						</span>
+					{/if}
+					<div class="flex items-center gap-2">
+						<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">
+							{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}
+						</span>
+						<InfoTip text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
+					</div>
 				</div>
 			</div>
 			{#if cw.status === 'open'}
-				<p class="mt-3 text-xs text-[#c9a84c]">
-					Picks are open. Submit or update your pick from each active entry below before the deadline.
+				<p class="mt-3 text-xs {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+					{urgent ? '⚠ Deadline closing soon — submit your pick now.' : 'Picks are open. Submit or update your pick from each active entry below before the deadline.'}
 				</p>
 			{:else if cw.status === 'locked'}
 				<p class="mt-3 text-xs text-yellow-500">
@@ -377,7 +396,7 @@
 		<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
 		<p class="mt-1 text-sm text-gray-400">Submit or update your pick for the current week</p>
 	</a>
-	<a href="/dashboard/standings"
+	<a href="/dashboard/standings?season={selectedSeasonId}"
 		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
 		<p class="font-semibold text-[#c9a84c]">Standings</p>
 		<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>

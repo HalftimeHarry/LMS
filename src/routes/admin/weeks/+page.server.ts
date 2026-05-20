@@ -58,8 +58,11 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	// Earliest game time for week 1 — used to pre-fill the deadline field
 	let firstGameTime: string | null = null;
-	// Longest shot per week — biggest underdog (most positive spread) from active odds
-	const longestShotByWeek: Record<number, { teamId: string; abbreviation: string; city: string; name: string; spread: number }> = {};
+	// Per-week auto-pick candidates derived from active odds:
+	//   longestShotByWeek   — biggest underdog (most positive spread)  → 2H auto-pick
+	//   biggestFavoriteByWeek — biggest favorite (most negative spread) → LMS auto-pick
+	const longestShotByWeek:     Record<number, { teamId: string; abbreviation: string; city: string; name: string; spread: number }> = {};
+	const biggestFavoriteByWeek: Record<number, { teamId: string; abbreviation: string; city: string; name: string; spread: number }> = {};
 	if (activeSeason) {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
@@ -78,20 +81,24 @@ export const load: PageServerLoad = async ({ url }) => {
 			for (const g of allOdds) {
 				const w      = g.week as number;
 				const spread = g.homeSpread as number;
-				// Candidates: home team with positive spread, away team with negative spread (= underdog)
 				const candidates = [
 					{ team: g.expand?.homeTeam, spread:  spread },
 					{ team: g.expand?.awayTeam, spread: -spread },
 				];
 				for (const c of candidates) {
-					if (!c.team || c.spread <= 0) continue;
-					if (!longestShotByWeek[w] || c.spread > longestShotByWeek[w].spread) {
+					if (!c.team) continue;
+					// Underdog (positive spread) → 2H auto-pick
+					if (c.spread > 0 && (!longestShotByWeek[w] || c.spread > longestShotByWeek[w].spread)) {
 						longestShotByWeek[w] = {
-							teamId:       c.team.id,
-							abbreviation: c.team.abbreviation,
-							city:         c.team.city,
-							name:         c.team.name,
-							spread:       c.spread,
+							teamId: c.team.id, abbreviation: c.team.abbreviation,
+							city: c.team.city, name: c.team.name, spread: c.spread,
+						};
+					}
+					// Favorite (negative spread) → LMS auto-pick
+					if (c.spread < 0 && (!biggestFavoriteByWeek[w] || c.spread < biggestFavoriteByWeek[w].spread)) {
+						biggestFavoriteByWeek[w] = {
+							teamId: c.team.id, abbreviation: c.team.abbreviation,
+							city: c.team.city, name: c.team.name, spread: c.spread,
 						};
 					}
 				}
@@ -132,6 +139,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		isTestSeason,
 		serverNow: now,
 		longestShotByWeek,
+		biggestFavoriteByWeek,
 		activeOddsWeeks: [...activeOddsWeeks],
 	};
 };
