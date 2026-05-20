@@ -25,7 +25,7 @@
 
 	// ── Filters (client-side) ─────────────────────────────────────────────────
 	let searchText   = $state('');
-	let statusFilter = $state<'all' | 'active' | 'eliminated'>('all');
+	let statusFilter = $state<'all' | 'active' | 'eliminated'>('active');
 
 	const filteredEntries = $derived(() => {
 		let list = [...entries] as any[];
@@ -250,7 +250,7 @@
 		{#if searchText || statusFilter !== 'all'}
 			<button
 				type="button"
-				onclick={() => { searchText = ''; statusFilter = 'all'; }}
+				onclick={() => { searchText = ''; statusFilter = 'active'; }}
 				class="text-xs text-gray-600 hover:text-gray-400"
 			>
 				Clear filters
@@ -362,12 +362,11 @@
 													src={teamLogoUrl(abbr)}
 													alt={abbr}
 													title="{abbr}{cell.isAutoPick ? ' (auto-pick)' : ''}"
-													class="h-6 w-6 object-contain {cell.isAutoPick ? 'opacity-40 grayscale' : ''}"
+													class="h-6 w-6 rounded-full bg-white p-0.5 object-contain {cell.isAutoPick ? 'opacity-40 grayscale' : ''}"
 												/>
+												<span class="text-[9px] leading-none {cell.isAutoPick ? 'text-gray-600' : 'text-gray-400'}">{abbr}</span>
 											{/each}
-											{#if cell.isAutoPick}
-												<span class="text-[9px] leading-none text-orange-500">auto</span>
-											{/if}
+	
 										</div>
 									{:else if isElim && entry.eliminatedWeek && week.week >= entry.eliminatedWeek}
 										<span class="text-gray-700 text-xs">—</span>
@@ -377,7 +376,7 @@
 										{#if autoPick}
 											<div class="flex flex-col items-center gap-0.5" title="Auto-pick pending: {autoPick.abbreviation}">
 												<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation}
-													class="h-6 w-6 object-contain opacity-20" />
+													class="h-6 w-6 rounded-full bg-white p-0.5 object-contain opacity-20" />
 												<span class="text-[9px] leading-none text-orange-700">?</span>
 											</div>
 										{:else}
@@ -400,8 +399,9 @@
 														src={teamLogoUrl(abbr)}
 														alt={abbr}
 														title="Your pick: {abbr}"
-														class="h-6 w-6 object-contain"
+														class="h-6 w-6 rounded-full bg-white p-0.5 object-contain"
 													/>
+													<span class="text-[9px] leading-none text-gray-400">{abbr}</span>
 												</div>
 											{/each}
 											<!-- Small "you" indicator -->
@@ -447,7 +447,7 @@
 				<span class="h-1.5 w-1.5 rounded-full bg-gray-600"></span>Complete
 			</span>
 			<span class="flex items-center gap-1.5">
-				<img src={teamLogoUrl('DAL')} alt="" class="h-3.5 w-3.5 opacity-20 grayscale" />
+				<img src={teamLogoUrl('DAL')} alt="" class="h-3.5 w-3.5 rounded-full bg-white p-px opacity-20 grayscale" />
 				Auto-pick pending
 			</span>
 			<span class="flex items-center gap-1.5">

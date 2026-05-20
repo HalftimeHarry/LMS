@@ -193,8 +193,11 @@ export const actions: Actions = {
 			}
 		}
 
-		// Advance week to results_pending
-		await pb.collection('weekly_settings').update(weekId, { status: 'results_pending' }).catch(() => {});
+		// Advance week to results_pending (only if not already complete)
+		const weekRec = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+		if (weekRec?.status !== 'complete') {
+			await pb.collection('weekly_settings').update(weekId, { status: 'results_pending' }).catch(() => {});
+		}
 
 		return { success: true, resultsWritten, eliminated };
 	},
