@@ -12,6 +12,11 @@ const INTERVAL_MS: Record<TestInterval, number> = {
 	'1d': 24 * 60 * 60 * 1000,
 };
 
+// Fixed anchor for test season game times.
+// Week 1 slot starts here; all game times and deadlines are offsets from this.
+// 2026-05-20 11:00 PST = 19:00 UTC
+const TEST_SEASON_START = new Date('2026-05-20T19:00:00.000Z');
+
 // Weighted spread pool
 const SPREADS = [
 	-1, -1.5, -2, -2.5, -3, -3, -3, -3.5, -4, -4.5,
@@ -95,7 +100,7 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval)
 	shName:  string;
 }> {
 	const intervalMs  = INTERVAL_MS[interval];
-	const seasonStart = new Date();
+	const seasonStart = TEST_SEASON_START;
 	const tag         = `(${interval}/week) ${seasonStart.toISOString().slice(0, 16)}`;
 
 	// Load teams

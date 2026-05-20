@@ -12,6 +12,13 @@ node_modules
 .DS_Store
 Thumbs.db
 
+# Local PocketBase binary and data
+pocketbase/pocketbase
+pocketbase/data.db
+pocketbase/auxiliary.db
+pocketbase/pb_data/
+pocketbase/types.d.ts
+
 # Env
 .env
 .env.*
