@@ -10,12 +10,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const seasonId = url.searchParams.get('season') ?? null;
 	const userId   = locals.user.id;
 
-	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
+	const seasonsRaw = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
+	// Real seasons before test seasons so defaults always land on the real season
+	const seasons = seasonsRaw.sort((a: any, b: any) => {
+		const aTest = a.name?.includes('[TEST]') ? 1 : 0;
+		const bTest = b.name?.includes('[TEST]') ? 1 : 0;
+		return aTest - bTest;
+	});
 
-	// Prefer explicit ?season=, then first active/open, then first overall
+	// Prefer explicit ?season=, then first active/open real season, then first overall
 	const activeSeason = (
-		(seasonId ? seasons.find(s => s.id === seasonId) : null)
-		?? seasons.find(s => s.status === 'active' || s.status === 'open')
+		(seasonId ? seasons.find((s: any) => s.id === seasonId) : null)
+		?? seasons.find((s: any) => !s.name?.includes('[TEST]') && (s.status === 'active' || s.status === 'open'))
+		?? seasons.find((s: any) => s.status === 'active' || s.status === 'open')
 		?? seasons[0]
 		?? null
 	);

@@ -2,7 +2,8 @@ import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url, depends }) => {
+	depends('dashboard:season');
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
 	if (locals.role === 'super_admin' || locals.role === 'pool_admin') redirect(302, '/admin');
 
@@ -13,6 +14,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		console.error('[dashboard] pbAdmin failed:', e);
 		throw e;
 	}
+
+	const seasonParam = url.searchParams.get('season');
 
 	const [entries, seasons] = await Promise.all([
 		pb.collection('entries').getFullList({
@@ -29,25 +32,71 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const allSeasons = seasons as any[];
 
 	// Active/open seasons — there may be multiple (LMS + Second Half run concurrently)
-	const activeSeasons = allSeasons.filter(s => s.status === 'active' || s.status === 'open');
-	// Primary season for the welcome banner — prefer LMS type, else first active
-	const activeSeason = activeSeasons.find(s => s.poolType === 'lms') ?? activeSeasons[0] ?? null;
+	const activeSeasons = allSeasons.filter((s: any) => s.status === 'active' || s.status === 'open');
 
-	// Seasons the user actually has entries in (may include non-active seasons)
-	const userSeasonIds = [...new Set((entries as any[]).map((e: any) => e.season))];
-	// Merge with active seasons so we have full season objects for all user seasons
-	const userSeasons = userSeasonIds.map(id =>
+	// Seasons the user actually has entries in
+	const userSeasonIds = [...new Set(e.map((x: any) => x.season as string))];
+	const userSeasons   = userSeasonIds.map(id =>
 		allSeasons.find((s: any) => s.id === id) ?? { id, name: '—', status: 'unknown' }
 	);
 
-	// Current open/locked week per season the user has entries in
+	// Season name map for quick lookup
+	const seasonNameMap = new Map(allSeasons.map((s: any) => [s.id as string, s.name as string]));
+
+	// Sort user seasons: real first, then test
+	const userSeasonIdsSorted = [...userSeasonIds].sort((a, b) => {
+		const aTest = seasonNameMap.get(a)?.includes('[TEST]') ? 1 : 0;
+		const bTest = seasonNameMap.get(b)?.includes('[TEST]') ? 1 : 0;
+		return aTest - bTest;
+	});
+	const bestSeasonId = userSeasonIdsSorted[0] ?? '';
+
+	// Use explicit ?season= only if it's a valid user season AND it's a real season
+	// (or there are no real seasons to fall back to)
+	const hasRealSeason = userSeasonIdsSorted.some(id => !seasonNameMap.get(id)?.includes('[TEST]'));
+	const paramIsReal   = seasonParam ? !seasonNameMap.get(seasonParam)?.includes('[TEST]') : false;
+	const paramIsValid  = seasonParam ? userSeasonIds.includes(seasonParam) : false;
+
+	const defaultSeasonId =
+		(paramIsValid && (!hasRealSeason || paramIsReal)) ? seasonParam!
+		: bestSeasonId;
+
+	// Redirect to canonical URL if param is missing or pointing to a test season when a real one exists
+	if (defaultSeasonId && seasonParam !== defaultSeasonId) {
+		redirect(303, `/dashboard?season=${defaultSeasonId}`);
+	}
+
+	// Selected season object
+	const activeSeason = allSeasons.find((s: any) => s.id === defaultSeasonId)
+		?? activeSeasons[0]
+		?? null;
+
+	// Current open/locked week per season the user has entries in.
+	// Prefer the earliest open week with a future deadline; fall back to
+	// the earliest locked week if no open week with a future deadline exists.
 	const currentWeekBySeason: Record<string, any> = {};
+	const now = new Date().toISOString();
 	await Promise.all(
 		userSeasons.map(async (s: any) => {
-			const w = await pb.collection('weekly_settings').getFirstListItem(
-				`season = "${s.id}" && (status = "open" || status = "locked")`,
+			// First: earliest open week whose deadline is still in the future
+			let w = await pb.collection('weekly_settings').getFirstListItem(
+				`season = "${s.id}" && status = "open" && deadline > "${now}"`,
 				{ sort: 'week' }
 			).catch(() => null);
+			// Fallback: earliest locked week
+			if (!w) {
+				w = await pb.collection('weekly_settings').getFirstListItem(
+					`season = "${s.id}" && status = "locked"`,
+					{ sort: 'week' }
+				).catch(() => null);
+			}
+			// Last fallback: any open week (past deadline, e.g. test seasons)
+			if (!w) {
+				w = await pb.collection('weekly_settings').getFirstListItem(
+					`season = "${s.id}" && status = "open"`,
+					{ sort: 'week' }
+				).catch(() => null);
+			}
 			if (w) currentWeekBySeason[s.id] = w;
 		})
 	);
@@ -106,14 +155,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 			role:        locals.user.role        as string
 		},
 		entries:              e,
-		activeEntries:        realEntries.filter(x => x.status === 'active'),
-		pendingEntries:       realEntries.filter(x => x.status === 'pending_payment'),
-		eliminatedEntries:    realEntries.filter(x => x.status === 'eliminated'),
+		activeEntries:        realEntries.filter((x: any) => x.status === 'active'),
+		pendingEntries:       realEntries.filter((x: any) => x.status === 'pending_payment'),
+		eliminatedEntries:    realEntries.filter((x: any) => x.status === 'eliminated'),
 		activeSeason,
 		activeSeasons,
+		allSeasons,
 		currentWeekBySeason,
 		entriesBySeason,
 		pickByEntry,
-		usedTeamCountByEntry
+		usedTeamCountByEntry,
+		selectedSeasonId: defaultSeasonId
 	};
 };

@@ -224,15 +224,21 @@ async function completeWeek(week: any, seasonId: string, log: string[]): Promise
 
 	for (const pick of picks) {
 		const results = await pbGet('pick_results', `pick = "${pick.id}"`);
-		const hasIncorrect = results.some((r: any) => r.result === 'incorrect');
-		if (!hasIncorrect || !results.length) continue;
+		if (!results.length) continue;
+		const isLms = pick.entryType === 'lms';
+		// LMS:      eliminated when picked team WINS (result=correct)
+		// 2nd Half: eliminated when picked team LOSES (result=incorrect)
+		const shouldEliminate = isLms
+			? results.some((r: any) => r.result === 'correct')
+			: results.some((r: any) => r.result === 'incorrect');
+		if (!shouldEliminate) continue;
 		try {
 			const entry = await pbGetOne('entries', pick.entry);
 			if (entry.status === 'active') {
 				await pbPatch('entries', entry.id, {
 					status:           'eliminated',
 					eliminatedWeek:   week.week,
-					eliminatedReason: 'Picked a losing team',
+					eliminatedReason: isLms ? 'Picked a winning team' : 'Picked a losing team',
 				});
 				eliminated++;
 			}

@@ -58,7 +58,7 @@
 	});
 
 	// ── Filters ──────────────────────────────────────────────────────────────
-	let selectedSeasonId = $state(seasons[0]?.id ?? '');
+	let selectedSeasonId = $state('');
 	let selectedWeekId   = $state('');
 	let selectedTeamId   = $state('');
 
@@ -211,7 +211,15 @@
 		{/each}
 	</div>
 
+	<!-- ── Prompt when no season selected ─────────────────────────────────── -->
+	{#if !selectedSeasonId}
+		<div class="mb-5 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+			<p class="text-sm text-gray-500">Select a season above to view picks and manage eliminations.</p>
+		</div>
+	{/if}
+
 	<!-- ── Week cards ──────────────────────────────────────────────────────── -->
+	{#if selectedSeasonId}
 	<div class="mb-5 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
 		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Select Week</p>
 		<div class="flex flex-wrap gap-2">
@@ -674,5 +682,7 @@
 			</div>
 		</div>
 	</div>
+
+	{/if}<!-- /selectedSeasonId -->
 
 </div>

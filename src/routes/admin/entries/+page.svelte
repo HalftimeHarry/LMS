@@ -128,6 +128,15 @@
 		if (result.success) { bulkStatusValue = ''; await invalidateAll(); }
 	}
 
+	// Bulk delete
+	let bulkDeleteConfirm = $state(false);
+	async function handleBulkDelete() {
+		if (!bulkDeleteConfirm) { bulkDeleteConfirm = true; return; }
+		bulkDeleteConfirm = false;
+		const result = await ctrl.bulkDelete();
+		if (result.success) await invalidateAll();
+	}
+
 	// Keep old handler alias for eliminated confirm reset
 	async function handleBulkInactive() {
 		bulkStatusValue = 'eliminated';
@@ -457,8 +466,30 @@
 				<InfoTip text="Override the status of all selected entries. Use 'eliminated' to remove entries that shouldn't continue, or 'active' to reinstate entries after a correction." />
 			</div>
 
+			<div class="h-4 w-px bg-[rgba(201,168,76,0.3)]"></div>
+
+			<!-- Bulk delete -->
+			{#if bulkDeleteConfirm}
+				<span class="text-xs text-red-400">Delete {ctrl.selectedIds.size} entries? This cannot be undone.</span>
+				<button
+					onclick={handleBulkDelete}
+					disabled={ctrl.bulkLoading}
+					class="rounded border border-red-700 bg-red-950/60 px-3 py-1 text-xs font-semibold text-red-400 transition hover:bg-red-950 disabled:opacity-40"
+				>{ctrl.bulkLoading ? 'Deleting…' : 'Confirm Delete'}</button>
+				<button
+					onclick={() => bulkDeleteConfirm = false}
+					class="text-xs text-gray-500 hover:text-gray-300"
+				>Cancel</button>
+			{:else}
+				<button
+					onclick={handleBulkDelete}
+					disabled={ctrl.bulkLoading}
+					class="rounded border border-red-900 bg-red-950/30 px-3 py-1 text-xs font-medium text-red-500 transition hover:bg-red-950/60 disabled:opacity-40"
+				>Delete selected</button>
+			{/if}
+
 			<button
-				onclick={() => { ctrl.clearSelection(); bulkConfirm = false; bulkPaidMethod = ''; bulkStatusValue = ''; }}
+				onclick={() => { ctrl.clearSelection(); bulkConfirm = false; bulkDeleteConfirm = false; bulkPaidMethod = ''; bulkStatusValue = ''; }}
 				class="ml-auto text-xs text-gray-500 hover:text-gray-300"
 			>Clear selection</button>
 

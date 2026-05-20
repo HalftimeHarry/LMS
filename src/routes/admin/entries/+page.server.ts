@@ -209,5 +209,29 @@ export const actions: Actions = {
 		}
 		if (errors.length) return fail(400, { error: `Some updates failed: ${errors.join(', ')}` });
 		return { success: true, count: ids.length };
+	},
+
+	bulkDelete: async ({ request }) => {
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+		const ids  = data.getAll('ids') as string[];
+
+		if (!ids.length) return fail(400, { error: 'No entries selected.' });
+
+		const errors: string[] = [];
+		for (const id of ids) {
+			try {
+				// Delete associated picks first to avoid orphaned records
+				const picks = await pb.collection('picks').getFullList({ filter: `entry = "${id}"` }).catch(() => []);
+				for (const p of picks as any[]) {
+					await pb.collection('picks').delete(p.id).catch(() => {});
+				}
+				await pb.collection('entries').delete(id);
+			} catch (e: unknown) {
+				errors.push(`${id}: ${(e as { message?: string })?.message ?? 'failed'}`);
+			}
+		}
+		if (errors.length) return fail(400, { error: `Some deletes failed: ${errors.join(', ')}` });
+		return { success: true, count: ids.length };
 	}
 };
