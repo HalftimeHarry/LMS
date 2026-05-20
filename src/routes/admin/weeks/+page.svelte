@@ -14,10 +14,10 @@
 	$effect(() => ctrl.setWeeks(data.weeks as any[]));
 
 	const statusColors: Record<string, string> = {
-		open:            'bg-blue-950/60 text-blue-400 border-blue-800',
-		locked:          'bg-yellow-950/60 text-yellow-400 border-yellow-800',
-		results_pending: 'bg-orange-950/60 text-orange-400 border-orange-800',
-		complete:        'bg-gray-900 text-gray-500 border-gray-700',
+		open:            'bg-blue-950 text-blue-400 border-blue-800',
+		locked:          'bg-yellow-950 text-yellow-400 border-yellow-800',
+		results_pending: 'bg-orange-950 text-orange-300 border-orange-600',
+		complete:        'bg-green-950 text-green-300 border-green-800',
 	};
 
 	let bulkLoading      = $state(false);
@@ -53,7 +53,12 @@
 		return `${Math.round(abs / 86_400_000)}d`;
 	}
 
-	const now         = $derived(data.serverNow as number);
+	let   nowTick     = $state(data.serverNow as number);
+	$effect(() => {
+		const id = setInterval(() => { nowTick = Date.now(); }, 1_000);
+		return () => clearInterval(id);
+	});
+	const now         = $derived(nowTick);
 	const nextActions = $derived(data.nextActions as { weekNum: number; at: number; action: string }[]);
 	const isTestSeason = $derived(data.isTestSeason as boolean);
 
@@ -276,16 +281,39 @@
 	{:else}
 		<div class="flex flex-col gap-3">
 			{#each ctrl.filtered as week}
-				{@const pickCount   = (data.pickCountsByWeek ?? {})[week.id] ?? 0}
-				{@const activeCount = data.activeEntryCount ?? 0}
-				{@const missing     = Math.max(0, activeCount - pickCount)}
-				{@const picksThisWeek = ctrl.poolType === 'second_half' ? (week.week >= 10 ? 2 : 1) : 1}
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+				{@const pickCount      = (data.pickCountsByWeek ?? {})[week.id] ?? 0}
+				{@const activeCount    = data.activeEntryCount ?? 0}
+				{@const missing        = Math.max(0, activeCount - pickCount)}
+				{@const picksThisWeek  = ctrl.poolType === 'second_half' ? (week.week >= 10 ? 2 : 1) : 1}
+				{@const hasActiveOdds  = (data.activeOddsWeeks ?? []).includes(week.week)}
+				{@const isNextOpen     = ctrl.filtered.find((w: any) => w.status === 'open')?.id === week.id}
+				{@const needsOddsWarn  = week.status === 'open' && !hasActiveOdds && isNextOpen}
+				{@const deadlineDiff   = isNextOpen ? new Date(week.deadline).getTime() - now : 0}
+				{@const deadlineUrgent = isNextOpen && deadlineDiff > 0 && deadlineDiff < 3_600_000}
+				{@const deadlineLabel  = isNextOpen && deadlineDiff > 0
+					? (Math.floor(deadlineDiff / 3_600_000) > 0
+						? `${Math.floor(deadlineDiff / 3_600_000)}h ${String(Math.floor((deadlineDiff % 3_600_000) / 60_000)).padStart(2,'0')}m`
+						: `${String(Math.floor((deadlineDiff % 3_600_000) / 60_000)).padStart(2,'0')}:${String(Math.floor((deadlineDiff % 60_000) / 1_000)).padStart(2,'0')}`)
+					: null}
+				<div class="rounded-xl border p-5 backdrop-blur-sm
+					{week.status === 'complete'         ? 'border-green-900    bg-green-950'
+					: week.status === 'results_pending' ? 'border-purple-900   bg-purple-950/60'
+					: week.status === 'locked'          ? 'border-gray-700     bg-gray-900/60'
+					: isNextOpen                        ? 'border-purple-700   bg-purple-950/60'
+					:                                     'border-gray-800     bg-gray-950/40'}">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
 						<div>
 							<div class="flex items-center gap-3">
 								<p class="font-semibold text-white">Week {week.week}</p>
+
+								{#if week.status === 'open'}
+									{#if isNextOpen}
+										<span class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.12)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">Current</span>
+									{:else}
+										<span class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-xs text-gray-500">Upcoming</span>
+									{/if}
+								{/if}
 
 								{#if activeCount > 0}
 									<span class="rounded border px-2 py-0.5 text-xs
@@ -299,12 +327,19 @@
 									</span>
 								{/if}
 							</div>
-							<p class="mt-0.5 text-sm text-gray-400">
-								Deadline: {new Date(week.deadline).toLocaleString('en-US', {
-									weekday: 'short', month: 'short', day: 'numeric',
-									hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-								})}
-							</p>
+							<div class="mt-0.5 flex items-center gap-3">
+								<p class="text-sm text-gray-400">
+									Deadline: {new Date(week.deadline).toLocaleString('en-US', {
+										weekday: 'short', month: 'short', day: 'numeric',
+										hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+									})}
+								</p>
+								{#if deadlineLabel}
+									<span class="font-mono text-sm font-bold {deadlineUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+										{deadlineLabel}
+									</span>
+								{/if}
+							</div>
 	
 							{#if week.expand?.biggestFavoriteTeam || (data.longestShotByWeek ?? {})[week.week]}
 								<div class="mt-2 flex flex-wrap gap-2">
@@ -325,6 +360,11 @@
 									{/if}
 								</div>
 							{/if}
+							{#if needsOddsWarn}
+								<div class="mt-2 flex items-center gap-1.5 rounded border border-yellow-800 bg-yellow-950/60 px-2.5 py-1.5 text-xs text-yellow-400">
+									⚠ No active odds set — auto-pick will not fire at lock time. Activate odds via <a href="/admin/odds" class="underline hover:text-yellow-300">Manage Odds</a>.
+								</div>
+							{/if}
 							{#if week.notes}
 								<p class="mt-1 text-xs text-gray-500">{week.notes}</p>
 							{/if}
@@ -332,7 +372,8 @@
 
 						<!-- Actions -->
 						<div class="flex flex-wrap items-center gap-2">
-							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[week.status] ?? ''}">
+							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[week.status] ?? ''}
+								{week.status === 'results_pending' ? 'animate-pulse' : ''}">
 								{week.status.replace('_', ' ')}
 							</span>
 
@@ -356,7 +397,10 @@
 									<input type="hidden" name="id" value={week.id} />
 									<input type="hidden" name="status" value={ctrl.nextStatus(week.status) ?? week.status} />
 									<button type="submit"
-										class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1 text-xs text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]">
+										class="rounded border px-3 py-1 text-xs transition
+											{week.status === 'results_pending'
+												? 'animate-pulse border-orange-500 text-orange-300 hover:bg-orange-950/40'
+												: 'border-[rgba(201,168,76,0.4)] text-[#c9a84c] hover:bg-[rgba(201,168,76,0.1)]'}">
 										→ {ctrl.advanceLabel(week.status)}
 									</button>
 								</form>

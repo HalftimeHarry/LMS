@@ -7,8 +7,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const seasons      = $derived(data.seasons      as any[]);
-	const hasMissingPick = $derived(data.hasMissingPick as boolean);
-	const activeSeason   = $derived(data.activeSeason as any);
+	const activeSeason = $derived(data.activeSeason as any);
 	const weeks        = $derived(data.weeks        as any[]);
 	const entries      = $derived(data.entries      as any[]);
 	const pickGrid     = $derived(data.pickGrid     as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
@@ -59,6 +58,29 @@
 	});
 
 	const activeCount = $derived(entries.filter((e: any) => e.status === 'active').length);
+
+	// ── Countdown timer ───────────────────────────────────────────────────────
+	let now = $state(Date.now());
+	$effect(() => {
+		const t = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(t);
+	});
+
+	const timeLeft = $derived(() => {
+		if (!currentWeek?.deadline) return null;
+		const diff = new Date(currentWeek.deadline).getTime() - now;
+		if (diff <= 0) return null;
+		const h  = Math.floor(diff / 3_600_000);
+		const m  = Math.floor((diff % 3_600_000) / 60_000);
+		const s  = Math.floor((diff % 60_000) / 1_000);
+		const urgent = diff < 3_600_000; // under 1 hour
+		return {
+			label: h > 0
+				? `${h}h ${String(m).padStart(2,'0')}m`
+				: `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`,
+			urgent
+		};
+	});
 
 	// ── Pool switcher ─────────────────────────────────────────────────────────
 	function switchPool(type: string) {
@@ -166,7 +188,7 @@
 	</div>
 
 	<!-- ── Filters ──────────────────────────────────────────────────────────── -->
-	<div class="mb-4 flex flex-wrap items-center gap-3 {hasMissingPick ? 'missing-pick-alert' : ''}">
+	<div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-4 py-3 backdrop-blur-sm">
 		<!-- Search -->
 		<div class="relative">
 			<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,6 +255,29 @@
 			{filteredEntries().length} of {entries.length} shown
 		</span>
 	</div>
+
+	<!-- Deadline countdown -->
+	{#if currentWeek?.deadline}
+		{@const tl = timeLeft()}
+		<div class="mb-4 flex items-center gap-3 rounded-lg border {tl?.urgent ? 'border-red-900 bg-red-950' : 'border-gray-800 bg-black/60'} px-4 py-2.5">
+			<span class="text-xs text-gray-500">
+				Wk {currentWeek.week} pick deadline:
+				<span class="text-white">
+					{new Date(currentWeek.deadline).toLocaleString('en-US', {
+						weekday: 'short', month: 'short', day: 'numeric',
+						hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+					})}
+				</span>
+			</span>
+			{#if tl}
+				<span class="ml-auto font-mono text-sm font-bold {tl.urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+					{tl.label}
+				</span>
+			{:else}
+				<span class="ml-auto text-xs text-gray-600">Deadline passed</span>
+			{/if}
+		</div>
+	{/if}
 
 	{#if visibleWeeks.length === 0 && openWeeks.length === 0}
 		<!-- Season not started -->
@@ -412,12 +457,4 @@
 
 {/if}
 
-<style>
-	@keyframes pick-pulse {
-		0%, 100% { opacity: 1; }
-		50%       { opacity: 0.35; }
-	}
-	:global(.missing-pick-alert) {
-		animation: pick-pulse 1.4s ease-in-out infinite;
-	}
-</style>
+

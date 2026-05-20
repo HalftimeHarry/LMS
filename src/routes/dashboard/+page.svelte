@@ -75,7 +75,14 @@
 		Welcome back, <span class="text-[#c9a84c]">{data.user.displayName}</span>
 	</h1>
 	{#if seasonGroups.length > 0}
-		<p class="mt-1 text-gray-400">{seasonGroups.map(g => g.season.name).join(' · ')} {seasonGroups.length === 1 ? 'is' : 'are'} underway.</p>
+		{@const realGroups = seasonGroups.filter(g => !g.season.name?.includes('[TEST]'))}
+		<p class="mt-1 text-gray-400">
+			{#if realGroups.length > 0}
+				{realGroups.map(g => g.season.name).join(' · ')} {realGroups.length === 1 ? 'is' : 'are'} underway.
+			{:else}
+				Your test seasons are underway.
+			{/if}
+		</p>
 	{:else if data.activeSeason}
 		<p class="mt-1 text-gray-400">{data.activeSeason.name} is underway.</p>
 	{:else}
