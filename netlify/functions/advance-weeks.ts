@@ -289,9 +289,24 @@ async function advanceWeeks(): Promise<void> {
 				await lockWeek(week, season.id, log);
 			}
 
-			// Simulate results: only for [TEST] seasons
+			// Simulate results: only for [TEST] seasons, and only if no results
+			// have been manually entered yet (pick_results already present = admin took over)
 			if (isTest && now >= resultsAt && week.status === 'locked') {
-				await simulateResults(week, season.id, log);
+				const picks = await pbGet('picks', `week = "${week.id}"`);
+				const pickIds = picks.map((p: any) => p.id);
+				let hasManualResults = false;
+				if (pickIds.length) {
+					const existing = await pbGet('pick_results',
+						pickIds.slice(0, 5).map((id: string) => `pick = "${id}"`).join(' || ')
+					);
+					hasManualResults = existing.length > 0;
+				}
+				if (hasManualResults) {
+					log.push(`Week ${week.week}: skipping simulation — manual results already present`);
+					await pbPatch('weekly_settings', week.id, { status: 'results_pending' });
+				} else {
+					await simulateResults(week, season.id, log);
+				}
 			}
 
 			// Complete: for test seasons auto-complete; real seasons need manual results first

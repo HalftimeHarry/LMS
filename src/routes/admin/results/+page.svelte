@@ -48,8 +48,8 @@
 
 	const weekStatus = $derived(weekSetting?.status ?? 'open');
 	const isLocked   = $derived(weekStatus === 'locked' || weekStatus === 'results_pending' || weekStatus === 'complete');
-	const canRecord  = $derived(weekStatus === 'locked' || weekStatus === 'results_pending');
-	const isComplete = $derived(weekStatus === 'complete');
+	const canRecord  = $derived(weekStatus === 'locked' || weekStatus === 'results_pending' || weekStatus === 'complete');
+	const isComplete = $derived(false); // always allow admin to record/correct results
 
 	const statusColors: Record<string, string> = {
 		open:             'border-green-800 bg-green-950/60 text-green-400',
@@ -555,3 +555,4 @@
 </div>
 {/if}
 {/if}
+ 
