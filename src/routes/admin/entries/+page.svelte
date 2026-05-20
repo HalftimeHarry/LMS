@@ -481,7 +481,7 @@
 			<div
 				class="min-w-0 rounded-xl border p-5 backdrop-blur-sm transition
 					{ctrl.selectedIds.has(entry.id)
-						? 'border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.06)]'
+						? 'border-purple-700 bg-purple-950/60'
 						: 'border-[rgba(201,168,76,0.3)] bg-black/75'}"
 			>
 				<div class="flex flex-wrap items-start justify-between gap-4">

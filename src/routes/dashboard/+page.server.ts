@@ -95,6 +95,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		entriesBySeason[sid].push(entry);
 	}
 
+	// Stat cards only count real (non-test) season entries
+	const realSeasonIds = new Set(allSeasons.filter(s => !s.name?.includes('[TEST]')).map(s => s.id));
+	const realEntries   = e.filter(x => realSeasonIds.has(x.season));
+
 	return {
 		user: {
 			id:          locals.user.id,
@@ -102,9 +106,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			role:        locals.user.role        as string
 		},
 		entries:              e,
-		activeEntries:        e.filter(x => x.status === 'active'),
-		pendingEntries:       e.filter(x => x.status === 'pending_payment'),
-		eliminatedEntries:    e.filter(x => x.status === 'eliminated'),
+		activeEntries:        realEntries.filter(x => x.status === 'active'),
+		pendingEntries:       realEntries.filter(x => x.status === 'pending_payment'),
+		eliminatedEntries:    realEntries.filter(x => x.status === 'eliminated'),
 		activeSeason,
 		activeSeasons,
 		currentWeekBySeason,

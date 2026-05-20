@@ -72,7 +72,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		try {
 			const allOdds = await pb.collection('game_odds').getFullList({
 				filter: `season = "${activeSeason.id}" && isActive = true && homeSpread != null`,
-				fields: 'week,homeSpread,homeTeam,awayTeam',
 				expand: 'homeTeam,awayTeam',
 			}) as any[];
 
@@ -116,6 +115,9 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const isTestSeason = activeSeason?.name?.includes('[TEST]') ?? false;
 
+	// Weeks that have at least one active game odd with a spread set
+	const activeOddsWeeks = new Set(Object.keys(longestShotByWeek).map(Number));
+
 	return {
 		seasons,
 		teams,
@@ -130,6 +132,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		isTestSeason,
 		serverNow: now,
 		longestShotByWeek,
+		activeOddsWeeks: [...activeOddsWeeks],
 	};
 };
 

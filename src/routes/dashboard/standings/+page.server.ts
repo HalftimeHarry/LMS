@@ -48,7 +48,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		sort:   '+entryName'
 	}).catch(() => []) as any[];
 
-	const currentWeek = weeks.find(w => w.status === 'open' || w.status === 'locked') ?? null;
+	// Prefer the earliest open week with a future deadline; fall back to most recent locked week
+	const now = new Date();
+	const currentWeek =
+		weeks.find(w => w.status === 'open' && new Date(w.deadline) > now) ??
+		weeks.find(w => w.status === 'open') ??
+		weeks.find(w => w.status === 'locked') ??
+		null;
 
 	if (entries.length === 0) {
 		return { activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId };
