@@ -299,6 +299,6 @@ export const actions: Actions = {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to save pick.' });
 		}
 
-		redirect(302, '/dashboard');
+		redirect(302, `/dashboard/entries/${entryId}?pickSaved=1`);
 	}
 };

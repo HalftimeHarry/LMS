@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { page } from '$app/stores';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -18,6 +19,16 @@
 	const recommendationsByWeek  = $derived((data as any).recommendationsByWeek  as Record<string, any[]>);
 
 	const isLms = $derived(entry?.entryType === 'lms');
+
+	// Pick saved toast
+	let showToast = $state(false);
+	$effect(() => {
+		if ($page.url.searchParams.get('pickSaved') === '1') {
+			showToast = true;
+			const t = setTimeout(() => { showToast = false; }, 3500);
+			return () => clearTimeout(t);
+		}
+	});
 
 	function spreadDisplay(spread: number): string {
 		if (spread === 0) return 'PK';
@@ -128,11 +139,40 @@
 
 <svelte:head><title>{entry?.entryName ?? 'Entry'} — LMS Pool</title></svelte:head>
 
+<!-- Pick saved toast -->
+{#if showToast}
+	<div class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2
+		animate-[toast-in_0.35s_ease-out_forwards]"
+		style="animation: toast-in 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards, toast-out 0.4s ease-in 3.1s forwards;">
+		<div class="flex items-center gap-3 rounded-xl border border-green-700 bg-green-950/95 px-5 py-3 shadow-2xl backdrop-blur-sm">
+			<span class="text-lg">✅</span>
+			<span class="text-sm font-semibold text-green-300">Pick saved!</span>
+		</div>
+	</div>
+{/if}
+
+<style>
+	@keyframes toast-in {
+		from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.92); }
+		to   { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1);    }
+	}
+	@keyframes toast-out {
+		from { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1);    }
+		to   { opacity: 0; transform: translateX(-50%) translateY(8px)   scale(0.95); }
+	}
+</style>
+
 <div class="mx-auto max-w-2xl">
 
 	<!-- Back -->
-	<div class="mb-6">
+	<div class="mb-6 flex items-center justify-between">
 		<a href="/dashboard" class="text-sm text-gray-500 hover:text-[#c9a84c]">← Dashboard</a>
+		{#if $page.url.searchParams.get('pickSaved') === '1'}
+			<a href="/dashboard"
+				class="flex items-center gap-2 rounded-lg border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-4 py-2 text-sm font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">
+				← Back to Dashboard
+			</a>
+		{/if}
 	</div>
 
 	<!-- Entry header -->
@@ -166,6 +206,33 @@
 			<p class="text-gray-400">No weeks set up yet. Check back soon.</p>
 		</div>
 	{:else}
+
+		<!-- ── Past picks summary ─────────────────────────────────────────────── -->
+		{@const pastPicks = closedWeeks
+			.filter(w => pickByWeek[w.id])
+			.map(w => ({ week: w, pick: pickByWeek[w.id], teams: pickByWeek[w.id]?.expand?.pickedTeams ?? [] }))}
+		{#if pastPicks.length > 0}
+			<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+				<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Teams Used</h2>
+				<div class="flex flex-wrap gap-2">
+					{#each pastPicks as { week: w, pick: p, teams }}
+						{#each teams as team}
+							<div class="flex items-center gap-2 rounded-lg border border-gray-800 bg-black/60 px-3 py-2">
+								<img
+									src={teamLogoUrl(team.abbreviation)}
+									alt={team.abbreviation}
+									class="h-7 w-7 rounded-full bg-white p-0.5 object-contain {p.isAutoPick ? 'opacity-60 grayscale' : ''}"
+								/>
+								<div>
+									<p class="text-xs font-semibold text-white">{team.abbreviation}</p>
+									<p class="text-[10px] text-gray-500">Wk {w.week}{p.isAutoPick ? ' · auto' : ''}</p>
+								</div>
+							</div>
+						{/each}
+					{/each}
+				</div>
+			</div>
+		{/if}
 
 		<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 			<div class="flex items-center justify-between gap-4">

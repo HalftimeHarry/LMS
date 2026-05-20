@@ -129,7 +129,7 @@
 	})());
 
 	function updateSeason(id: string) {
-		goto(`?season=${id}&week=1`);
+		goto(`?season=${id}`);
 	}
 	function updateWeek(w: number) {
 		goto(`?season=${activeSeason?.id}&week=${w}`);

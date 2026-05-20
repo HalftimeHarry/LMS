@@ -4,8 +4,8 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url }) => {
 	const pb       = await pbAdmin();
-	const seasonId = url.searchParams.get('season') ?? '';
-	const weekNum  = Number(url.searchParams.get('week') ?? 1);
+	const seasonId  = url.searchParams.get('season') ?? '';
+	const weekParam = url.searchParams.get('week');
 
 	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => []) as any[];
 
@@ -15,7 +15,29 @@ export const load: PageServerLoad = async ({ url }) => {
 		: null;
 
 	if (!activeSeason) {
-		return { seasons, activeSeason: null, weekNum, weekSetting: null, games: [], picks: [], pickResults: [] };
+		return { seasons, activeSeason: null, weekNum: 1, weekSetting: null, games: [], picks: [], pickResults: [] };
+	}
+
+	// Smart default: locked/results_pending first, then most recent complete, then week 1
+	let weekNum = weekParam ? Number(weekParam) : 0;
+	if (!weekNum) {
+		const allWeeksForDefault = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${activeSeason.id}"`,
+			fields: 'week,status',
+			sort:   'week'
+		}).catch(() => []) as any[];
+
+		// Priority: locked (needs results) → results_pending → open → last complete
+		const locked          = allWeeksForDefault.find((w: any) => w.status === 'locked');
+		const resultsPending  = allWeeksForDefault.find((w: any) => w.status === 'results_pending');
+		const firstOpen       = allWeeksForDefault.find((w: any) => w.status === 'open');
+		const lastComplete    = [...allWeeksForDefault].reverse().find((w: any) => w.status === 'complete');
+
+		weekNum = locked?.week ?? resultsPending?.week ?? firstOpen?.week ?? lastComplete?.week ?? 1;
+
+		// Redirect to canonical URL so the tab highlights correctly
+		const { redirect } = await import('@sveltejs/kit');
+		redirect(302, `/admin/results?season=${activeSeason.id}&week=${weekNum}`);
 	}
 
 	// Week setting for selected week
