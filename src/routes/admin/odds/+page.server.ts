@@ -9,13 +9,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
 
-	// Prefer explicit ?season=, then first active/open, then first overall
-	const activeSeason = (
-		(seasonId ? seasons.find(s => s.id === seasonId) : null)
-		?? seasons.find(s => s.status === 'active' || s.status === 'open')
-		?? seasons[0]
-		?? null
-	);
+	// No auto-default — require explicit ?season= param
+	const activeSeason = seasonId
+		? (seasons.find(s => s.id === seasonId) ?? null)
+		: null;
 
 	if (!activeSeason) {
 		return { seasons, activeSeason: null, weekNum: 1, games: [], teams: [], weekSummary: [] };

@@ -38,6 +38,12 @@
 	const selectedSeasonId = $derived(data.selectedSeasonId as string);
 	const selectedGroup    = $derived(seasonGroups.find(g => g.season.id === selectedSeasonId) ?? null);
 
+	// Only show test seasons in the selector when no real seasons exist
+	const hasRealSeasons      = $derived(seasonGroups.some(g => !g.season.name?.includes('[TEST]')));
+	const selectableSeasons   = $derived(
+		hasRealSeasons ? seasonGroups.filter(g => !g.season.name?.includes('[TEST]')) : seasonGroups
+	);
+
 	function switchSeason(id: string) {
 		goto(`?season=${id}`);
 	}
@@ -99,7 +105,7 @@
 			<p class="mt-1 text-gray-400">No active season right now. Check back soon.</p>
 		{/if}
 	</div>
-	{#if seasonGroups.length > 1}
+	{#if selectableSeasons.length > 1}
 		<div class="flex flex-col items-end gap-1">
 			<label for="season-select" class="text-xs text-gray-600">Season</label>
 			<select
@@ -108,7 +114,7 @@
 				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
 				class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-2 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
 			>
-				{#each seasonGroups as g}
+				{#each selectableSeasons as g}
 					<option value={g.season.id}>{g.season.name}</option>
 				{/each}
 			</select>

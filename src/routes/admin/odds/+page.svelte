@@ -117,8 +117,8 @@
 </div>
 
 {#if !activeSeason}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
-		<p class="text-gray-400">No active season. <a href="/admin/seasons" class="text-[#c9a84c] hover:underline">Create one first.</a></p>
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+		<p class="text-sm text-gray-500">Select a season above to view and manage odds.</p>
 	</div>
 {:else}
 

@@ -129,10 +129,10 @@
 	})());
 
 	function updateSeason(id: string) {
-		goto(`?season=${id}&week=1`, { replaceState: true });
+		goto(`?season=${id}&week=1`);
 	}
 	function updateWeek(w: number) {
-		goto(`?season=${activeSeason?.id}&week=${w}`, { replaceState: true });
+		goto(`?season=${activeSeason?.id}&week=${w}`);
 	}
 
 	const outcomeLabel: Record<string, string> = { home: 'Home Win', away: 'Away Win', tie: 'Tie' };
@@ -197,8 +197,8 @@
 </div>
 
 {#if !activeSeason}
-	<div class="rounded-xl border border-yellow-800 bg-yellow-950/40 px-5 py-4 text-yellow-400">
-		No active season found.
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+		<p class="text-sm text-gray-500">Select a season above to view and record results.</p>
 	</div>
 {:else}
 

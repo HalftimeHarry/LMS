@@ -133,6 +133,35 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 	// Keep for backwards compat
 	async function bulkSetInactive() { return bulkSetStatus('eliminated'); }
 
+	// ── Bulk: delete ─────────────────────────────────────────────────────────
+	async function bulkDelete(): Promise<{ success: boolean; error?: string }> {
+		if (selectedIds.size === 0) return { success: false, error: 'No entries selected.' };
+
+		bulkLoading = true;
+		bulkError   = null;
+
+		try {
+			const fd = new FormData();
+			for (const id of selectedIds) fd.append('ids', id);
+
+			const res  = await fetch('?/bulkDelete', { method: 'POST', body: fd });
+			const json = await res.json().catch(() => ({}));
+
+			if (!res.ok) {
+				bulkError = json?.data?.error ?? 'Bulk delete failed.';
+				return { success: false, error: bulkError ?? undefined };
+			}
+
+			clearSelection();
+			return { success: true };
+		} catch (e: unknown) {
+			bulkError = (e as Error)?.message ?? 'Unexpected error.';
+			return { success: false, error: bulkError ?? undefined };
+		} finally {
+			bulkLoading = false;
+		}
+	}
+
 	// ── Sync entries when page data reloads ──────────────────────────────────
 	function setEntries(next: Entry[]) {
 		entries = next;
@@ -168,6 +197,7 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 		bulkMarkPaid,
 		bulkSetStatus,
 		bulkSetInactive,
+		bulkDelete,
 		setEntries
 	};
 }

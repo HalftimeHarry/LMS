@@ -9,9 +9,10 @@ export const load: PageServerLoad = async ({ url }) => {
 
 	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => []) as any[];
 
+	// No auto-default — require explicit ?season= param to prevent acting on wrong season
 	const activeSeason = seasonId
-		? seasons.find((s: any) => s.id === seasonId)
-		: seasons.find((s: any) => s.status === 'active' || s.status === 'open') ?? seasons[0] ?? null;
+		? (seasons.find((s: any) => s.id === seasonId) ?? null)
+		: null;
 
 	if (!activeSeason) {
 		return { seasons, activeSeason: null, weekNum, weekSetting: null, games: [], picks: [], pickResults: [] };
