@@ -154,7 +154,7 @@ async function createSeasonRecord(token, name, isSecondHalf, seasonStart) {
     status:                  'active',
     lmsEntryFee:             100,
     secondHalfEntryFee:      50,
-    secondHalfPicksPerWeek:  2,
+    secondHalfPicksPerWeek:  1,
     regularSeasonOnly:       true,
     lmsEnabled:              !isSecondHalf,
     secondHalfEnabled:       isSecondHalf,

@@ -7,15 +7,21 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	const pb       = await pbAdmin();
 	const poolType = (url.searchParams.get('pool') ?? 'lms') as 'lms' | 'second_half';
+	const seasonId = url.searchParams.get('season') ?? null;
 	const userId   = locals.user.id;
 
-	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
-	const activeSeason = seasons.find((s) => s.status === 'active' || s.status === 'open')
+	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
+
+	// Prefer explicit ?season=, then first active/open, then first overall
+	const activeSeason = (
+		(seasonId ? seasons.find(s => s.id === seasonId) : null)
+		?? seasons.find(s => s.status === 'active' || s.status === 'open')
 		?? seasons[0]
-		?? null;
+		?? null
+	);
 
 	if (!activeSeason) {
-		return { activeSeason: null, poolType, weeks: [], entries: [], pickGrid: {}, currentWeek: null, userId };
+		return { seasons, activeSeason: null, poolType, weeks: [], entries: [], pickGrid: {}, currentWeek: null, userId };
 	}
 
 	// All weeks for this season, sorted ascending
@@ -100,13 +106,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		}
 	}
 
+	// Does the current user have any active entry missing a pick for an open week?
+	const hasMissingPick = openWeekIds.size > 0 && [...myEntryIds].some(entryId => {
+		const entry = entries.find((e: any) => e.id === entryId);
+		if (entry?.status !== 'active') return false;
+		return [...openWeekIds].some(weekId => !pickGrid[entryId]?.[weekId]);
+	});
+
 	return {
+		seasons,
 		activeSeason,
 		poolType,
-		weeks:       weeks    as any[],
-		entries:     entries  as any[],
+		weeks:          weeks    as any[],
+		entries:        entries  as any[],
 		pickGrid,
-		currentWeek: currentWeek as any,
-		userId
+		currentWeek:    currentWeek as any,
+		userId,
+		hasMissingPick,
 	};
 };

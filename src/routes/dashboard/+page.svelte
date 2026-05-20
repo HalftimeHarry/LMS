@@ -1,12 +1,49 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
+	import { teamLogoUrl } from '$lib/teamLogos';
 
 	let { data }: { data: PageData } = $props();
 
 	const pickByEntry          = $derived(data.pickByEntry          as Record<string, any>);
 	const usedTeamCountByEntry = $derived(data.usedTeamCountByEntry as Record<string, number>);
+	const currentWeekBySeason  = $derived(data.currentWeekBySeason  as Record<string, any>);
+	const entriesBySeason      = $derived(data.entriesBySeason      as Record<string, any[]>);
+	const activeSeasons        = $derived(data.activeSeasons        as any[]);
 	const NFL_TEAMS = 32;
+
+	// Seasons that have at least one entry for this user, sorted by name
+	const seasonGroups = $derived(
+		Object.entries(entriesBySeason)
+			.map(([sid, entries]) => ({
+				season:  (data.entries as any[]).find((e: any) => e.season === sid)?.expand?.season
+				         ?? activeSeasons.find((s: any) => s.id === sid)
+				         ?? { id: sid, name: '—' },
+				entries: entries as any[],
+			}))
+			.sort((a, b) => (a.season.name ?? '').localeCompare(b.season.name ?? ''))
+	);
+
+	// Collapsible season groups — real seasons open by default, test seasons collapsed
+	let openGroups = $state(new Set<number>());
+	$effect(() => {
+		const initial = new Set<number>();
+		seasonGroups.forEach((g, i) => {
+			if (!g.season.name?.includes('[TEST]')) initial.add(i);
+		});
+		openGroups = initial;
+	});
+	function toggleGroup(i: number) {
+		const next = new Set(openGroups);
+		next.has(i) ? next.delete(i) : next.add(i);
+		openGroups = next;
+	}
+
+	// Active/Eliminated tab per season group
+	let groupTab = $state<Record<number, 'active' | 'eliminated'>>({});
+	function setGroupTab(i: number, tab: 'active' | 'eliminated') {
+		groupTab = { ...groupTab, [i]: tab };
+	}
 
 	const statusColors: Record<string, string> = {
 		pending_payment: 'bg-yellow-950/60 text-yellow-400 border-yellow-800',
@@ -37,7 +74,9 @@
 	<h1 class="text-3xl font-bold text-white">
 		Welcome back, <span class="text-[#c9a84c]">{data.user.displayName}</span>
 	</h1>
-	{#if data.activeSeason}
+	{#if seasonGroups.length > 0}
+		<p class="mt-1 text-gray-400">{seasonGroups.map(g => g.season.name).join(' · ')} {seasonGroups.length === 1 ? 'is' : 'are'} underway.</p>
+	{:else if data.activeSeason}
 		<p class="mt-1 text-gray-400">{data.activeSeason.name} is underway.</p>
 	{:else}
 		<p class="mt-1 text-gray-400">No active season right now. Check back soon.</p>
@@ -76,45 +115,49 @@
 	</div>
 </div>
 
-<!-- Current week + deadline -->
-{#if data.currentWeek}
-	<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-		<div class="flex flex-wrap items-center justify-between gap-4">
-			<div>
-				<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">Current Week</p>
-				<p class="mt-1 text-2xl font-bold text-white">Week {data.currentWeek.week}</p>
-				<p class="mt-1 text-sm text-gray-400">
-					Pick deadline:
-					<span class="text-white">
-						{new Date(data.currentWeek.deadline).toLocaleString('en-US', {
-							weekday: 'short', month: 'short', day: 'numeric',
-							hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-						})}
+<!-- Current week + deadline — real seasons only -->
+{#each seasonGroups as group}
+	{@const season = group.season}
+	{@const cw = currentWeekBySeason[season.id]}
+	{#if cw && !season.name?.includes('[TEST]')}
+		<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
+			<div class="flex flex-wrap items-center justify-between gap-4">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-wider text-gray-500">{season.name} — Current Week</p>
+					<p class="mt-1 text-2xl font-bold text-white">Week {cw.week}</p>
+					<p class="mt-1 text-sm text-gray-400">
+						Pick deadline:
+						<span class="text-white">
+							{new Date(cw.deadline).toLocaleString('en-US', {
+								weekday: 'short', month: 'short', day: 'numeric',
+								hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+							})}
+						</span>
+					</p>
+				</div>
+				<div class="flex items-center gap-2">
+					<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">
+						{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}
 					</span>
+					<InfoTip text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
+				</div>
+			</div>
+			{#if cw.status === 'open'}
+				<p class="mt-3 text-xs text-[#c9a84c]">
+					Picks are open. Submit or update your pick from each active entry below before the deadline.
 				</p>
-			</div>
-			<div class="flex items-center gap-2">
-				<span class="text-sm font-medium {weekStatusColors[data.currentWeek.status] ?? 'text-gray-400'}">
-					{weekStatusLabels[data.currentWeek.status] ?? data.currentWeek.status.toUpperCase()}
-				</span>
-				<InfoTip text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
-			</div>
+			{:else if cw.status === 'locked'}
+				<p class="mt-3 text-xs text-yellow-500">
+					The deadline has passed. Picks are locked — no changes until results are posted.
+				</p>
+			{:else if cw.status === 'results_pending'}
+				<p class="mt-3 text-xs text-orange-400">
+					Games are in. Results are being entered — check back soon to see if you're still alive.
+				</p>
+			{/if}
 		</div>
-		{#if data.currentWeek.status === 'open'}
-			<p class="mt-3 text-xs text-[#c9a84c]">
-				Picks are open. Submit or update your pick from each active entry below before the deadline.
-			</p>
-		{:else if data.currentWeek.status === 'locked'}
-			<p class="mt-3 text-xs text-yellow-500">
-				The deadline has passed. Picks are locked — no changes until results are posted.
-			</p>
-		{:else if data.currentWeek.status === 'results_pending'}
-			<p class="mt-3 text-xs text-orange-400">
-				Games are in. Results are being entered — check back soon to see if you're still alive.
-			</p>
-		{/if}
-	</div>
-{/if}
+	{/if}
+{/each}
 
 <!-- Entries -->
 <div class="mb-8">
@@ -142,63 +185,141 @@
 		</div>
 	{:else}
 		<div class="flex flex-col gap-3">
-			{#each data.entries as entry}
-				<a
-					href="/dashboard/entries/{entry.id}"
-					class="block rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]"
-				>
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<div>
-							<p class="font-semibold text-white">{entry.entryName}</p>
-							<p class="mt-0.5 text-sm text-gray-400">{entry.expand?.season?.name ?? '—'}</p>
-							{#if entry.status === 'eliminated' && entry.eliminatedWeek}
-								<p class="mt-1 text-xs text-red-400">
-									Eliminated week {entry.eliminatedWeek}
-									{#if entry.eliminatedReason} — {entry.eliminatedReason}{/if}
-								</p>
-							{/if}
-							{#if entry.status === 'pending_payment'}
-								<p class="mt-1 text-xs text-yellow-500">Awaiting payment confirmation from admin.</p>
-							{/if}
-						</div>
-						<div class="flex flex-wrap items-center gap-2">
-							{#if entry.paid}
-								<span class="text-xs text-green-400">✅ Paid</span>
-							{:else}
-								<span class="text-xs text-gray-500">Payment pending</span>
-							{/if}
-							<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[entry.status] ?? ''}">
-								{entry.status.replace('_', ' ')}
-							</span>
-							{#if entry.status === 'active'}
-								{@const available = NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)}
-								<span class="text-xs text-gray-500">
-									{available} team{available !== 1 ? 's' : ''} left
-								</span>
-							{/if}
-							{#if entry.status === 'active' && data.currentWeek}
-								{@const pick = pickByEntry[entry.id]}
-								{#if pick}
-									{@const teams = pick.expand?.pickedTeams ?? []}
-									{@const isLms = entry.entryType === 'lms'}
-									{@const isPending = data.currentWeek.status === 'open'}
-									<span class="rounded border px-2.5 py-1 text-xs font-medium
-										{isPending
-											? 'border-yellow-800 bg-yellow-950/60 text-yellow-400'
-											: 'border-gray-700 bg-gray-900/60 text-gray-400'}">
-										{isPending ? 'Pending' : 'Locked'} · Wk {data.currentWeek.week}
-										— {teams.map((t: any) => t.city + ' ' + t.name).join(', ')}
-										<span class="{isLms ? 'text-red-400' : 'text-green-400'}">{isLms ? 'to lose' : 'to win'}</span>
-									</span>
-								{:else if data.currentWeek.status === 'open'}
-									<span class="rounded border border-red-800 bg-red-950/60 px-2.5 py-1 text-xs font-medium text-red-400">
-										⚠ Wk {data.currentWeek.week} — pick needed
+			{#each seasonGroups as group, gi}
+				{@const currentWeek   = currentWeekBySeason[group.season.id] ?? null}
+				{@const activeCount   = group.entries.filter((e: any) => e.status === 'active').length}
+				{@const missingPicks  = currentWeek?.status === 'open'
+					? group.entries.filter((e: any) => e.status === 'active' && !pickByEntry[e.id]).length
+					: 0}
+				{@const isOpen        = openGroups.has(gi)}
+
+				<!-- Collapsible season card -->
+				<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+
+					<!-- Header / toggle -->
+					<button
+						type="button"
+						onclick={() => toggleGroup(gi)}
+						class="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.03]"
+					>
+						<div class="min-w-0">
+							<div class="flex flex-wrap items-center gap-2">
+								<span class="font-semibold text-white">{group.season.name}</span>
+								{#if currentWeek}
+									<span class="rounded border border-gray-800 px-2 py-0.5 text-xs {weekStatusColors[currentWeek.status] ?? 'text-gray-500'}">
+										Wk {currentWeek.week} · {weekStatusLabels[currentWeek.status] ?? currentWeek.status}
 									</span>
 								{/if}
-							{/if}
+							</div>
+							<p class="mt-1 text-xs text-gray-500">
+								{activeCount} active entr{activeCount === 1 ? 'y' : 'ies'}
+								{#if missingPicks > 0}
+									· <span class="text-red-400">⚠ {missingPicks} pick{missingPicks === 1 ? '' : 's'} needed</span>
+								{:else if currentWeek?.status === 'open' && activeCount > 0}
+									· <span class="text-green-400">All picks submitted</span>
+								{:else if currentWeek?.status === 'locked'}
+									· <span class="text-yellow-500">Picks locked</span>
+								{/if}
+								· Click to {isOpen ? 'collapse' : 'view entries & submit picks'}
+							</p>
 						</div>
-					</div>
-				</a>
+						<span class="shrink-0 text-gray-500 transition-transform duration-200 {isOpen ? 'rotate-180' : ''}">▾</span>
+					</button>
+
+					<!-- Entry list with Active / Eliminated tabs -->
+					{#if isOpen}
+						{@const activeEntries     = group.entries.filter((e: any) => e.status !== 'eliminated')}
+						{@const eliminatedEntries = group.entries.filter((e: any) => e.status === 'eliminated')}
+						{@const tab               = groupTab[gi] ?? 'active'}
+						<div class="border-t border-[rgba(201,168,76,0.15)]">
+							<!-- Tab bar -->
+							<div class="flex border-b border-[rgba(201,168,76,0.1)]">
+								<button
+									type="button"
+									onclick={() => setGroupTab(gi, 'active')}
+									class="px-5 py-2.5 text-xs font-semibold transition {tab === 'active' ? 'border-b-2 border-[#c9a84c] text-[#c9a84c]' : 'text-gray-500 hover:text-gray-300'}"
+								>Active ({activeEntries.length})</button>
+								<button
+									type="button"
+									onclick={() => setGroupTab(gi, 'eliminated')}
+									class="px-5 py-2.5 text-xs font-semibold transition {tab === 'eliminated' ? 'border-b-2 border-red-500 text-red-400' : 'text-gray-500 hover:text-gray-300'}"
+								>Eliminated ({eliminatedEntries.length})</button>
+							</div>
+							<div class="flex flex-col gap-3 px-5 pb-4 pt-3">
+								{#each (tab === 'active' ? activeEntries : eliminatedEntries) as entry}
+									{@const hasPick = currentWeek ? !!pickByEntry[entry.id] : false}
+								<a
+										href="/dashboard/entries/{entry.id}"
+										class="block rounded-lg border p-4 transition hover:border-[#c9a84c]
+											{entry.status === 'active' && currentWeek
+												? hasPick
+													? 'border-green-900 bg-green-950'
+													: 'border-blue-900 bg-blue-950'
+												: 'border-gray-800 bg-gray-950/60'}"
+									>
+										<div class="flex flex-wrap items-center justify-between gap-3">
+											<div>
+												<p class="font-semibold text-white">{entry.entryName}</p>
+												{#if entry.status === 'eliminated' && entry.eliminatedWeek}
+													<p class="mt-1 text-xs text-red-400">
+														Eliminated week {entry.eliminatedWeek}
+														{#if entry.eliminatedReason} — {entry.eliminatedReason}{/if}
+													</p>
+												{/if}
+												{#if entry.status === 'pending_payment'}
+													<p class="mt-1 text-xs text-yellow-500">Awaiting payment confirmation from admin.</p>
+												{/if}
+											</div>
+											<div class="flex flex-wrap items-center gap-2">
+												{#if entry.paid}
+													<span class="text-xs text-green-400">✅ Paid</span>
+												{:else}
+													<span class="text-xs text-gray-500">Payment pending</span>
+												{/if}
+												<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[entry.status] ?? ''}">
+													{entry.status.replace('_', ' ')}
+												</span>
+												{#if entry.status === 'active'}
+													{@const available = NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)}
+													<span class="text-xs text-gray-500">{available} team{available !== 1 ? 's' : ''} left</span>
+												{/if}
+												{#if entry.status === 'active' && currentWeek}
+													{@const pick = pickByEntry[entry.id]}
+													{#if pick}
+														{@const teams = pick.expand?.pickedTeams ?? []}
+														{@const isLms = entry.entryType === 'lms'}
+														{@const isPending = currentWeek.status === 'open'}
+														<span class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium
+															{isPending ? 'border-yellow-800 bg-yellow-950/60 text-yellow-400' : 'border-gray-700 bg-gray-900/60 text-gray-400'}">
+															{isPending ? 'Pending' : 'Locked'} · Wk {currentWeek.week} —
+															{#each teams as t}
+																<img src={teamLogoUrl(t.abbreviation)} alt={t.abbreviation} class="h-4 w-4 object-contain" />
+																<span>{t.city} {t.name}</span>
+															{/each}
+															<span class="{isLms ? 'text-red-400' : 'text-green-400'}">{isLms ? 'to lose' : 'to win'}</span>
+														</span>
+														{#if isPending}
+															<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2.5 py-1 text-xs font-semibold text-[#c9a84c]">
+																Update pick →
+															</span>
+														{/if}
+													{:else if currentWeek.status === 'open'}
+														<span class="rounded border border-red-800 bg-red-950/60 px-2.5 py-1 text-xs font-medium text-red-400">
+															⚠ Wk {currentWeek.week} — pick needed
+														</span>
+														<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2.5 py-1 text-xs font-semibold text-[#c9a84c]">
+															Submit pick →
+														</span>
+													{/if}
+												{/if}
+											</div>
+										</div>
+									</a>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
 			{/each}
 		</div>
 	{/if}

@@ -235,6 +235,9 @@ export const actions: Actions = {
 		if (entry.user !== locals.user.id) {
 			return fail(403, { error: 'Not your entry.' });
 		}
+		if (entry.status === 'eliminated') {
+			return fail(403, { error: 'This entry has been eliminated and cannot submit picks.' });
+		}
 
 		let week: any;
 		try {
@@ -296,6 +299,6 @@ export const actions: Actions = {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to save pick.' });
 		}
 
-		redirect(302, `/dashboard/entries/${params.id}`);
+		redirect(302, '/dashboard');
 	}
 };

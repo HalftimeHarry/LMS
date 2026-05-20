@@ -23,43 +23,76 @@ export const load: PageServerLoad = async ({ locals }) => {
 		pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => [])
 	]);
 
-	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
 
-	let currentWeek: any = null;
-	if (activeSeason) {
-		currentWeek = await pb.collection('weekly_settings').getFirstListItem(
-			`season = "${activeSeason.id}" && (status = "open" || status = "locked")`,
-			{ sort: 'week' }
-		).catch(() => null);
-	}
 
-	// Fetch all picks for active entries — current week pick (with teams) + total used team count.
-	const e = entries as any[];
-	const pickByEntry: Record<string, any> = {};
+	const e          = entries as any[];
+	const allSeasons = seasons as any[];
+
+	// Active/open seasons — there may be multiple (LMS + Second Half run concurrently)
+	const activeSeasons = allSeasons.filter(s => s.status === 'active' || s.status === 'open');
+	// Primary season for the welcome banner — prefer LMS type, else first active
+	const activeSeason = activeSeasons.find(s => s.poolType === 'lms') ?? activeSeasons[0] ?? null;
+
+	// Seasons the user actually has entries in (may include non-active seasons)
+	const userSeasonIds = [...new Set((entries as any[]).map((e: any) => e.season))];
+	// Merge with active seasons so we have full season objects for all user seasons
+	const userSeasons = userSeasonIds.map(id =>
+		allSeasons.find((s: any) => s.id === id) ?? { id, name: '—', status: 'unknown' }
+	);
+
+	// Current open/locked week per season the user has entries in
+	const currentWeekBySeason: Record<string, any> = {};
+	await Promise.all(
+		userSeasons.map(async (s: any) => {
+			const w = await pb.collection('weekly_settings').getFirstListItem(
+				`season = "${s.id}" && (status = "open" || status = "locked")`,
+				{ sort: 'week' }
+			).catch(() => null);
+			if (w) currentWeekBySeason[s.id] = w;
+		})
+	);
+
+	// Build a set of all current week IDs for quick lookup
+	const currentWeekIds = new Set(Object.values(currentWeekBySeason).map((w: any) => w.id));
+
+	// Fetch picks for ALL entries (active across all seasons)
+	const pickByEntry: Record<string, any>    = {};
 	const usedTeamCountByEntry: Record<string, number> = {};
 
 	const activeIds = e.filter(x => x.status === 'active').map(x => x.id);
 	if (activeIds.length) {
-		const filter = activeIds.map(id => `entry = "${id}"`).join(' || ');
+		const CHUNK = 30;
+		const allPicks: any[] = [];
 
-		// All picks across all weeks — to count used teams
-		const allPicks = await pb.collection('picks').getFullList({
-			filter,
-			expand: 'pickedTeams',
-			sort:   '-id'
-		}).catch(() => []);
+		for (let i = 0; i < activeIds.length; i += CHUNK) {
+			const chunk  = activeIds.slice(i, i + CHUNK);
+			const filter = chunk.map(id => `entry = "${id}"`).join(' || ');
+			const batch  = await pb.collection('picks').getFullList({
+				filter,
+				expand: 'pickedTeams',
+				sort:   '-id'
+			}).catch(() => []);
+			allPicks.push(...batch);
+		}
 
-		// Count distinct teams used per entry
 		const usedTeams: Record<string, Set<string>> = {};
 		for (const p of allPicks) {
 			if (!usedTeams[p.entry]) usedTeams[p.entry] = new Set();
 			for (const t of p.expand?.pickedTeams ?? []) usedTeams[p.entry].add(t.id);
-			// Also index the current week's pick for the badge
-			if (currentWeek && p.week === currentWeek.id) pickByEntry[p.entry] = p;
+			// Index pick for the current week of its season
+			if (currentWeekIds.has(p.week)) pickByEntry[p.entry] = p;
 		}
 		for (const id of activeIds) {
 			usedTeamCountByEntry[id] = usedTeams[id]?.size ?? 0;
 		}
+	}
+
+	// Group entries by season for the UI
+	const entriesBySeason: Record<string, any[]> = {};
+	for (const entry of e) {
+		const sid = entry.season;
+		if (!entriesBySeason[sid]) entriesBySeason[sid] = [];
+		entriesBySeason[sid].push(entry);
 	}
 
 	return {
@@ -68,12 +101,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 			displayName: locals.user.displayName as string,
 			role:        locals.user.role        as string
 		},
-		entries:           e,
-		activeEntries:     e.filter(x => x.status === 'active'),
-		pendingEntries:    e.filter(x => x.status === 'pending_payment'),
-		eliminatedEntries: e.filter(x => x.status === 'eliminated'),
+		entries:              e,
+		activeEntries:        e.filter(x => x.status === 'active'),
+		pendingEntries:       e.filter(x => x.status === 'pending_payment'),
+		eliminatedEntries:    e.filter(x => x.status === 'eliminated'),
 		activeSeason,
-		currentWeek,
+		activeSeasons,
+		currentWeekBySeason,
+		entriesBySeason,
 		pickByEntry,
 		usedTeamCountByEntry
 	};

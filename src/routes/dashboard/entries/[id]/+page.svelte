@@ -268,13 +268,13 @@
 									</p>
 								</div>
 							{/if}
-							{#if !hasPick && !t.expired}
+							{#if !t.expired}
 								<button
 									type="button"
 									onclick={() => { expandedWeeks = new Set([currentWeek.id]); }}
 									class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]"
 								>
-									Pick now ↓
+									{hasPick ? 'Change pick ↓' : 'Pick now ↓'}
 								</button>
 							{/if}
 						</div>
@@ -414,15 +414,48 @@
 									</div>
 								{/if}
 
+							{:else if entry?.status === 'eliminated'}
+								<!-- Eliminated — no picking allowed -->
+								<div class="rounded-lg border border-red-900 bg-red-950/30 p-4">
+									<p class="text-sm text-red-400">This entry has been eliminated — picks are no longer accepted.</p>
+								</div>
 							{:else}
 								<!-- ── OPEN WEEK: team picker ── -->
-								<p class="mb-4 text-xs text-gray-500">
-									{#if isLms}
-										Select <strong class="text-gray-300">1 team</strong> you think will <strong class="text-red-400">lose</strong>.
-									{:else}
-										Select <strong class="text-gray-300">{picksRequired} team{picksRequired > 1 ? 's' : ''}</strong> you think will <strong class="text-green-400">win</strong>.
-									{/if}
-								</p>
+								<!-- ── OPEN WEEK: team picker ── -->
+								<!-- Sticky pick bar — instruction + live selection + submit -->
+								<div class="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgba(201,168,76,0.25)] bg-gray-950/95 px-4 py-3 backdrop-blur-sm">
+									<p class="text-xs text-gray-400">
+										{#if isLms}
+											Select <strong class="text-white">1 team</strong> you think will <strong class="text-red-400">lose</strong>.
+										{:else}
+											Select <strong class="text-white">{picksRequired} team{picksRequired > 1 ? 's' : ''}</strong> you think will <strong class="text-green-400">win</strong>.
+										{/if}
+									</p>
+									<div class="flex items-center gap-3">
+										{#if sel.length > 0}
+											<span class="flex items-center gap-1.5 text-sm text-gray-300">
+												{#each sel as id}
+													{@const t = (teams as Team[]).find(x => x.id === id)}
+													{#if t}
+														<img src={teamLogoUrl(t.abbreviation)} alt={t.name} class="h-5 w-5 object-contain" />
+														<span>{t.abbreviation}</span>
+													{/if}
+												{/each}
+												<span class="{isLms ? 'text-red-400' : 'text-green-400'}">— {isLms ? 'Lose' : 'Win'}</span>
+											</span>
+										{:else}
+											<span class="text-xs text-gray-600">No team selected</span>
+										{/if}
+										<button
+											type="submit"
+											form="pick-form-{week.id}"
+											disabled={!canSubmit || loadingWeek === week.id}
+											class="rounded bg-[#c9a84c] px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-40"
+										>
+											{loadingWeek === week.id ? 'Saving…' : hasPick ? 'Update Pick' : 'Submit Pick'}
+										</button>
+									</div>
+								</div>
 
 								<!-- ── Odds panel ── -->
 								{#each [oddsByWeek?.[week.id] ?? []] as weekOdds}
@@ -568,6 +601,7 @@
 								{/each}
 
 								<form
+									id="pick-form-{week.id}"
 									method="POST"
 									use:enhance={() => {
 										loadingWeek = week.id;

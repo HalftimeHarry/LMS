@@ -6,7 +6,9 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const activeSeason = $derived(data.activeSeason as any);
+	const seasons      = $derived(data.seasons      as any[]);
+	const hasMissingPick = $derived(data.hasMissingPick as boolean);
+	const activeSeason   = $derived(data.activeSeason as any);
 	const weeks        = $derived(data.weeks        as any[]);
 	const entries      = $derived(data.entries      as any[]);
 	const pickGrid     = $derived(data.pickGrid     as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
@@ -62,6 +64,12 @@
 	function switchPool(type: string) {
 		const params = new URLSearchParams($page.url.searchParams);
 		params.set('pool', type);
+		goto(`?${params.toString()}`, { replaceState: true });
+	}
+
+	function switchSeason(id: string) {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.set('season', id);
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 
@@ -158,7 +166,7 @@
 	</div>
 
 	<!-- ── Filters ──────────────────────────────────────────────────────────── -->
-	<div class="mb-4 flex flex-wrap items-center gap-3">
+	<div class="mb-4 flex flex-wrap items-center gap-3 {hasMissingPick ? 'missing-pick-alert' : ''}">
 		<!-- Search -->
 		<div class="relative">
 			<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,7 +216,20 @@
 			</button>
 		{/if}
 
-		<span class="ml-auto text-xs text-gray-600">
+		<!-- Season dropdown -->
+		{#if seasons?.length > 1}
+			<select
+				value={activeSeason?.id ?? ''}
+				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+				class="ml-auto rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each seasons as s}
+					<option value={s.id}>{s.name}</option>
+				{/each}
+			</select>
+		{/if}
+
+		<span class="{seasons?.length > 1 ? '' : 'ml-auto'} text-xs text-gray-600">
 			{filteredEntries().length} of {entries.length} shown
 		</span>
 	</div>
@@ -390,3 +411,13 @@
 	{/if}
 
 {/if}
+
+<style>
+	@keyframes pick-pulse {
+		0%, 100% { opacity: 1; }
+		50%       { opacity: 0.35; }
+	}
+	:global(.missing-pick-alert) {
+		animation: pick-pulse 1.4s ease-in-out infinite;
+	}
+</style>
