@@ -219,9 +219,9 @@ async function completeWeek(week: any, seasonId: string, log: string[]): Promise
 }
 
 // ---------------------------------------------------------------------------
-// Main handler
+// Main logic
 // ---------------------------------------------------------------------------
-async function handler(): Promise<void> {
+async function advanceWeeks(): Promise<void> {
 	const now = Date.now();
 	const log: string[] = [`advance-weeks fired at ${new Date().toISOString()}`];
 
@@ -258,10 +258,10 @@ async function handler(): Promise<void> {
 	console.log(log.join('\n'));
 }
 
-// Export as a Netlify scheduled function — every 2 minutes
-export const advanceWeeks = schedule('*/2 * * * *', async () => {
+// Netlify scheduled function — runs every 2 minutes
+export const handler = schedule('*/2 * * * *', async () => {
 	try {
-		await handler();
+		await advanceWeeks();
 		return { statusCode: 200 };
 	} catch (e: any) {
 		console.error('advance-weeks error:', e.message);
