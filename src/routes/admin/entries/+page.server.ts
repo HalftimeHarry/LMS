@@ -57,8 +57,14 @@ export const actions: Actions = {
 		}
 		const { seasonId, userId, entryType, count, baseName, referredBy = '', complimentary } = parsed.data;
 
-		// Admin bypasses entry window rules — no isLmsOpen/isSecondHalfOpen check here.
-		// Window enforcement only applies to participant self-registration.
+		// Block entry creation after the first pick deadline has passed
+		const season = await pb.collection('seasons').getOne(seasonId).catch(() => null) as any;
+		if (season?.firstPickDeadline && new Date() > new Date(season.firstPickDeadline)) {
+			return fail(400, {
+				error: 'The first pick deadline has passed — new entries cannot be added after the season has started.',
+				action: 'create'
+			});
+		}
 		const entryProvider = new EntryProvider(pb);
 		const existing      = await entryProvider.getAll({ seasonId, userId });
 		const offset        = existing.length;

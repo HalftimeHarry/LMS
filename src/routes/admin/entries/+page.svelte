@@ -8,6 +8,12 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => { now = Date.now(); }, 10_000); // 10s is enough for deadline checks
+		return () => clearInterval(id);
+	});
+
 	const ctrl = createEntriesController(data.entries as any[]);
 	// Keep controller in sync when page data reloads after form actions
 	$effect(() => ctrl.setEntries(data.entries as any[]));
@@ -88,7 +94,6 @@
 
 	// Deadline helpers — keyed by seasonId
 	const deadlineMap = $derived(data.deadlineMap as Record<string, string>);
-	const now = Date.now();
 	function canDelete(entry: any): boolean {
 		const dl = deadlineMap[entry.season];
 		return !dl || now < new Date(dl).getTime();
@@ -178,6 +183,7 @@
 		</div>
 
 		<button
+			type="button"
 			onclick={() => showCreateForm = !showCreateForm}
 			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
 		>+ Add Entries</button>
@@ -212,8 +218,16 @@
 
 <!-- Create entries form -->
 {#if showCreateForm}
+{@const createDeadline = deadlineMap[selectedSeasonId]}
+{@const createDeadlinePast = createDeadline ? now > new Date(createDeadline).getTime() : false}
 <div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
 	<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Add Entries for a Player</h2>
+
+	{#if createDeadlinePast}
+		<div class="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+			⚠ The first pick deadline for this season has passed — new entries cannot be added after the season has started.
+		</div>
+	{/if}
 	<form
 		method="POST"
 		action="?/createEntries"
@@ -359,7 +373,7 @@
 
 		<!-- Submit -->
 		<div class="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
-			<button type="submit" disabled={createLoading || !selectedUserId}
+			<button type="submit" disabled={createLoading || !selectedUserId || createDeadlinePast}
 				class="rounded bg-[#c9a84c] px-6 py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
 				{createLoading ? 'Creating…' : 'Create entries'}
 			</button>

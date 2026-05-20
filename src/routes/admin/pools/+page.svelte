@@ -150,6 +150,45 @@
 
 	const selectedWeek = $derived(weeks.find((w: any) => w.id === selectedWeekId) as any);
 
+	// ── Countdown timer ───────────────────────────────────────────────────────
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(id);
+	});
+
+	function timeUntil(deadline: string | null): string {
+		if (!deadline) return '';
+		const diff = new Date(deadline).getTime() - now;
+		if (diff <= 0) return 'Expired';
+		const d = Math.floor(diff / 86_400_000);
+		const h = Math.floor((diff % 86_400_000) / 3_600_000);
+		const m = Math.floor((diff % 3_600_000)  /    60_000);
+		const s = Math.floor((diff % 60_000)      /     1_000);
+		if (d > 0) return `${d}d ${h}h ${String(m).padStart(2,'0')}m`;
+		if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+		return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+	}
+
+	function isUrgent(deadline: string | null): boolean {
+		if (!deadline) return false;
+		const diff = new Date(deadline).getTime() - now;
+		return diff > 0 && diff < 3_600_000;
+	}
+
+	const weekStatusColors: Record<string, string> = {
+		open:            'text-green-400 border-green-800',
+		locked:          'text-yellow-400 border-yellow-800',
+		results_pending: 'text-orange-400 border-orange-800',
+		complete:        'text-gray-500 border-gray-700',
+	};
+	const weekStatusLabels: Record<string, string> = {
+		open:            'OPEN',
+		locked:          'LOCKED',
+		results_pending: 'RESULTS PENDING',
+		complete:        'COMPLETE',
+	};
+
 	// ── Helpers ───────────────────────────────────────────────────────────────
 	function seasonLabel(s: any) {
 		return s?.name ?? '—';
@@ -224,11 +263,13 @@
 		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Select Week</p>
 		<div class="flex flex-wrap gap-2">
 			{#each seasonWeeks as w}
-				{@const sel = selectedWeekId === w.id}
+				{@const sel      = selectedWeekId === w.id}
+				{@const urgent   = w.status === 'open' && isUrgent(w.deadline)}
+				{@const countdown = w.status === 'open' ? timeUntil(w.deadline) : null}
 				<button
 					type="button"
 					onclick={() => { selectedWeekId = w.id; selectedEntryIds = new Set(); }}
-					class="relative overflow-hidden rounded-lg border px-3 py-2 text-xs font-semibold transition
+					class="relative overflow-hidden rounded-lg border px-3 py-2 text-left text-xs font-semibold transition
 						{sel
 							? 'border-[rgba(201,168,76,0.6)] text-[#c9a84c]'
 							: 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'}"
@@ -236,7 +277,22 @@
 						? 'background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.15) 0%, transparent 80%), #0a0a0a;'
 						: 'background: #0d0d0d;'}
 				>
-					Wk {w.week}
+					<div class="flex items-center gap-1.5">
+						<span>Wk {w.week}</span>
+						<span class="rounded px-1 py-0.5 text-[10px] font-medium border
+							{weekStatusColors[w.status] ?? 'text-gray-500 border-gray-700'}">
+							{weekStatusLabels[w.status] ?? w.status}
+						</span>
+					</div>
+					{#if countdown}
+						<div class="mt-1 font-mono text-[11px] {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+							⏱ {countdown}
+						</div>
+					{:else if w.status !== 'open'}
+						<div class="mt-1 text-[10px] text-gray-600">
+							{w.deadline ? new Date(w.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No deadline'}
+						</div>
+					{/if}
 				</button>
 			{/each}
 		</div>

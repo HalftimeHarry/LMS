@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return aTest - bTest;
 	});
 
-	// Prefer explicit ?season=, then first active/open real season, then first overall
+	// Prefer explicit ?season= param; fall back to first active real season, then any active
 	const activeSeason = (
 		(seasonId ? seasons.find((s: any) => s.id === seasonId) : null)
 		?? seasons.find((s: any) => !s.name?.includes('[TEST]') && (s.status === 'active' || s.status === 'open'))
@@ -64,7 +64,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		null;
 
 	if (entries.length === 0) {
-		return { activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId };
+		return { seasons, activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId };
 	}
 
 	// pickGrid[entryId][weekId] = { teams, isAutoPick, isOwn }

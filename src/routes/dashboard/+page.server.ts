@@ -75,7 +75,8 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 	// Prefer the earliest open week with a future deadline; fall back to
 	// the earliest locked week if no open week with a future deadline exists.
 	const currentWeekBySeason: Record<string, any> = {};
-	const now = new Date().toISOString();
+	// PocketBase stores datetimes with a space separator — use the same format for filter comparisons
+	const now = new Date().toISOString().replace('T', ' ').slice(0, 23) + 'Z';
 	await Promise.all(
 		userSeasons.map(async (s: any) => {
 			// First: earliest open week whose deadline is still in the future
@@ -144,6 +145,36 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 		entriesBySeason[sid].push(entry);
 	}
 
+	// Pool-wide stats per season (all users)
+	const poolStatsBySeason: Record<string, {
+		total: number; active: number; pending: number; eliminated: number; pot: number;
+	}> = {};
+
+	await Promise.all(
+		userSeasonIds.map(async (sid) => {
+			const season = allSeasons.find((s: any) => s.id === sid);
+			const lmsFee = (season?.lmsEntryFee        ?? 0) as number;
+			const shFee  = (season?.secondHalfEntryFee ?? 0) as number;
+
+			const all = await pb.collection('entries').getFullList({
+				filter: `season = "${sid}"`,
+				fields: 'id,status,paid,paymentMethod,entryType',
+			}).catch(() => []) as any[];
+
+			poolStatsBySeason[sid] = {
+				total:      all.length,
+				active:     all.filter((x: any) => x.status === 'active').length,
+				pending:    all.filter((x: any) => x.status === 'pending_payment').length,
+				eliminated: all.filter((x: any) => x.status === 'eliminated').length,
+				// Pot: paid non-complimentary entries × their pool's entry fee
+				pot: all
+					.filter((x: any) => x.paid && x.paymentMethod !== 'free')
+					.reduce((sum: number, x: any) =>
+						sum + (x.entryType === 'lms' ? lmsFee : shFee), 0),
+			};
+		})
+	);
+
 	// Stat cards only count real (non-test) season entries
 	const realSeasonIds = new Set(allSeasons.filter(s => !s.name?.includes('[TEST]')).map(s => s.id));
 	const realEntries   = e.filter(x => realSeasonIds.has(x.season));
@@ -163,6 +194,7 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 		allSeasons,
 		currentWeekBySeason,
 		entriesBySeason,
+		poolStatsBySeason,
 		pickByEntry,
 		usedTeamCountByEntry,
 		selectedSeasonId: defaultSeasonId

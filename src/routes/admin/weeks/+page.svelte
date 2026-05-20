@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import InfoTip from '$lib/components/InfoTip.svelte';
 	import { createWeeksController } from '$lib/controllers';
+	import { teamLogoUrl } from '$lib/teamLogos';
 	import type { PageData, ActionData } from './$types';
 	import type { EntryType } from '$lib/providers';
 
@@ -158,6 +159,44 @@
 			{/if}
 		</div>
 	{/if}
+
+	<!-- ── Season countdown banner ───────────────────────────────────────── -->
+	{#each [ctrl.filtered.find((w: any) => w.status === 'open') ?? null] as currentWeek}
+		{#if currentWeek}
+			{@const diff   = new Date(currentWeek.deadline).getTime() - now}
+			{@const live   = diff > 0}
+			{@const urgent = live && diff < 3_600_000}
+			{@const d = live ? Math.floor(diff / 86_400_000) : 0}
+			{@const h = live ? Math.floor((diff % 86_400_000) / 3_600_000) : 0}
+			{@const m = live ? Math.floor((diff % 3_600_000) / 60_000) : 0}
+			{@const s = live ? Math.floor((diff % 60_000) / 1_000) : 0}
+			<div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border px-5 py-3
+				{urgent ? 'border-red-800 bg-red-950/40' : live ? 'border-green-800 bg-green-950/30' : 'border-gray-700 bg-gray-900/40'}">
+				<div class="flex items-center gap-3">
+					<span class="text-xs font-semibold uppercase tracking-wider {urgent ? 'text-red-400' : live ? 'text-green-400' : 'text-gray-500'}">
+						{live ? '● Running' : '● Deadline passed'}
+					</span>
+					<span class="text-sm text-gray-300">
+						Week {currentWeek.week} — deadline {new Date(currentWeek.deadline).toLocaleString('en-US', {
+							weekday: 'short', month: 'short', day: 'numeric',
+							hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+						})}
+					</span>
+				</div>
+				{#if live}
+					<span class="font-mono text-xl font-bold tabular-nums {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+						{#if d > 0}{d}d {/if}{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}
+					</span>
+				{:else}
+					<span class="text-sm font-semibold text-gray-500">Advance week to continue</span>
+				{/if}
+			</div>
+		{:else}
+			<div class="mt-4 rounded-xl border border-gray-700 bg-gray-900/40 px-5 py-3">
+				<span class="text-sm text-gray-500">⏸ No open week — season not running or all weeks complete.</span>
+			</div>
+		{/if}
+	{/each}
 
 	<!-- Divider -->
 	<div class="my-4 border-t border-[rgba(201,168,76,0.15)]"></div>
@@ -341,25 +380,28 @@
 								{/if}
 							</div>
 	
-							{#if week.expand?.biggestFavoriteTeam || (data.longestShotByWeek ?? {})[week.week]}
+							{#each [{ lms: (data.biggestFavoriteByWeek ?? {})[week.week], sh: (data.longestShotByWeek ?? {})[week.week] }] as picks}
+							{#if picks.lms || picks.sh}
 								<div class="mt-2 flex flex-wrap gap-2">
-									{#if week.expand?.biggestFavoriteTeam}
-										{@const fav = week.expand.biggestFavoriteTeam}
+									{#if picks.lms}
 										<span class="flex items-center gap-1.5 rounded border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.06)] px-2 py-0.5 text-xs text-[#c9a84c]">
-											<span class="font-semibold uppercase tracking-wide">LMS</span>
-											<span class="text-gray-400">{fav.city} {fav.name}</span>
+											<span class="font-semibold uppercase tracking-wide">LMS auto-pick</span>
+											<img src={teamLogoUrl(picks.lms.abbreviation)} alt={picks.lms.abbreviation} class="h-4 w-4 object-contain" />
+											<span class="text-gray-300">{picks.lms.city} {picks.lms.name}</span>
+											<span class="text-gray-500">{picks.lms.spread}</span>
 										</span>
 									{/if}
-									{#if (data.longestShotByWeek ?? {})[week.week]}
-										{@const shot = (data.longestShotByWeek ?? {})[week.week]}
+									{#if picks.sh}
 										<span class="flex items-center gap-1.5 rounded border border-blue-900 bg-blue-950/40 px-2 py-0.5 text-xs text-blue-400">
-											<span class="font-semibold uppercase tracking-wide">2H</span>
-											<span class="text-gray-400">{shot.city} {shot.name}</span>
-											<span class="text-blue-600">+{shot.spread}</span>
+											<span class="font-semibold uppercase tracking-wide">2H auto-pick</span>
+											<img src={teamLogoUrl(picks.sh.abbreviation)} alt={picks.sh.abbreviation} class="h-4 w-4 object-contain" />
+											<span class="text-gray-300">{picks.sh.city} {picks.sh.name}</span>
+											<span class="text-blue-500">+{picks.sh.spread}</span>
 										</span>
 									{/if}
 								</div>
 							{/if}
+						{/each}
 							{#if needsOddsWarn}
 								<div class="mt-2 flex items-center gap-1.5 rounded border border-yellow-800 bg-yellow-950/60 px-2.5 py-1.5 text-xs text-yellow-400">
 									⚠ No active odds set — auto-pick will not fire at lock time. Activate odds via <a href="/admin/odds" class="underline hover:text-yellow-300">Manage Odds</a>.

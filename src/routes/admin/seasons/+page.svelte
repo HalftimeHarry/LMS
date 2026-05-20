@@ -88,15 +88,18 @@
 							class="rounded border border-gray-700 px-3 py-1 text-xs text-gray-300 transition hover:bg-gray-800"
 						>Season Settings</a>
 
-						<!-- Delete (only setup seasons) -->
-						{#if season.status === 'setup'}
+						<!-- Delete — [TEST] seasons only, full cascade -->
+						{#if season.name?.includes('[TEST]')}
 							<form method="POST" action="?/delete" use:enhance>
 								<input type="hidden" name="id" value={season.id} />
 								<button
 									type="submit"
-									onclick={(e) => { if (!confirm('Delete this season?')) e.preventDefault(); }}
+									onclick={(e) => {
+										if (!confirm(`Delete "${season.name}" and ALL its weeks, entries, and picks? This cannot be undone.`))
+											e.preventDefault();
+									}}
 									class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
-								>Delete</button>
+								>Delete season</button>
 							</form>
 						{/if}
 					</div>

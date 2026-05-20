@@ -123,18 +123,37 @@
 		{/if}
 	</div>
 
-	<!-- Pool toggle -->
-	<div class="flex overflow-hidden rounded border border-gray-700">
-		<button type="button" onclick={() => switchPool('lms')}
-			class="px-4 py-1.5 text-sm font-medium transition
-				{poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}">
-			LMS
-		</button>
-		<button type="button" onclick={() => switchPool('second_half')}
-			class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition
-				{poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}">
-			2nd Half
-		</button>
+	<div class="flex flex-wrap items-center gap-3">
+		<!-- Season selector — always visible -->
+		{#if seasons?.length > 1}
+			<div class="flex items-center gap-2">
+				<label for="standings-season" class="text-xs text-gray-500">Season</label>
+				<select
+					id="standings-season"
+					value={activeSeason?.id ?? ''}
+					onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+					class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-1.5 text-xs text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
+				>
+					{#each seasons as s}
+						<option value={s.id}>{s.name}</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
+
+		<!-- Pool toggle -->
+		<div class="flex overflow-hidden rounded border border-gray-700">
+			<button type="button" onclick={() => switchPool('lms')}
+				class="px-4 py-1.5 text-sm font-medium transition
+					{poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+				LMS
+			</button>
+			<button type="button" onclick={() => switchPool('second_half')}
+				class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition
+					{poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+				2nd Half
+			</button>
+		</div>
 	</div>
 </div>
 
@@ -238,20 +257,7 @@
 			</button>
 		{/if}
 
-		<!-- Season dropdown -->
-		{#if seasons?.length > 1}
-			<select
-				value={activeSeason?.id ?? ''}
-				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-				class="ml-auto rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
-			>
-				{#each seasons as s}
-					<option value={s.id}>{s.name}</option>
-				{/each}
-			</select>
-		{/if}
-
-		<span class="{seasons?.length > 1 ? '' : 'ml-auto'} text-xs text-gray-600">
+		<span class="ml-auto text-xs text-gray-600">
 			{filteredEntries().length} of {entries.length} shown
 		</span>
 	</div>

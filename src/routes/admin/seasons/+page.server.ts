@@ -10,15 +10,58 @@ export const load: PageServerLoad = async () => {
 
 export const actions: Actions = {
 	delete: async ({ request }) => {
-		const pb = await pbAdmin();
+		const pb   = await pbAdmin();
 		const data = await request.formData();
-		const id = data.get('id') as string;
+		const id   = data.get('id') as string;
+		if (!id) return fail(400, { error: 'Season ID required.' });
+
+		const season = await pb.collection('seasons').getOne(id).catch(() => null) as any;
+		if (!season) return fail(404, { error: 'Season not found.' });
+		if (!season.name?.includes('[TEST]')) {
+			return fail(400, { error: 'Only [TEST] seasons can be deleted here. Archive real seasons by setting status to "complete".' });
+		}
+
+		// Cascade: weekly_settings → picks → pick_results → entries → season
+		const weeks = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${id}"`
+		}).catch(() => []) as any[];
+
+		// Collect all picks for this season's weeks
+		const weekIds = weeks.map((w: any) => w.id);
+		const picks = weekIds.length
+			? await pb.collection('picks').getFullList({
+				filter: weekIds.map((wid: string) => `week = "${wid}"`).join(' || ')
+			  }).catch(() => []) as any[]
+			: [];
+
+		// Delete pick_results first
+		for (const p of picks) {
+			const results = await pb.collection('pick_results').getFullList({
+				filter: `pick = "${p.id}"`
+			}).catch(() => []) as any[];
+			for (const r of results) await pb.collection('pick_results').delete(r.id).catch(() => {});
+		}
+
+		// Delete picks
+		for (const p of picks) await pb.collection('picks').delete(p.id).catch(() => {});
+
+		// Delete weekly_settings
+		for (const w of weeks) await pb.collection('weekly_settings').delete(w.id).catch(() => {});
+
+		// Delete entries
+		const entries = await pb.collection('entries').getFullList({
+			filter: `season = "${id}"`
+		}).catch(() => []) as any[];
+		for (const e of entries) await pb.collection('entries').delete(e.id).catch(() => {});
+
+		// Delete the season itself
 		try {
 			await pb.collection('seasons').delete(id);
 		} catch (e: unknown) {
-			return fail(400, { error: (e as { message?: string })?.message ?? 'Delete failed.' });
+			return fail(400, { error: (e as { message?: string })?.message ?? 'Season delete failed.' });
 		}
-		return { success: true };
+
+		return { success: true, deleted: { weeks: weeks.length, picks: picks.length, entries: entries.length } };
 	},
 
 	setStatus: async ({ request }) => {
