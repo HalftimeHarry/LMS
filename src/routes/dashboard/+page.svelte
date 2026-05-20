@@ -2,6 +2,8 @@
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	let { data }: { data: PageData } = $props();
 
@@ -10,21 +12,37 @@
 	const currentWeekBySeason  = $derived(data.currentWeekBySeason  as Record<string, any>);
 	const entriesBySeason      = $derived(data.entriesBySeason      as Record<string, any[]>);
 	const activeSeasons        = $derived(data.activeSeasons        as any[]);
+	const allSeasons           = $derived(data.allSeasons           as any[]);
 	const NFL_TEAMS = 32;
 
-	// Seasons that have at least one entry for this user, sorted by name
+	// Seasons that have at least one entry for this user, sorted real-first
 	const seasonGroups = $derived(
 		Object.entries(entriesBySeason)
 			.map(([sid, entries]) => ({
-				season:  (data.entries as any[]).find((e: any) => e.season === sid)?.expand?.season
+				season:  allSeasons.find((s: any) => s.id === sid)
 				         ?? activeSeasons.find((s: any) => s.id === sid)
+				         ?? (data.entries as any[]).find((e: any) => e.season === sid)?.expand?.season
 				         ?? { id: sid, name: '—' },
 				entries: entries as any[],
 			}))
-			.sort((a, b) => (a.season.name ?? '').localeCompare(b.season.name ?? ''))
+			// Real seasons first, then test seasons; alphabetical within each group
+			.sort((a, b) => {
+				const aTest = a.season.name?.includes('[TEST]') ? 1 : 0;
+				const bTest = b.season.name?.includes('[TEST]') ? 1 : 0;
+				if (aTest !== bTest) return aTest - bTest;
+				return (a.season.name ?? '').localeCompare(b.season.name ?? '');
+			})
 	);
 
-	// Collapsible season groups — real seasons open by default, test seasons collapsed
+	// Season is driven by the URL ?season= param — server sets the correct default via redirect
+	const selectedSeasonId = $derived(data.selectedSeasonId as string);
+	const selectedGroup    = $derived(seasonGroups.find(g => g.season.id === selectedSeasonId) ?? null);
+
+	function switchSeason(id: string) {
+		goto(`?season=${id}`);
+	}
+
+	// Collapsible — selected season open by default
 	let openGroups = $state(new Set<number>());
 	$effect(() => {
 		const initial = new Set<number>();
@@ -70,63 +88,77 @@
 <svelte:head><title>Dashboard — LMS Pool</title></svelte:head>
 
 <!-- Welcome -->
-<div class="mb-8">
-	<h1 class="text-3xl font-bold text-white">
-		Welcome back, <span class="text-[#c9a84c]">{data.user.displayName}</span>
-	</h1>
-	{#if seasonGroups.length > 0}
-		{@const realGroups = seasonGroups.filter(g => !g.season.name?.includes('[TEST]'))}
-		<p class="mt-1 text-gray-400">
-			{#if realGroups.length > 0}
-				{realGroups.map(g => g.season.name).join(' · ')} {realGroups.length === 1 ? 'is' : 'are'} underway.
-			{:else}
-				Your test seasons are underway.
-			{/if}
-		</p>
-	{:else if data.activeSeason}
-		<p class="mt-1 text-gray-400">{data.activeSeason.name} is underway.</p>
-	{:else}
-		<p class="mt-1 text-gray-400">No active season right now. Check back soon.</p>
+<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+	<div>
+		<h1 class="text-3xl font-bold text-white">
+			Welcome back, <span class="text-[#c9a84c]">{data.user.displayName}</span>
+		</h1>
+		{#if selectedGroup}
+			<p class="mt-1 text-sm text-gray-500">{selectedGroup.season.name}</p>
+		{:else}
+			<p class="mt-1 text-gray-400">No active season right now. Check back soon.</p>
+		{/if}
+	</div>
+	{#if seasonGroups.length > 1}
+		<div class="flex flex-col items-end gap-1">
+			<label for="season-select" class="text-xs text-gray-600">Season</label>
+			<select
+				id="season-select"
+				value={selectedSeasonId}
+				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+				class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-2 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each seasonGroups as g}
+					<option value={g.season.id}>{g.season.name}</option>
+				{/each}
+			</select>
+		</div>
 	{/if}
 </div>
 
-<!-- Stat cards -->
-<div class="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-		<div class="text-3xl font-bold text-green-400">{data.activeEntries.length}</div>
-		<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-			Active Entries
-			<InfoTip text="Entries still alive in the pool. You stay active by picking correctly each week." />
+<!-- Stat cards — scoped to selected season -->
+{#if selectedGroup}
+	{@const sg = selectedGroup}
+	{@const activeCount    = sg.entries.filter((e: any) => e.status === 'active').length}
+	{@const pendingCount   = sg.entries.filter((e: any) => e.status === 'pending_payment').length}
+	{@const eliminatedCount= sg.entries.filter((e: any) => e.status === 'eliminated').length}
+	<div class="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
+			<div class="text-3xl font-bold text-green-400">{activeCount}</div>
+			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
+				Active Entries
+				<InfoTip text="Entries still alive in the pool. You stay active by picking correctly each week." />
+			</div>
+		</div>
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
+			<div class="text-3xl font-bold text-yellow-400">{pendingCount}</div>
+			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
+				Pending Payment
+				<InfoTip text="Entries awaiting payment confirmation from the admin. Your entry becomes active once payment is marked." />
+			</div>
+		</div>
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
+			<div class="text-3xl font-bold text-red-400">{eliminatedCount}</div>
+			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
+				Eliminated
+				<InfoTip text="Entries knocked out. In LMS your pick must lose — if they win, you're eliminated. In 2nd Half your pick must win." />
+			</div>
+		</div>
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
+			<div class="text-3xl font-bold text-white">{sg.entries.length}</div>
+			<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
+				Total Entries
+				<InfoTip text="All entries you hold this season across LMS and 2nd Half pools combined." />
+			</div>
 		</div>
 	</div>
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-		<div class="text-3xl font-bold text-yellow-400">{data.pendingEntries.length}</div>
-		<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-			Pending Payment
-			<InfoTip text="Entries awaiting payment confirmation from the admin. Your entry becomes active once payment is marked." />
-		</div>
-	</div>
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-		<div class="text-3xl font-bold text-red-400">{data.eliminatedEntries.length}</div>
-		<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-			Eliminated
-			<InfoTip text="Entries knocked out. In LMS your pick must lose — if they win, you're eliminated. In 2nd Half your pick must win." />
-		</div>
-	</div>
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 text-center backdrop-blur-sm">
-		<div class="text-3xl font-bold text-white">{data.entries.length}</div>
-		<div class="mt-1 flex items-center justify-center gap-1 text-xs text-gray-500">
-			Total Entries
-			<InfoTip text="All entries you hold this season across LMS and 2nd Half pools combined." />
-		</div>
-	</div>
-</div>
+{/if}
 
-<!-- Current week + deadline — real seasons only -->
-{#each seasonGroups as group}
+<!-- Current week + deadline — selected season only -->
+{#each seasonGroups.filter(g => g.season.id === selectedSeasonId) as group}
 	{@const season = group.season}
 	{@const cw = currentWeekBySeason[season.id]}
-	{#if cw && !season.name?.includes('[TEST]')}
+	{#if cw}
 		<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
 			<div class="flex flex-wrap items-center justify-between gap-4">
 				<div>
@@ -167,7 +199,7 @@
 {/each}
 
 <!-- Entries -->
-<div class="mb-8">
+<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			<h2 class="text-xl font-bold text-white">My Entries</h2>
@@ -192,7 +224,7 @@
 		</div>
 	{:else}
 		<div class="flex flex-col gap-3">
-			{#each seasonGroups as group, gi}
+			{#each seasonGroups.filter(g => g.season.id === selectedSeasonId) as group, gi}
 				{@const currentWeek   = currentWeekBySeason[group.season.id] ?? null}
 				{@const activeCount   = group.entries.filter((e: any) => e.status === 'active').length}
 				{@const missingPicks  = currentWeek?.status === 'open'

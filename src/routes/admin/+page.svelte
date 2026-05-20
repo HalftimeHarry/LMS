@@ -41,11 +41,11 @@
 		}
 	}
 
-	// Which season is currently selected in the overview
-	let selectedSeasonId = $state((data.activeSeason as any)?.id ?? '');
+	// Which season is currently selected in the overview — no default, must be chosen explicitly
+	let selectedSeasonId = $state('');
 
 	const selectedSeason = $derived(
-		(data.seasons as any[]).find(s => s.id === selectedSeasonId) ?? data.activeSeason
+		(data.seasons as any[]).find(s => s.id === selectedSeasonId) ?? null
 	);
 	const selectedData = $derived(
 		(data.seasonDataMap as any)[selectedSeasonId] ?? null
@@ -94,12 +94,10 @@
 		allSeasons.filter(s => getSeasonGroup(s) === seasonGroup)
 	);
 
-	// Auto-select the first active season when switching groups
+	// Clear selection when switching season groups — force explicit choice
 	$effect(() => {
-		const first = visibleSeasons.find(s =>
-			(data.activeSeasons as any[]).some((a: any) => a.id === s.id)
-		);
-		if (first) selectedSeasonId = (first as any).id;
+		void visibleSeasons;
+		selectedSeasonId = '';
 	});
 </script>
 
@@ -194,12 +192,9 @@
 		</div>
 	</div>
 {:else}
-	<div class="mb-6 rounded-xl border border-yellow-800 bg-yellow-950/40 px-5 py-4 text-yellow-400">
-		<p class="font-semibold">No active season</p>
-		<p class="mt-1 text-sm opacity-75">Create a season to get started.</p>
-		<a href="/admin/seasons/new" class="mt-3 inline-block rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black hover:bg-[#e8c96a] transition">
-			+ New Season
-		</a>
+	<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+		<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Current Season</p>
+		<p class="mt-2 text-sm text-gray-500">Select a season below to view stats and quick actions.</p>
 	</div>
 {/if}
 
@@ -284,6 +279,7 @@
 	</div>
 </div>
 
+{#if stats}
 <!-- Stats grid -->
 <div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -387,6 +383,7 @@
 		{/if}
 	</div>
 </div>
+{/if}
 
 <!-- Test season management panel -->
 <div class="mb-6 rounded-xl border border-orange-800/50 bg-black/75 p-5 backdrop-blur-sm">
@@ -500,7 +497,7 @@
 </div>
 
 <!-- Pending payment quick list -->
-{#if stats.pendingPayment > 0}
+{#if stats && stats.pendingPayment > 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
 		<div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
 			<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Awaiting Payment</h2>

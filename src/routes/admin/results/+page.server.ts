@@ -116,7 +116,9 @@ export const actions: Actions = {
 		}).catch(() => []) as any[];
 
 		// Build map: teamId → 'correct' | 'incorrect' based on outcomes
-		// A team is correct if they won (or tied — tie = both correct for LMS purposes)
+		// 'correct' = team won. Elimination logic differs by pool type:
+		//   LMS:        pick a team to LOSE → eliminated if picked team WINS (result=correct)
+		//   2nd Half:   pick a team to WIN  → eliminated if picked team LOSES (result=incorrect)
 		const teamResult: Record<string, 'correct' | 'incorrect'> = {};
 		for (const game of games) {
 			const outcome = outcomes[game.id];
@@ -148,13 +150,18 @@ export const actions: Actions = {
 		// For each pick, write pick_results for each picked team
 		for (const pick of picks) {
 			const teams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
-			let pickAllCorrect = true;
+			const isLms = pick.entryType === 'lms';
+			let shouldEliminate = false;
 
 			for (const teamId of teams) {
 				const result = teamResult[teamId];
 				if (!result) continue; // game not yet recorded — skip
 
-				if (result === 'incorrect') pickAllCorrect = false;
+				// LMS:       eliminated when picked team WINS (result=correct)
+				// 2nd Half:  eliminated when picked team LOSES (result=incorrect)
+				if (isLms ? result === 'correct' : result === 'incorrect') {
+					shouldEliminate = true;
+				}
 
 				// Upsert pick_result
 				const existing = await pb.collection('pick_results')
@@ -171,14 +178,14 @@ export const actions: Actions = {
 				} catch { /* skip */ }
 			}
 
-			// Eliminate entry if any pick was incorrect
-			if (!pickAllCorrect) {
+			// Eliminate entry if pick outcome triggers elimination for this pool type
+			if (shouldEliminate) {
 				const entry = pick.expand?.entry ?? null;
 				if (entry && entry.status === 'active') {
 					await pb.collection('entries').update(entry.id, {
 						status:           'eliminated',
 						eliminatedWeek:   weekNum,
-						eliminatedReason: 'Picked a losing team'
+						eliminatedReason: isLms ? 'Picked a winning team' : 'Picked a losing team'
 					}).catch(() => {});
 					eliminated++;
 				}
