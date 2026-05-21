@@ -86,6 +86,7 @@
 	let completeLoading = $state(false);
 	let overrideLoading = $state(false);
 	let resetLoading    = $state(false);
+	let resetConfirm    = $state(false);
 
 	// Override panel state
 	type OverrideTarget = { entry: any; pick: any; teams: any[] } | null;
@@ -380,19 +381,33 @@
 				<!-- Reset results — clears pick_results, reinstates eliminated entries, resets week to locked -->
 				{#if weekSetting && (weekSetting.status === 'results_pending' || weekSetting.status === 'complete' || pickResults.length > 0)}
 					<div class="mx-5 mb-5 mt-3 border-t border-gray-800 pt-3">
-						<form method="POST" action="?/resetWeekResults" use:enhance={() => {
-							if (!confirm('Reset all results for this week? Pick results will be deleted and eliminated entries reinstated.')) return () => {};
-							resetLoading = true;
-							return async ({ update }) => { await update(); resetLoading = false; await invalidateAll(); };
-						}}>
-							<input type="hidden" name="weekId"   value={weekSetting?.id} />
-							<input type="hidden" name="seasonId" value={activeSeason?.id} />
-							<button type="submit" disabled={resetLoading}
+						{#if resetConfirm}
+							<div class="flex items-center gap-2">
+								<form method="POST" action="?/resetWeekResults" use:enhance={() => {
+									resetConfirm  = false;
+									resetLoading  = true;
+									return async ({ update }) => { await update(); resetLoading = false; await invalidateAll(); };
+								}}>
+									<input type="hidden" name="weekId"   value={weekSetting?.id} />
+									<input type="hidden" name="seasonId" value={activeSeason?.id} />
+									<button type="submit" disabled={resetLoading}
+										class="rounded border border-red-500 bg-red-950/40 px-4 py-1.5 text-xs text-red-400 transition hover:bg-red-900/60 disabled:opacity-50">
+										{resetLoading ? 'Resetting…' : 'Confirm Reset'}
+									</button>
+								</form>
+								<button type="button" onclick={() => resetConfirm = false}
+									class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800">
+									Cancel
+								</button>
+								<span class="text-xs text-gray-600">Clears results, reinstates eliminated entries, returns week to locked.</span>
+							</div>
+						{:else}
+							<button type="button" onclick={() => resetConfirm = true} disabled={resetLoading}
 								class="rounded border border-gray-700 bg-gray-900 px-4 py-1.5 text-xs text-gray-400 transition hover:border-red-800 hover:text-red-400 disabled:opacity-50">
-								{resetLoading ? 'Resetting…' : '↺ Reset Week Results'}
+								↺ Reset Week Results
 							</button>
 							<span class="ml-2 text-xs text-gray-600">Clears results, reinstates eliminated entries, returns week to locked.</span>
-						</form>
+						{/if}
 					</div>
 				{/if}
 			</form>

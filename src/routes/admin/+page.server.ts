@@ -86,11 +86,12 @@ export const actions: Actions = {
 		const pb       = await pbAdmin();
 		const formData = await request.formData();
 		const interval = (formData.get('interval') ?? '1h') as '1h' | '1d';
+		const mode     = (formData.get('mode') ?? 'with-picks') as 'with-picks' | 'no-picks';
 		if (interval !== '1h' && interval !== '1d') {
 			return fail(400, { error: 'Invalid interval. Use 1h or 1d.' });
 		}
 		try {
-			const result = await seedTestSeasonPair(pb, interval);
+			const result = await seedTestSeasonPair(pb, interval, mode);
 			return { success: true, ...result };
 		} catch (e: unknown) {
 			return fail(500, { error: (e as Error).message });
@@ -115,7 +116,8 @@ export const actions: Actions = {
 	resetTestSeason: async ({ request }) => {
 		const pb       = await pbAdmin();
 		const formData = await request.formData();
-		const interval = (formData.get('interval') ?? '1h') as '1h' | '1d';
+		const interval  = (formData.get('interval') ?? '1h') as '1h' | '1d';
+		const mode      = (formData.get('mode') ?? 'with-picks') as 'with-picks' | 'no-picks';
 		const seasonIds = formData.getAll('seasonId') as string[];
 
 		// Clear existing test seasons
@@ -125,7 +127,7 @@ export const actions: Actions = {
 
 		// Seed fresh
 		try {
-			const result = await seedTestSeasonPair(pb, interval);
+			const result = await seedTestSeasonPair(pb, interval, mode);
 			return { success: true, ...result };
 		} catch (e: unknown) {
 			return fail(500, { error: (e as Error).message });

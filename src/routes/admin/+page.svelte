@@ -16,6 +16,9 @@
 	let testBusy    = $state(false);
 	let testMessage = $state('');
 	let testError   = $state('');
+	// Inline confirm state — stores the seasonId pending clear, or interval pending reset
+	let clearConfirmId    = $state<string | null>(null);
+	let resetConfirmGroup = $state<string | null>(null);
 
 	async function submitTestAction(action: string, formData: FormData) {
 		testBusy    = true;
@@ -428,16 +431,31 @@
 										<span class="ml-2 font-mono text-xs text-gray-600">{s.id}</span>
 									</div>
 									<!-- Clear single season -->
-									<button
-										disabled={testBusy}
-										onclick={() => {
-											if (!confirm(`Clear "${s.name}"? This deletes all entries, picks and results.`)) return;
-											const fd = new FormData();
-											fd.append('seasonId', s.id);
-											submitTestAction('clearTestSeason', fd);
-										}}
-										class="rounded border border-red-900/60 px-2 py-0.5 text-xs text-red-500 transition hover:bg-red-950/40 disabled:opacity-40"
-									>Clear</button>
+									{#if clearConfirmId === s.id}
+										<div class="flex items-center gap-1">
+											<button
+												disabled={testBusy}
+												onclick={() => {
+													clearConfirmId = null;
+													const fd = new FormData();
+													fd.append('seasonId', s.id);
+													submitTestAction('clearTestSeason', fd);
+												}}
+												class="rounded border border-red-500 bg-red-950/40 px-2 py-0.5 text-xs text-red-400 transition hover:bg-red-900/60 disabled:opacity-40"
+											>Confirm</button>
+											<button
+												type="button"
+												onclick={() => clearConfirmId = null}
+												class="rounded border border-gray-700 px-2 py-0.5 text-xs text-gray-400 transition hover:bg-gray-800"
+											>Cancel</button>
+										</div>
+									{:else}
+										<button
+											disabled={testBusy}
+											onclick={() => clearConfirmId = s.id}
+											class="rounded border border-red-900/60 px-2 py-0.5 text-xs text-red-500 transition hover:bg-red-950/40 disabled:opacity-40"
+										>Clear</button>
+									{/if}
 								</div>
 							{/each}
 						</div>
@@ -445,17 +463,33 @@
 						<p class="mb-3 text-xs text-gray-600">{group.timing}</p>
 
 						<!-- Reset pair -->
-						<button
-							disabled={testBusy}
-							onclick={() => {
-								if (!confirm(`Reset all ${group.label} test seasons? Current data will be deleted and a fresh pair seeded.`)) return;
-								const fd = new FormData();
-								fd.append('interval', group.interval);
-								for (const s of group.seasons) fd.append('seasonId', s.id);
-								submitTestAction('resetTestSeason', fd);
-							}}
-							class="w-full rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
-						>{testBusy ? 'Working…' : `↺ Reset ${group.label} pair`}</button>
+						{#if resetConfirmGroup === group.interval}
+							<div class="flex gap-2">
+								<button
+									disabled={testBusy}
+									onclick={() => {
+										resetConfirmGroup = null;
+										const fd = new FormData();
+										fd.append('interval', group.interval);
+										fd.append('mode', 'with-picks');
+										for (const s of group.seasons) fd.append('seasonId', s.id);
+										submitTestAction('resetTestSeason', fd);
+									}}
+									class="flex-1 rounded border border-orange-500 bg-orange-950/50 px-3 py-1.5 text-xs font-medium text-orange-300 transition hover:bg-orange-900/60 disabled:opacity-40"
+								>{testBusy ? 'Working…' : 'Confirm Reset'}</button>
+								<button
+									type="button"
+									onclick={() => resetConfirmGroup = null}
+									class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800"
+								>Cancel</button>
+							</div>
+						{:else}
+							<button
+								disabled={testBusy}
+								onclick={() => resetConfirmGroup = group.interval}
+								class="w-full rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+							>{testBusy ? 'Working…' : `↺ Reset ${group.label} pair`}</button>
+						{/if}
 					</div>
 				{/if}
 			{/each}
@@ -465,27 +499,70 @@
 	<!-- Seed new pair -->
 	<div class="flex flex-wrap items-center gap-3 {testSeasons.length ? 'border-t border-orange-800/30 pt-4' : ''}">
 		<p class="text-xs text-gray-500 shrink-0">Seed new pair:</p>
+
+		<!-- with-picks variants -->
 		<button
 			disabled={testBusy}
 			onclick={() => {
 				const fd = new FormData();
 				fd.append('interval', '1h');
+				fd.append('mode', 'with-picks');
 				submitTestAction('seedTestSeason', fd);
 			}}
 			class="rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+			title="20 entries, random paid status, picks pre-seeded for weeks 1–3"
 		>{testBusy ? 'Working…' : '+ 1h / week'}</button>
 		<button
 			disabled={testBusy}
 			onclick={() => {
 				const fd = new FormData();
 				fd.append('interval', '1d');
+				fd.append('mode', 'with-picks');
 				submitTestAction('seedTestSeason', fd);
 			}}
 			class="rounded border border-orange-800/60 bg-orange-950/30 px-3 py-1.5 text-xs font-medium text-orange-400 transition hover:bg-orange-950/60 disabled:opacity-40"
+			title="20 entries, random paid status, picks pre-seeded for weeks 1–3"
 		>{testBusy ? 'Working…' : '+ 1d / week'}</button>
 
+		<span class="text-gray-700 text-xs">|</span>
+
+		<!-- no-picks variants -->
+		<button
+			disabled={testBusy}
+			onclick={() => {
+				const fd = new FormData();
+				fd.append('interval', '1h');
+				fd.append('mode', 'no-picks');
+				submitTestAction('seedTestSeason', fd);
+			}}
+			class="rounded border border-blue-800/60 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition hover:bg-blue-950/60 disabled:opacity-40"
+			title="20 entries, all paid + active, no picks — click Start to begin"
+		>{testBusy ? 'Working…' : '+ 1h / week  no picks'}</button>
+		<button
+			disabled={testBusy}
+			onclick={() => {
+				const fd = new FormData();
+				fd.append('interval', '1d');
+				fd.append('mode', 'no-picks');
+				submitTestAction('seedTestSeason', fd);
+			}}
+			class="rounded border border-blue-800/60 bg-blue-950/30 px-3 py-1.5 text-xs font-medium text-blue-400 transition hover:bg-blue-950/60 disabled:opacity-40"
+			title="20 entries, all paid + active, no picks — click Start to begin"
+		>{testBusy ? 'Working…' : '+ 1d / week  no picks'}</button>
+
 		{#if testBusy}
-			<span class="text-xs text-orange-400 animate-pulse">Working…</span>
+			<div class="flex w-full items-center gap-3 pt-1">
+				<!-- spinner -->
+				<svg class="h-4 w-4 shrink-0 animate-spin text-orange-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+				</svg>
+				<!-- indeterminate progress bar -->
+				<div class="relative h-1.5 flex-1 overflow-hidden rounded-full bg-orange-950/60">
+					<div class="absolute inset-y-0 w-1/3 rounded-full bg-orange-400 animate-[slide_1.4s_ease-in-out_infinite]"></div>
+				</div>
+				<span class="shrink-0 text-xs text-orange-400">Working…</span>
+			</div>
 		{/if}
 		{#if testMessage}
 			<span class="text-xs text-green-400">{testMessage}</span>
@@ -541,4 +618,11 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	@keyframes slide {
+		0%   { left: -33%; }
+		100% { left: 100%; }
+	}
+</style>
 
