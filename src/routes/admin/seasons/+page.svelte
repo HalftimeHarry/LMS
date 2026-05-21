@@ -5,6 +5,8 @@
 
 	let { data }: { data: PageData } = $props();
 
+	let deleteConfirmId = $state<string | null>(null);
+
 	const statusColors: Record<string, string> = {
 		setup:    'bg-gray-800 text-gray-400 border-gray-700',
 		open:     'bg-blue-950/60 text-blue-400 border-blue-800',
@@ -90,17 +92,23 @@
 
 						<!-- Delete — [TEST] seasons only, full cascade -->
 						{#if season.name?.includes('[TEST]')}
-							<form method="POST" action="?/delete" use:enhance>
-								<input type="hidden" name="id" value={season.id} />
-								<button
-									type="submit"
-									onclick={(e) => {
-										if (!confirm(`Delete "${season.name}" and ALL its weeks, entries, and picks? This cannot be undone.`))
-											e.preventDefault();
-									}}
+							{#if deleteConfirmId === season.id}
+								<div class="flex items-center gap-1">
+									<form method="POST" action="?/delete" use:enhance={() => { deleteConfirmId = null; }}>
+										<input type="hidden" name="id" value={season.id} />
+										<button type="submit"
+											class="rounded border border-red-500 bg-red-950/40 px-3 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
+										>Confirm</button>
+									</form>
+									<button type="button" onclick={() => deleteConfirmId = null}
+										class="rounded border border-gray-700 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-800"
+									>Cancel</button>
+								</div>
+							{:else}
+								<button type="button" onclick={() => deleteConfirmId = season.id}
 									class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
 								>Delete season</button>
-							</form>
+							{/if}
 						{/if}
 					</div>
 				</div>

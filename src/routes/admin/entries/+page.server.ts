@@ -29,10 +29,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		})
 	]);
 
-	// Map seasonId → firstPickDeadline (ISO string) so the UI can gate delete per entry
+	// Map seasonId → firstPickDeadline (ISO string) so the UI can gate delete per entry.
+	// [TEST] seasons are excluded — admins can always delete test data.
 	const deadlineMap: Record<string, string> = {};
 	for (const s of seasons) {
-		if (s.firstPickDeadline) deadlineMap[s.id] = s.firstPickDeadline;
+		if (s.firstPickDeadline && !s.name.startsWith('[TEST]')) deadlineMap[s.id] = s.firstPickDeadline;
 	}
 
 	return { entries, seasons, participants, seasonFilter, statusFilter, poolType, deadlineMap };
@@ -137,8 +138,9 @@ export const actions: Actions = {
 			return fail(404, { error: 'Entry not found.' });
 		}
 
+		const isTestSeason = (entry.expand?.season?.name as string | undefined)?.startsWith('[TEST]');
 		const deadline = entry.expand?.season?.firstPickDeadline;
-		if (deadline && new Date() > new Date(deadline)) {
+		if (!isTestSeason && deadline && new Date() > new Date(deadline)) {
 			return fail(400, {
 				error: 'The first-game deadline has passed. Entries can no longer be deleted — change the entry status instead.'
 			});

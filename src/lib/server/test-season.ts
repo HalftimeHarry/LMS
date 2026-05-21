@@ -6,16 +6,17 @@
 import type PocketBase from 'pocketbase';
 
 export type TestInterval = '1h' | '1d';
+export type TestSeedMode = 'with-picks' | 'no-picks';
 
 const INTERVAL_MS: Record<TestInterval, number> = {
 	'1h': 60 * 60 * 1000,
 	'1d': 24 * 60 * 60 * 1000,
 };
 
-// Fixed anchor for test season game times.
-// Week 1 slot starts here; all game times and deadlines are offsets from this.
-// 2026-05-20 11:00 PST = 19:00 UTC
-const TEST_SEASON_START = new Date('2026-05-20T19:00:00.000Z');
+// Dynamic anchor: Week 1 starts 5 minutes from now so deadlines are always in the future.
+function makeSeasonStart() {
+	return new Date(Date.now() + 5 * 60 * 1000);
+}
 
 // Weighted spread pool
 const SPREADS = [
@@ -93,14 +94,14 @@ const SCHEDULE = [
 // ---------------------------------------------------------------------------
 // Seed a test season pair (LMS + Second Half)
 // ---------------------------------------------------------------------------
-export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval): Promise<{
+export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval, mode: TestSeedMode = 'with-picks'): Promise<{
 	lmsId: string;
 	shId:  string;
 	lmsName: string;
 	shName:  string;
 }> {
 	const intervalMs  = INTERVAL_MS[interval];
-	const seasonStart = TEST_SEASON_START;
+	const seasonStart = makeSeasonStart();
 	const tag         = `(${interval}/week) ${seasonStart.toISOString().slice(0, 16)}`;
 
 	// Load teams
@@ -123,7 +124,7 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval)
 			status:                  'active',
 			lmsEntryFee:             100,
 			secondHalfEntryFee:      50,
-			secondHalfPicksPerWeek:  1,
+			secondHalfPicksPerWeek:  2,
 			regularSeasonOnly:       true,
 			lmsEnabled:              !isSecondHalf,
 			secondHalfEnabled:       isSecondHalf,
@@ -173,11 +174,27 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval)
 	}
 
 	async function seedEntries(seasonId: string, entryType: 'lms' | 'second_half', weeks: any[]) {
-		const maxPerUser  = entryType === 'lms' ? 4 : 2;
-		const pickWeeks   = weeks.slice(0, 3);
-		const seasonTag   = entryType === 'lms'
-			? `LMS-${interval}`
-			: `2H-${interval}`;
+		const seasonTag = entryType === 'lms' ? `LMS-${interval}` : `2H-${interval}`;
+
+		if (mode === 'no-picks') {
+			// Clean state: exactly 1 entry per user, all paid + active, no picks
+			for (const user of testUsers) {
+				const name = `${(user as any).displayName} · ${seasonTag}`;
+				try {
+					await pb.collection('entries').create({
+						season: seasonId, user: (user as any).id,
+						entryName: name, entryType, status: 'active',
+						paid: true, paidAt: pbDate(new Date()),
+						paymentMethod: 'venmo', referredBy: null,
+					});
+				} catch { /* skip */ }
+			}
+			return; // no picks seeded
+		}
+
+		// with-picks mode: random counts, random paid status, picks for weeks 1-3
+		const maxPerUser = entryType === 'lms' ? 4 : 2;
+		const pickWeeks  = weeks.slice(0, 3);
 
 		for (const user of testUsers) {
 			const count  = rand(1, maxPerUser);

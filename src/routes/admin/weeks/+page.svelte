@@ -22,15 +22,17 @@
 	};
 
 	let bulkLoading      = $state(false);
-	let advanceLoading   = $state(false);
-	let advanceLog       = $state<string[]>([]);
-	let seasonActionMsg  = $state('');
-	let seasonActionBusy = $state(false);
+	let advanceLoading      = $state(false);
+	let advanceLog          = $state<string[]>([]);
+	let seasonActionMsg     = $state('');
+	let seasonActionBusy    = $state(false);
+	let seasonActionConfirm = $state<'startSeason' | 'resetSeason' | null>(null);
+	let deleteWeekConfirmId = $state<string | null>(null);
 
 	async function runSeasonAction(action: 'startSeason' | 'resetSeason') {
 		if (!data.activeSeason) return;
-		const label = action === 'startSeason' ? 'start' : 'reset';
-		if (!confirm(`${label === 'reset' ? 'Reset' : 'Start'} "${data.activeSeason.name}"? ${label === 'reset' ? 'All picks and results will be cleared and deadlines pushed forward.' : 'Deadlines will be pushed forward from now.'}`)) return;
+		if (seasonActionConfirm !== action) { seasonActionConfirm = action; return; }
+		seasonActionConfirm = null;
 		seasonActionBusy = true;
 		seasonActionMsg  = '';
 		const fd = new FormData();
@@ -139,17 +141,33 @@
 				<InfoTip text="These controls only appear for [TEST] seasons. Start season pushes all week deadlines forward from now without touching picks or entries. Reset season clears all picks and results, restores eliminated entries, and restarts the clock — use this for a clean test run." />
 			</div>
 
-			<button
-				onclick={() => runSeasonAction('startSeason')}
-				disabled={seasonActionBusy}
-				class="rounded border border-green-800 bg-green-950/40 px-4 py-1.5 text-xs font-semibold text-green-400 transition hover:bg-green-950/70 disabled:opacity-40"
-			>▶ Start season</button>
+			{#if seasonActionConfirm === 'startSeason'}
+				<button onclick={() => runSeasonAction('startSeason')} disabled={seasonActionBusy}
+					class="rounded border border-green-500 bg-green-950/50 px-4 py-1.5 text-xs font-semibold text-green-300 transition hover:bg-green-900/60 disabled:opacity-40"
+				>Confirm Start</button>
+				<button type="button" onclick={() => seasonActionConfirm = null}
+					class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800"
+				>Cancel</button>
+			{:else if seasonActionConfirm === 'resetSeason'}
+				<button onclick={() => runSeasonAction('resetSeason')} disabled={seasonActionBusy}
+					class="rounded border border-orange-500 bg-orange-950/50 px-4 py-1.5 text-xs font-semibold text-orange-300 transition hover:bg-orange-900/60 disabled:opacity-40"
+				>Confirm Reset</button>
+				<button type="button" onclick={() => seasonActionConfirm = null}
+					class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800"
+				>Cancel</button>
+			{:else}
+				<button
+					onclick={() => runSeasonAction('startSeason')}
+					disabled={seasonActionBusy}
+					class="rounded border border-green-800 bg-green-950/40 px-4 py-1.5 text-xs font-semibold text-green-400 transition hover:bg-green-950/70 disabled:opacity-40"
+				>▶ Start season</button>
 
-			<button
-				onclick={() => runSeasonAction('resetSeason')}
-				disabled={seasonActionBusy}
-				class="rounded border border-orange-800 bg-orange-950/40 px-4 py-1.5 text-xs font-semibold text-orange-400 transition hover:bg-orange-950/70 disabled:opacity-40"
-			>↺ Reset season</button>
+				<button
+					onclick={() => runSeasonAction('resetSeason')}
+					disabled={seasonActionBusy}
+					class="rounded border border-orange-800 bg-orange-950/40 px-4 py-1.5 text-xs font-semibold text-orange-400 transition hover:bg-orange-950/70 disabled:opacity-40"
+				>↺ Reset season</button>
+			{/if}
 
 			{#if seasonActionBusy}
 				<span class="text-xs text-gray-400 animate-pulse">Working…</span>
@@ -452,14 +470,26 @@
 
 							<!-- Delete (open weeks only) -->
 							{#if week.status === 'open'}
-								<form method="POST" action="?/deleteWeek" use:enhance>
-									<input type="hidden" name="id" value={week.id} />
-									<button type="submit"
-										onclick={(e) => { if (!confirm('Delete this week?')) e.preventDefault(); }}
+								{#if deleteWeekConfirmId === week.id}
+									<div class="flex items-center gap-1">
+										<form method="POST" action="?/deleteWeek" use:enhance={() => { deleteWeekConfirmId = null; }}>
+											<input type="hidden" name="id" value={week.id} />
+											<button type="submit"
+												class="rounded border border-red-500 bg-red-950/40 px-3 py-1 text-xs text-red-400 transition hover:bg-red-900/60">
+												Confirm
+											</button>
+										</form>
+										<button type="button" onclick={() => deleteWeekConfirmId = null}
+											class="rounded border border-gray-700 px-2 py-1 text-xs text-gray-400 transition hover:bg-gray-800">
+											Cancel
+										</button>
+									</div>
+								{:else}
+									<button type="button" onclick={() => deleteWeekConfirmId = week.id}
 										class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40">
 										Delete
 									</button>
-								</form>
+								{/if}
 							{/if}
 						</div>
 					</div>

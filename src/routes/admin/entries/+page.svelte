@@ -135,6 +135,7 @@
 
 	// Bulk delete
 	let bulkDeleteConfirm = $state(false);
+	let deleteConfirmId   = $state<string | null>(null);
 	async function handleBulkDelete() {
 		if (!bulkDeleteConfirm) { bulkDeleteConfirm = true; return; }
 		bulkDeleteConfirm = false;
@@ -503,7 +504,7 @@
 			{/if}
 
 			<button
-				onclick={() => { ctrl.clearSelection(); bulkConfirm = false; bulkDeleteConfirm = false; bulkPaidMethod = ''; bulkStatusValue = ''; }}
+				onclick={() => { ctrl.clearSelection(); bulkConfirm = false; bulkDeleteConfirm = false; deleteConfirmId = null; bulkPaidMethod = ''; bulkStatusValue = ''; }}
 				class="ml-auto text-xs text-gray-500 hover:text-gray-300"
 			>Clear selection</button>
 
@@ -611,16 +612,27 @@
 
 						<!-- Delete — only before first-game deadline -->
 						{#if canDelete(entry)}
-							<form method="POST" action="?/deleteEntry"
-								use:enhance={() => async ({ update }) => { await update(); await invalidateAll(); }}
-							>
-								<input type="hidden" name="id" value={entry.id} />
+							{#if deleteConfirmId === entry.id}
+								<form method="POST" action="?/deleteEntry"
+									use:enhance={() => async ({ update }) => { deleteConfirmId = null; await update(); await invalidateAll(); }}
+								>
+									<input type="hidden" name="id" value={entry.id} />
+									<button type="submit"
+										class="rounded border border-red-500 bg-red-950/40 px-3 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
+									>Confirm</button>
+								</form>
 								<button
-									type="submit"
-									onclick={(e) => { if (!confirm(`Delete "${entry.entryName}"?`)) e.preventDefault(); }}
+									type="button"
+									onclick={() => deleteConfirmId = null}
+									class="rounded border border-gray-700 px-3 py-1 text-xs text-gray-400 transition hover:bg-gray-800"
+								>Cancel</button>
+							{:else}
+								<button
+									type="button"
+									onclick={() => deleteConfirmId = entry.id}
 									class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
 								>Delete</button>
-							</form>
+							{/if}
 						{:else}
 							<span class="rounded border border-gray-800 px-3 py-1 text-xs text-gray-600" title="Delete window closed — deadline passed">
 								Locked

@@ -145,6 +145,7 @@
 	let eliminateTeamId  = $state('');
 	let submitting       = $state(false);
 	let clearing         = $state(false);
+	let clearTestConfirm = $state(false);
 	let seedingPicks     = $state(false);
 	let seedPicksWeekId  = $state('');
 
@@ -716,23 +717,29 @@
 							Re-seed with <code class="rounded bg-gray-800 px-1 py-0.5 text-gray-400">pnpm seed:test</code>.
 						</p>
 					</div>
-					<form
-						method="POST"
-						action="?/clearTestData"
-						use:enhance={() => {
-							if (!confirm('Delete ALL @blo.com test data? This cannot be undone.')) return () => {};
-							clearing = true;
-							return async ({ update }) => { await update(); clearing = false; };
-						}}
-					>
-						<button
-							type="submit"
-							disabled={clearing}
-							class="rounded border border-gray-700 bg-gray-900 px-4 py-1.5 text-xs text-gray-400 transition hover:border-red-800 hover:text-red-400 disabled:opacity-50"
-						>
+					{#if clearTestConfirm}
+						<div class="flex items-center gap-2">
+							<form method="POST" action="?/clearTestData" use:enhance={() => {
+								clearTestConfirm = false;
+								clearing = true;
+								return async ({ update }) => { await update(); clearing = false; };
+							}}>
+								<button type="submit" disabled={clearing}
+									class="rounded border border-red-500 bg-red-950/40 px-4 py-1.5 text-xs text-red-400 transition hover:bg-red-900/60 disabled:opacity-50">
+									{clearing ? 'Clearing…' : 'Confirm Clear'}
+								</button>
+							</form>
+							<button type="button" onclick={() => clearTestConfirm = false}
+								class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-gray-800">
+								Cancel
+							</button>
+						</div>
+					{:else}
+						<button type="button" onclick={() => clearTestConfirm = true} disabled={clearing}
+							class="rounded border border-gray-700 bg-gray-900 px-4 py-1.5 text-xs text-gray-400 transition hover:border-red-800 hover:text-red-400 disabled:opacity-50">
 							{clearing ? 'Clearing…' : 'Clear test data (@blo.com)'}
 						</button>
-					</form>
+					{/if}
 				</div>
 
 			</div>
