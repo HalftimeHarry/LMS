@@ -65,13 +65,62 @@ export const load: PageServerLoad = async () => {
 		})
 	);
 
+	// Per-week auto-pick team: biggest favorite from active odds, overridden by
+	// stored biggestFavoriteTeam when the scheduler has already committed a choice.
+	// Keyed as `${seasonId}:${weekNum}` so the UI can look up by season + week.
+	const autoPickByWeek: Record<string, { abbreviation: string; city: string; name: string; spread: number; stored: boolean }> = {};
+	if (seasonIds.length) {
+		try {
+			const allOdds = await pb.collection('game_odds').getFullList({
+				filter: `(${seasonIds.map(id => `season = "${id}"`).join(' || ')}) && isActive = true && homeSpread != null`,
+				expand: 'homeTeam,awayTeam',
+			}) as any[];
+
+			// Derive biggest favorite per season+week from odds
+			const derived: Record<string, { teamId: string; abbreviation: string; city: string; name: string; spread: number }> = {};
+			for (const g of allOdds) {
+				const key    = `${g.season}:${g.week}`;
+				const spread = g.homeSpread as number;
+				const candidates = [
+					{ team: g.expand?.homeTeam, spread:  spread },
+					{ team: g.expand?.awayTeam, spread: -spread },
+				];
+				for (const c of candidates) {
+					if (!c.team) continue;
+					if (c.spread < 0 && (!derived[key] || c.spread < derived[key].spread)) {
+						derived[key] = { teamId: c.team.id, abbreviation: c.team.abbreviation, city: c.team.city, name: c.team.name, spread: c.spread };
+					}
+				}
+			}
+
+			// Copy derived into result, then override with stored biggestFavoriteTeam
+			const teamById = Object.fromEntries((teams as any[]).map(t => [t.id, t]));
+			for (const [key, val] of Object.entries(derived)) {
+				autoPickByWeek[key] = { ...val, stored: false };
+			}
+			for (const w of weeks as any[]) {
+				const storedId = w.biggestFavoriteTeam as string | undefined;
+				if (!storedId) continue;
+				const t = teamById[storedId] as any;
+				if (!t) continue;
+				const key     = `${w.season}:${w.week}`;
+				const derived_ = autoPickByWeek[key];
+				autoPickByWeek[key] = {
+					abbreviation: t.abbreviation, city: t.city, name: t.name,
+					spread: derived_?.spread ?? 0, stored: true,
+				};
+			}
+		} catch { /* odds not available */ }
+	}
+
 	return {
 		seasons:           seasons             as any[],
 		weeks:             weeks               as any[],
 		teams:             teams               as any[],
 		entries:           entries             as any[],
 		picks:             picks               as any[],
-		eliminatedEntries: eliminatedWithPicks as any[]
+		eliminatedEntries: eliminatedWithPicks as any[],
+		autoPickByWeek,
 	};
 };
 

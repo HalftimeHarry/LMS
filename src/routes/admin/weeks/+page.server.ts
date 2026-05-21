@@ -104,6 +104,26 @@ export const load: PageServerLoad = async ({ url }) => {
 				}
 			}
 		} catch { /* odds not available */ }
+
+		// Override derived values with the stored biggestFavoriteTeam when the
+		// scheduled function has already written it — ensures the display matches
+		// exactly what was (or will be) used for auto-picks.
+		const teamById = Object.fromEntries(teams.map(t => [t.id, t]));
+		for (const week of weeks) {
+			const storedId = (week as any).biggestFavoriteTeam as string | undefined;
+			if (!storedId) continue;
+			const t = teamById[storedId] as any;
+			if (!t) continue;
+			const derived = biggestFavoriteByWeek[week.week];
+			biggestFavoriteByWeek[week.week] = {
+				teamId:       t.id,
+				abbreviation: t.abbreviation,
+				city:         t.city,
+				name:         t.name,
+				spread:       derived?.spread ?? 0,
+				stored:       true,  // flag: this came from the DB, not derived
+			} as any;
+		}
 	}
 
 	// Compute next scheduled action across all weeks for the timeline display
