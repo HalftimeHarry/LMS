@@ -1,3 +1,9 @@
+<script lang="ts">
+	import type { LayoutData } from '../$types';
+	let { data }: { data: LayoutData } = $props();
+	const isSuperAdmin = $derived(data.role === 'super_admin');
+</script>
+
 <svelte:head><title>Admin Duties — Admin</title></svelte:head>
 
 <div class="flex flex-col gap-6">
@@ -14,20 +20,22 @@
 		</div>
 	</div>
 
-	<!-- Phase 1: Before the season -->
+	<!-- ── Super Admin only: Phase 1 — Season Setup ─────────────────────── -->
+	{#if isSuperAdmin}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
 		<div class="mb-4 flex items-center gap-3">
 			<span class="rounded-full border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.1)] px-3 py-0.5 text-xs font-semibold text-[#c9a84c]">Phase 1</span>
 			<h2 class="text-lg font-bold text-white">Before the Season</h2>
+			<span class="rounded border border-[rgba(201,168,76,0.3)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#c9a84c]">Super Admin</span>
 		</div>
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Create the Season</p>
-				<p class="text-sm text-gray-400">Go to <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Seasons → New Season</a>. Set the entry fees, first pick deadline, and whether LMS and/or Second Half pools are enabled. Status starts at <span class="text-gray-300">setup</span> — players can't register yet.</p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Seasons → New Season</a>. Set the entry fees, first pick deadline, and whether LMS and/or Second Half pools are enabled. Status starts at <span class="text-gray-300">setup</span> — players can't register yet. Advance to <span class="text-green-400">active</span> once you're ready to open registration.</p>
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Open Registration</p>
-				<p class="text-sm text-gray-400">Advance the season to <span class="text-green-400">active</span> from the <a href="/admin/seasons" class="text-[#c9a84c] hover:underline">Seasons</a> page. Players can now request entries from their dashboard. Add entries manually via <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> for players who sign up offline.</p>
+				<p class="text-sm text-gray-400">Advance the season to <span class="text-green-400">active</span> from the <a href="/admin/seasons" class="text-[#c9a84c] hover:underline">Seasons</a> page. Players can now request entries from their dashboard. To add entries manually, go to <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> and click <span class="text-gray-300">+ Add Entries</span> — a 3-step modal walks through player selection, entry configuration, and a review screen before creating.</p>
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Enter Week 1 Odds <span class="ml-1 text-xs font-normal text-red-400">required before first deadline</span></p>
@@ -35,15 +43,34 @@
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Confirm Entries &amp; Payments</p>
-				<p class="text-sm text-gray-400">Filter <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> by <span class="text-yellow-400">Pending Payment</span>. Mark entries paid once fees are collected. Only <span class="text-green-400">active</span> entries receive picks and are tracked in standings. New entries cannot be added after the first pick deadline.</p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> and filter by <span class="text-yellow-400">Pending Payment</span> to process outstanding fees. Mark entries paid once collected. Use <span class="text-gray-300">+ Add Entries</span> to add players manually via the 3-step modal — select player, configure entry (season, pool type, count, name), then review before creating. Only <span class="text-green-400">active</span> entries receive picks. New entries are blocked after the first pick deadline.</p>
 			</div>
 		</div>
 	</div>
+	{:else}
+	<!-- Pool Admin: condensed pre-season note -->
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
+		<div class="mb-4 flex items-center gap-3">
+			<span class="rounded-full border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.1)] px-3 py-0.5 text-xs font-semibold text-[#c9a84c]">Phase 1</span>
+			<h2 class="text-lg font-bold text-white">Before the Season</h2>
+		</div>
+		<div class="grid gap-3 sm:grid-cols-2">
+			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
+				<p class="mb-1 text-sm font-semibold text-white">Enter Week 1 Odds <span class="ml-1 text-xs font-normal text-red-400">required before first deadline</span></p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add all Week 1 matchups with spreads. Mark each game <span class="text-green-400">active</span>. The scheduled function derives the auto-pick team (biggest favorite) directly from active odds at lock time — if no active odds exist, no auto-picks fire.</p>
+			</div>
+			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
+				<p class="mb-1 text-sm font-semibold text-white">Confirm Entries &amp; Payments</p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> and filter by <span class="text-yellow-400">Pending Payment</span> to process outstanding fees. Mark entries paid once collected. Use <span class="text-gray-300">+ Add Entries</span> to add players manually via the 3-step modal — select player, configure entry (season, pool type, count, name), then review before creating. Only <span class="text-green-400">active</span> entries receive picks. New entries are blocked after the first pick deadline.</p>
+			</div>
+		</div>
+	</div>
+	{/if}
 
-	<!-- Phase 2: Weekly management -->
+	<!-- Phase 2: Weekly management — both roles -->
 	<div class="rounded-xl border border-green-900/60 bg-black/75 p-6 backdrop-blur-sm">
 		<div class="mb-1 flex items-center gap-3">
-			<span class="rounded-full border border-green-700 bg-green-950/40 px-3 py-0.5 text-xs font-semibold text-green-400">Phase 2</span>
+			<span class="rounded-full border border-green-700 bg-green-950/40 px-3 py-0.5 text-xs font-semibold text-green-400">{isSuperAdmin ? 'Phase 2' : 'Phase 1'}</span>
 			<h2 class="text-lg font-bold text-white">Weekly Management</h2>
 			<span class="text-xs text-gray-600">— repeats every week of the season</span>
 		</div>
@@ -66,11 +93,13 @@
 		</div>
 	</div>
 
-	<!-- Exception: pick override -->
+	<!-- ── Super Admin only: Exception — pick override ───────────────────── -->
+	{#if isSuperAdmin}
 	<div class="rounded-xl border border-yellow-900/60 bg-black/75 p-6 backdrop-blur-sm">
 		<div class="mb-4 flex items-center gap-3">
 			<span class="rounded-full border border-yellow-700 bg-yellow-950/40 px-3 py-0.5 text-xs font-semibold text-yellow-400">Exception</span>
 			<h2 class="text-lg font-bold text-white">Updating a Pick After the Deadline</h2>
+			<span class="rounded border border-[rgba(201,168,76,0.3)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#c9a84c]">Super Admin</span>
 		</div>
 		<p class="mb-4 text-sm text-gray-400">
 			Once a week is locked, players cannot change their picks. If a player contacts you with a legitimate reason — wrong team selected, technical issue before kickoff — you have two options depending on timing.
@@ -100,8 +129,9 @@
 			Whenever you override a pick, note it somewhere — a group chat message, email, or the entry's notes field. If another player questions the change later, you'll have a record of when the request came in and why it was granted.
 		</div>
 	</div>
+	{/if}
 
-	<!-- Quick reference -->
+	<!-- Quick reference checklist — both roles -->
 	<div class="rounded-xl border border-gray-800 bg-black/75 p-6 backdrop-blur-sm">
 		<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">Weekly Checklist</h2>
 		<ol class="flex flex-col gap-2 text-sm text-gray-400">

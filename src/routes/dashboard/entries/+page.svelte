@@ -17,16 +17,29 @@
 		winner:          'Winner',
 	};
 
-	const allEntries = data.entries as any[];
-	const active     = $derived(allEntries.filter((e) => e.status === 'active'));
-	const pending    = $derived(allEntries.filter((e) => e.status === 'pending_payment'));
-	const eliminated = $derived(allEntries.filter((e) => e.status === 'eliminated'));
+	const allEntries    = data.entries as any[];
+	const active        = $derived(allEntries.filter((e) => e.status === 'active'));
+	const pending       = $derived(allEntries.filter((e) => e.status === 'pending_payment'));
+	const eliminated    = $derived(allEntries.filter((e) => e.status === 'eliminated'));
+
+	// Current season name for the heading — prefer active, then open, then first
+	const currentSeason = $derived(() => {
+		const seasons = data.seasons as any[];
+		return seasons.find((s: any) => s.status === 'active')
+			?? seasons.find((s: any) => s.status === 'open')
+			?? seasons[0]
+			?? null;
+	});
 </script>
 
-<svelte:head><title>My Entries — LMS Pool</title></svelte:head>
+<svelte:head><title>My Entries{currentSeason()?.name ? ` — ${currentSeason().name}` : ''} — LMS Pool</title></svelte:head>
 
 <div class="mb-6 flex items-center justify-between">
-	<h1 class="text-2xl font-bold text-white">My Entries</h1>
+	<h1 class="text-2xl font-bold text-white">My Entries
+		{#if currentSeason()?.name}
+			<span class="ml-1 text-lg font-normal text-gray-500">{currentSeason().name}</span>
+		{/if}
+	</h1>
 	{#if data.seasons.length > 0}
 		<a
 			href="/dashboard/entries/new"

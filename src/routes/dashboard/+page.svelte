@@ -227,7 +227,11 @@
 <div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-2">
-			<h2 class="text-xl font-bold text-white">My Entries</h2>
+			<h2 class="text-xl font-bold text-white">My Entries
+			{#if selectedGroup?.season?.name}
+				<span class="ml-1 text-base font-normal text-gray-500">{selectedGroup.season.name}</span>
+			{/if}
+		</h2>
 			<InfoTip text="Each entry is an independent shot at the pool. You can hold multiple entries. Click an entry to view its pick history and submit your weekly pick." />
 		</div>
 		{#if data.activeSeason?.status === 'open'}
