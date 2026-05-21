@@ -133,7 +133,7 @@ async function main() {
       { name: 'paid',             type: 'bool' },
       { name: 'paidAt',           type: 'date' },
       { name: 'paymentMethod',    type: 'select',
-        values: ['check','venmo','paypal','zelle','cash'], maxSelect: 1 },
+        values: ['check','venmo','paypal','zelle','cash','free'], maxSelect: 1 },
       { name: 'paymentNotes',     type: 'text' },
       { name: 'eliminatedWeek',   type: 'number' },
       { name: 'eliminatedReason', type: 'text' },

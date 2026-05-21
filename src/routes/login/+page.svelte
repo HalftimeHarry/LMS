@@ -6,7 +6,8 @@
 
 	let { form }: { form: ActionData } = $props();
 
-	const redirect = $derived($page.url.searchParams.get('redirect') ?? '/dashboard');
+	const redirectTo = $derived($page.url.searchParams.get('redirect') ?? '/dashboard');
+	const resetDone  = $derived($page.url.searchParams.get('reset') === '1');
 	let loading = $state(false);
 </script>
 
@@ -16,7 +17,13 @@
 	<div class="w-full max-w-md rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/80 p-8 backdrop-blur-sm">
 
 		<h1 class="mb-1 text-2xl font-bold text-white">Sign in</h1>
-		<p class="mb-6 text-sm text-gray-400">Welcome back to the pool.</p>
+		<p class="mb-4 text-sm text-gray-400">Welcome back to the pool.</p>
+
+		{#if resetDone}
+			<div class="mb-4 rounded border border-green-800 bg-green-950/40 px-4 py-2.5 text-sm text-green-400">
+				Password updated — sign in with your new password.
+			</div>
+		{/if}
 
 		<form
 			method="POST"
@@ -34,7 +41,7 @@
 			}}
 			class="flex flex-col gap-4"
 		>
-			<input type="hidden" name="redirect" value={redirect} />
+			<input type="hidden" name="redirect" value={redirectTo} />
 
 			<div class="flex flex-col gap-1">
 				<label for="email" class="text-xs font-medium text-gray-400">Email</label>
@@ -46,7 +53,10 @@
 			</div>
 
 			<div class="flex flex-col gap-1">
-				<label for="password" class="text-xs font-medium text-gray-400">Password</label>
+				<div class="flex items-center justify-between">
+					<label for="password" class="text-xs font-medium text-gray-400">Password</label>
+					<a href="/forgot-password" class="text-xs text-[#c9a84c] hover:underline">Forgot password?</a>
+				</div>
 				<input
 					id="password" name="password" type="password" required
 					placeholder="Your password"
