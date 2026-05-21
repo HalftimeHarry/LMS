@@ -51,10 +51,20 @@ describe('entries admin — deleteEntry', () => {
 		expect((result as any).success).toBe(true);
 	});
 
-	it('blocks delete when season is active', async () => {
+	// Use a deadline well in the past so tests are not date-sensitive
+	const PAST_DEADLINE = '2020-01-01T00:00:00Z';
+	const TEST_PAST_DEADLINE = '2020-01-01T00:00:00Z';
+
+	it('blocks delete when a real season has a past deadline', async () => {
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
-			expand: { season: { status: 'active' } }
+			expand: {
+				season: {
+					name:              '2027 LMS',
+					status:            'active',
+					firstPickDeadline: PAST_DEADLINE,
+				}
+			}
 		});
 
 		const result = await actions.deleteEntry({
@@ -63,13 +73,19 @@ describe('entries admin — deleteEntry', () => {
 
 		expect(collections.entries.delete).not.toHaveBeenCalled();
 		expect((result as any).status).toBe(400);
-		expect((result as any).data.error).toMatch(/cannot be deleted/i);
+		expect((result as any).data.error).toMatch(/deadline has passed/i);
 	});
 
-	it('blocks delete when season is complete', async () => {
+	it('blocks delete when a real complete season has a past deadline', async () => {
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
-			expand: { season: { status: 'complete' } }
+			expand: {
+				season: {
+					name:              '2027 LMS',
+					status:            'complete',
+					firstPickDeadline: PAST_DEADLINE,
+				}
+			}
 		});
 
 		const result = await actions.deleteEntry({
@@ -78,6 +94,26 @@ describe('entries admin — deleteEntry', () => {
 
 		expect(collections.entries.delete).not.toHaveBeenCalled();
 		expect((result as any).status).toBe(400);
+	});
+
+	it('allows delete on a [TEST] season even after the deadline', async () => {
+		collections.entries.getOne = vi.fn().mockResolvedValue({
+			id: 'e1',
+			expand: {
+				season: {
+					name:              '[TEST] 2027 LMS (1h/week) 2020-01-01T00:00',
+					status:            'active',
+					firstPickDeadline: TEST_PAST_DEADLINE,
+				}
+			}
+		});
+
+		const result = await actions.deleteEntry({
+			request: { formData: async () => makeFormData({ id: 'e1' }) }
+		} as any);
+
+		expect(collections.entries.delete).toHaveBeenCalledWith('e1');
+		expect((result as any).success).toBe(true);
 	});
 
 	it('returns 404 when entry does not exist', async () => {

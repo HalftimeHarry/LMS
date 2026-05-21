@@ -37,11 +37,44 @@
 		second_half:  'bg-blue-950/60 text-blue-400 border-blue-800',
 	};
 
-	const paymentMethods = ['check', 'venmo', 'paypal', 'zelle', 'cash', 'free'];
+	const paymentMethods: { value: string; label: string }[] = [
+		{ value: 'check',  label: 'Check'  },
+		{ value: 'venmo',  label: 'Venmo'  },
+		{ value: 'paypal', label: 'PayPal' },
+		{ value: 'zelle',  label: 'Zelle'  },
+		{ value: 'cash',   label: 'Cash'   },
+		{ value: 'free',   label: 'Free / Complimentary' },
+	];
 
 	let selectedMethod: Record<string, string> = $state({});
-	let createLoading = $state(false);
+	let createLoading  = $state(false);
 	let showCreateForm = $state(false);
+	let modalStep      = $state(1); // 1 = player, 2 = configure, 3 = review
+	let entryCount     = $state(1);
+	let referredBy     = $state('');
+
+	function openModal() {
+		playerSearch     = '';
+		selectedUserId   = '';
+		selectedSeasonId = defaultSeason?.id ?? '';
+		baseName         = 'Entry';
+		entryType        = 'lms';
+		complimentary    = false;
+		entryCount       = 1;
+		referredBy       = '';
+		modalStep        = 1;
+		showCreateForm   = true;
+	}
+	function closeModal() {
+		showCreateForm = false;
+	}
+	function nextStep() { modalStep = Math.min(modalStep + 1, 3); }
+	function prevStep() { modalStep = Math.max(modalStep - 1, 1); }
+
+	// Step 1 valid when a player is selected
+	const step1Valid = $derived(!!selectedUserId);
+	// Step 2 valid when season + baseName filled
+	const step2Valid = $derived(!!selectedSeasonId && baseName.trim().length >= 2);
 
 	// --- Player search ---
 	let playerSearch   = $state('');
@@ -185,7 +218,7 @@
 
 		<button
 			type="button"
-			onclick={() => showCreateForm = !showCreateForm}
+			onclick={openModal}
 			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
 		>+ Add Entries</button>
 	</div>
@@ -213,87 +246,99 @@
 		Created: {(form.created as string[]).join(', ')}
 	</div>
 {/if}
-{#if form?.action === 'create' && form?.error}
+{#if form?.error}
 	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{form.error}</div>
 {/if}
 
-<!-- Create entries form -->
+<!-- ── Add Entries Modal ──────────────────────────────────────────────────── -->
 {#if showCreateForm}
 {@const createDeadline = deadlineMap[selectedSeasonId]}
 {@const createDeadlinePast = createDeadline ? now > new Date(createDeadline).getTime() : false}
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-	<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Add Entries for a Player</h2>
+{@const selectedSeason = (data.seasons as any[]).find((s: any) => s.id === selectedSeasonId)}
 
-	{#if createDeadlinePast}
-		<div class="mb-4 rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
-			⚠ The first pick deadline for this season has passed — new entries cannot be added after the season has started.
-		</div>
-	{/if}
-	<form
-		method="POST"
-		action="?/createEntries"
-		use:enhance={() => {
-			createLoading = true;
-			return async ({ update }) => {
-				await update();
-				createLoading = false;
-				showCreateForm = false;
-				playerSearch = '';
-				selectedUserId = '';
-				selectedSeasonId = defaultSeason?.id ?? '';
-				baseName = 'Entry';
-				entryType = 'lms';
-				complimentary = false;
-			};
-		}}
-		class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-	>
-		<!-- Season -->
-		<div class="flex flex-col gap-1">
-			<label for="seasonId" class="text-xs font-medium text-gray-400">Season</label>
-			<select id="seasonId" name="seasonId" required
-				bind:value={selectedSeasonId}
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
-				{#each data.seasons as s}
-					<option value={s.id}>{s.name}</option>
-				{/each}
-			</select>
+<!-- Backdrop -->
+<button
+	type="button"
+	class="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+	onclick={closeModal}
+	aria-label="Close modal"
+></button>
+
+<!-- Modal panel -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+	<div class="relative w-full max-w-lg rounded-2xl border border-[rgba(201,168,76,0.3)] bg-[#0a0a0a] shadow-2xl"
+		style="background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 60%), #0a0a0a;">
+
+		<!-- Header -->
+		<div class="flex items-center justify-between border-b border-[rgba(201,168,76,0.15)] px-6 py-4">
+			<div>
+				<h2 class="text-base font-bold text-white">Add Entries</h2>
+				<p class="mt-0.5 text-xs text-gray-500">
+					Step {modalStep} of 3 —
+					{#if modalStep === 1}Select player{:else if modalStep === 2}Configure entry{:else}Review &amp; confirm{/if}
+				</p>
+			</div>
+			<button type="button" onclick={closeModal}
+				class="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-white"
+				aria-label="Close">
+				<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+				</svg>
+			</button>
 		</div>
 
-		<!-- Player search -->
-		<div class="flex flex-col gap-1 sm:col-span-2 lg:col-span-1">
-			<label for="playerSearch" class="text-xs font-medium text-gray-400">Player</label>
-			<!-- Hidden field carries the actual userId -->
-			<input type="hidden" name="userId" value={selectedUserId} />
+		<!-- Step indicators -->
+		<div class="flex items-center gap-0 border-b border-gray-800 px-6 py-3">
+			{#each [
+				{ n: 1, label: 'Player'    },
+				{ n: 2, label: 'Configure' },
+				{ n: 3, label: 'Review'    },
+			] as step}
+				<div class="flex items-center gap-0">
+					<div class="flex items-center gap-2">
+						<div class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold
+							{modalStep > step.n  ? 'bg-green-600 text-white' :
+							 modalStep === step.n ? 'bg-[#c9a84c] text-black' :
+							                        'bg-gray-800 text-gray-500'}">
+							{#if modalStep > step.n}✓{:else}{step.n}{/if}
+						</div>
+						<span class="text-xs {modalStep === step.n ? 'text-white font-medium' : 'text-gray-600'}">{step.label}</span>
+					</div>
+					{#if step.n < 3}
+						<div class="mx-3 h-px w-8 {modalStep > step.n ? 'bg-green-700' : 'bg-gray-800'}"></div>
+					{/if}
+				</div>
+			{/each}
+		</div>
+
+		<!-- Error banner -->
+		{#if form?.error}
+			<div class="mx-6 mt-4 rounded border border-red-800 bg-red-950/60 px-4 py-2.5 text-sm text-red-400">{form.error}</div>
+		{/if}
+
+		<!-- ── Step 1: Select Player ── -->
+		{#if modalStep === 1}
+		<div class="px-6 py-5">
+			<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Search for a participant</p>
 			<div class="relative">
 				<input
-					id="playerSearch"
 					type="text"
 					autocomplete="off"
-					placeholder="Search by name or email…"
+					placeholder="Name or email…"
 					bind:value={playerSearch}
 					onfocus={() => dropdownOpen = true}
 					oninput={() => { dropdownOpen = true; selectedUserId = ''; }}
-					class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none
-						{selectedUserId ? 'border-[#c9a84c]' : ''}"
+					class="w-full rounded-lg border bg-gray-900 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none
+						{selectedUserId ? 'border-[#c9a84c]' : 'border-gray-700 focus:border-[#c9a84c]'}"
 				/>
 				{#if dropdownOpen && filteredParticipants.length > 0}
-					<!-- Backdrop to close dropdown -->
-					<button
-						type="button"
-						class="fixed inset-0 z-10"
-						onclick={() => dropdownOpen = false}
-						aria-label="Close"
-					></button>
-					<ul class="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
+					<button type="button" class="fixed inset-0 z-10" onclick={() => dropdownOpen = false} aria-label="Close"></button>
+					<ul class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-700 bg-gray-950 py-1 shadow-xl">
 						{#each filteredParticipants as u}
 							<li>
-								<button
-									type="button"
-									onclick={() => selectUser(u)}
-									class="w-full px-3 py-2 text-left text-sm hover:bg-gray-800
-										{selectedUserId === u.id ? 'bg-gray-800 text-[#c9a84c]' : 'text-gray-200'}"
-								>
+								<button type="button" onclick={() => selectUser(u)}
+									class="w-full px-4 py-2.5 text-left text-sm transition hover:bg-gray-800
+										{selectedUserId === u.id ? 'bg-gray-800 text-[#c9a84c]' : 'text-gray-200'}">
 									<span class="font-medium">{u.displayName || '—'}</span>
 									<span class="ml-2 text-xs text-gray-500">{u.email}</span>
 								</button>
@@ -301,89 +346,204 @@
 						{/each}
 					</ul>
 				{/if}
-				{#if dropdownOpen && filteredParticipants.length === 0 && playerSearch.trim() !== ''}
-					<div class="absolute z-20 mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-500">
-						No participants found.
-					</div>
+				{#if dropdownOpen && filteredParticipants.length === 0 && playerSearch.trim()}
+					<div class="absolute z-20 mt-1 w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-gray-500">No participants found.</div>
 				{/if}
 			</div>
+
 			{#if selectedUser}
-				<p class="text-xs text-green-400">✅ {selectedUser.displayName || selectedUser.email}</p>
+				<div class="mt-4 flex items-center gap-3 rounded-lg border border-green-800 bg-green-950/30 px-4 py-3">
+					<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-900 text-sm font-bold text-green-300">
+						{(selectedUser.displayName || selectedUser.email)[0].toUpperCase()}
+					</div>
+					<div>
+						<p class="text-sm font-semibold text-white">{selectedUser.displayName || '—'}</p>
+						<p class="text-xs text-gray-400">{selectedUser.email}</p>
+					</div>
+					<span class="ml-auto text-green-400">✓</span>
+				</div>
 			{/if}
 		</div>
 
-		<!-- Entry type -->
-		<div class="flex flex-col gap-2">
-			<p class="text-xs font-medium text-gray-400">Entry type</p>
-			<div class="flex gap-3">
-				<label class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition
-					{entryType === 'lms' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}">
-					<input type="radio" name="entryType" value="lms" bind:group={entryType} class="accent-[#c9a84c]" />
-					LMS Full Season
-				</label>
-				<label class="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition
-					{entryType === 'second_half' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 text-gray-400 hover:border-gray-500'}">
-					<input type="radio" name="entryType" value="second_half" bind:group={entryType} class="accent-[#c9a84c]" />
-					Second Half
-				</label>
+		<!-- Step 1 footer -->
+		<div class="flex items-center justify-between border-t border-gray-800 px-6 py-4">
+			<button type="button" onclick={closeModal} class="text-sm text-gray-500 hover:text-gray-300">Cancel</button>
+			<button type="button" onclick={nextStep} disabled={!step1Valid}
+				class="rounded-lg bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-40">
+				Next →
+			</button>
+		</div>
+
+		<!-- ── Step 2: Configure Entry ── -->
+		{:else if modalStep === 2}
+		<div class="px-6 py-5 flex flex-col gap-4">
+
+			{#if createDeadlinePast}
+				<div class="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400">
+					⚠ The first pick deadline for this season has passed — new entries cannot be added.
+				</div>
+			{/if}
+
+			<!-- Season -->
+			<div class="flex flex-col gap-1.5">
+				<label class="text-xs font-medium text-gray-400">Season</label>
+				<select bind:value={selectedSeasonId}
+					class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
+					{#each data.seasons as s}
+						<option value={s.id}>{s.name}</option>
+					{/each}
+				</select>
 			</div>
-		</div>
 
-		<!-- Number of entries -->
-		<div class="flex flex-col gap-1">
-			<label for="count" class="text-xs font-medium text-gray-400">Number of entries</label>
-			<input id="count" name="count" type="number" min="1" max="20" value="1" required
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
-			<p class="text-xs text-gray-600">More than 1 appends a number suffix automatically.</p>
-		</div>
+			<!-- Pool type -->
+			<div class="flex flex-col gap-1.5">
+				<p class="text-xs font-medium text-gray-400">Pool type</p>
+				<div class="grid grid-cols-2 gap-2">
+					<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
+						{entryType === 'lms' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 text-gray-400 hover:border-gray-600'}">
+						<input type="radio" bind:group={entryType} value="lms" class="accent-[#c9a84c]" />
+						<span>LMS Full Season</span>
+					</label>
+					<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
+						{entryType === 'second_half' ? 'border-blue-500 bg-blue-950/30 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-600'}">
+						<input type="radio" bind:group={entryType} value="second_half" class="accent-blue-400" />
+						<span>Second Half</span>
+					</label>
+				</div>
+			</div>
 
-		<!-- Base name -->
-		<div class="flex flex-col gap-1">
-			<label for="baseName" class="text-xs font-medium text-gray-400">Entry base name</label>
-			<input id="baseName" name="baseName" type="text" required
-				bind:value={baseName}
-				placeholder="e.g. Dustin Entry"
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
-			<p class="text-xs text-gray-600">Single entry uses this name as-is (unless they already have entries).</p>
-		</div>
+			<!-- Count + base name side by side -->
+			<div class="grid grid-cols-2 gap-3">
+				<div class="flex flex-col gap-1.5">
+					<label class="text-xs font-medium text-gray-400">Number of entries</label>
+					<input type="number" min="1" max="20" bind:value={entryCount}
+						class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
+					<p class="text-xs text-gray-600">Max 20. Suffix added when &gt; 1.</p>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label class="text-xs font-medium text-gray-400">Entry base name</label>
+					<input type="text" bind:value={baseName} placeholder="e.g. Dustin Entry"
+						class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+				</div>
+			</div>
 
-		<!-- Referred by -->
-		<div class="flex flex-col gap-1">
-			<label for="referredBy" class="text-xs font-medium text-gray-400">Referred by (optional)</label>
-			<input id="referredBy" name="referredBy" type="text"
-				placeholder="Referring player's name"
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
-		</div>
+			<!-- Referred by -->
+			<div class="flex flex-col gap-1.5">
+				<label class="text-xs font-medium text-gray-400">Referred by <span class="text-gray-600">(optional)</span></label>
+				<input type="text" bind:value={referredBy} placeholder="Referring player's name"
+					class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+			</div>
 
-		<!-- Complimentary -->
-		<div class="flex items-center gap-3 sm:col-span-2 lg:col-span-1">
-			<label class="flex cursor-pointer items-center gap-2.5">
-				<input
-					type="checkbox"
-					name="complimentary"
-					value="true"
-					bind:checked={complimentary}
-					class="h-4 w-4 rounded border-gray-600 bg-gray-900 accent-[#c9a84c]"
-				/>
-				<span class="text-sm text-gray-300">Complimentary entry</span>
+			<!-- Complimentary -->
+			<label class="flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition
+				{complimentary ? 'border-green-700 bg-green-950/30' : 'border-gray-700 hover:border-gray-600'}">
+				<input type="checkbox" bind:checked={complimentary} class="h-4 w-4 accent-green-500" />
+				<div>
+					<p class="text-sm font-medium text-white">Complimentary entry</p>
+					<p class="text-xs text-gray-500">Marks as paid immediately — no payment required.</p>
+				</div>
+				{#if complimentary}
+					<span class="ml-auto rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs text-green-400">Free</span>
+				{/if}
 			</label>
-			{#if complimentary}
-				<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs text-green-400">Free — no payment required</span>
-			{/if}
 		</div>
 
-		<!-- Submit -->
-		<div class="flex items-end gap-3 sm:col-span-2 lg:col-span-3">
-			<button type="submit" disabled={createLoading || !selectedUserId || createDeadlinePast}
-				class="rounded bg-[#c9a84c] px-6 py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
-				{createLoading ? 'Creating…' : 'Create entries'}
-			</button>
-			<button type="button" onclick={() => { showCreateForm = false; playerSearch = ''; selectedUserId = ''; selectedSeasonId = defaultSeason?.id ?? ''; baseName = 'Entry'; complimentary = false; }}
-				class="rounded border border-gray-700 px-4 py-2.5 text-sm text-gray-400 transition hover:bg-gray-800">
-				Cancel
+		<!-- Step 2 footer -->
+		<div class="flex items-center justify-between border-t border-gray-800 px-6 py-4">
+			<button type="button" onclick={prevStep} class="text-sm text-gray-500 hover:text-gray-300">← Back</button>
+			<button type="button" onclick={nextStep} disabled={!step2Valid || createDeadlinePast}
+				class="rounded-lg bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-40">
+				Review →
 			</button>
 		</div>
-	</form>
+
+		<!-- ── Step 3: Review & Submit ── -->
+		{:else}
+		<form method="POST" action="?/createEntries"
+			use:enhance={() => {
+				createLoading = true;
+				return async ({ result, update }) => {
+					await update();
+					createLoading = false;
+					if (result.type === 'success') closeModal();
+					else modalStep = 2; // bounce back to configure on error
+				};
+			}}
+		>
+			<!-- Hidden fields -->
+			<input type="hidden" name="seasonId"      value={selectedSeasonId} />
+			<input type="hidden" name="userId"        value={selectedUserId} />
+			<input type="hidden" name="entryType"     value={entryType} />
+			<input type="hidden" name="count"         value={entryCount} />
+			<input type="hidden" name="baseName"      value={baseName} />
+			<input type="hidden" name="referredBy"    value={referredBy} />
+			{#if complimentary}
+				<input type="hidden" name="complimentary" value="true" />
+			{/if}
+
+			<div class="px-6 py-5">
+				<p class="mb-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Confirm details</p>
+				<dl class="flex flex-col gap-3 text-sm">
+					<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+						<dt class="text-gray-500">Player</dt>
+						<dd class="font-semibold text-white">{selectedUser?.displayName || selectedUser?.email || '—'}</dd>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+						<dt class="text-gray-500">Season</dt>
+						<dd class="text-right text-gray-300">{selectedSeason?.name ?? '—'}</dd>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+						<dt class="text-gray-500">Pool type</dt>
+						<dd>
+							{#if entryType === 'lms'}
+								<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.1)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">LMS</span>
+							{:else}
+								<span class="rounded border border-blue-800 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">2nd Half</span>
+							{/if}
+						</dd>
+					</div>
+					<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+						<dt class="text-gray-500">Entries</dt>
+						<dd class="text-gray-300">
+							{#if entryCount === 1}
+								<span class="font-semibold text-white">{baseName}</span>
+							{:else}
+								<span class="font-semibold text-white">{entryCount}×</span>
+								<span class="ml-1 text-gray-400">{baseName} 1 … {baseName} {entryCount}</span>
+							{/if}
+						</dd>
+					</div>
+					{#if referredBy}
+						<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+							<dt class="text-gray-500">Referred by</dt>
+							<dd class="text-gray-300">{referredBy}</dd>
+						</div>
+					{/if}
+					<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950 px-4 py-3">
+						<dt class="text-gray-500">Payment</dt>
+						<dd>
+							{#if complimentary}
+								<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs font-semibold text-green-400">Free / Complimentary</span>
+							{:else}
+								<span class="text-yellow-400">Pending payment</span>
+							{/if}
+						</dd>
+					</div>
+				</dl>
+			</div>
+
+			<!-- Step 3 footer -->
+			<div class="flex items-center justify-between border-t border-gray-800 px-6 py-4">
+				<button type="button" onclick={prevStep} class="text-sm text-gray-500 hover:text-gray-300">← Back</button>
+				<button type="submit" disabled={createLoading}
+					class="rounded-lg bg-[#c9a84c] px-6 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-40">
+					{createLoading ? 'Creating…' : `Create ${entryCount > 1 ? entryCount + ' entries' : 'entry'}`}
+				</button>
+			</div>
+		</form>
+		{/if}
+
+	</div>
 </div>
 {/if}
 
@@ -449,7 +609,7 @@
 				>
 					<option value="">Method…</option>
 					{#each paymentMethods as m}
-						<option value={m}>{m}</option>
+						<option value={m.value}>{m.label}</option>
 					{/each}
 				</select>
 				<button
@@ -588,7 +748,7 @@
 								>
 									<option value="">Method…</option>
 									{#each paymentMethods as m}
-										<option value={m}>{m}</option>
+										<option value={m.value}>{m.label}</option>
 									{/each}
 								</select>
 								<button
