@@ -6,6 +6,12 @@
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
 		<h1 class="text-2xl font-bold text-white">Admin Duties</h1>
 		<p class="mt-1 text-sm text-gray-500">What to do and when — from season setup through the final week.</p>
+		<div class="mt-3 rounded-lg border border-gray-800 bg-black/60 px-4 py-3 text-sm text-gray-400">
+			<span class="font-semibold text-gray-300">What's automated:</span> The scheduled function runs every 2 minutes and handles the entire weekly lifecycle —
+			locking the week at the deadline, assigning auto-picks to entries that missed the deadline (biggest favorite from active odds),
+			and advancing weeks through <span class="text-orange-300">results_pending</span> → <span class="text-green-300">complete</span>.
+			Your job is to keep odds current and enter real game results.
+		</div>
 	</div>
 
 	<!-- Phase 1: Before the season -->
@@ -17,79 +23,50 @@
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Create the Season</p>
-				<p class="text-sm text-gray-400">Go to <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Seasons → New Season</a>. Set the entry fees, registration deadline, and pick deadline. Status starts at <span class="text-gray-300">setup</span> — players can't register yet.</p>
-			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Configure Week 1</p>
-				<p class="text-sm text-gray-400">Go to <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a>. Set the Week 1 pick deadline. The week card will show as <span class="text-purple-300">Current</span> — leave it <span class="text-gray-300">open</span> so players can submit picks once the season opens.</p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Seasons → New Season</a>. Set the entry fees, first pick deadline, and whether LMS and/or Second Half pools are enabled. Status starts at <span class="text-gray-300">setup</span> — players can't register yet.</p>
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
 				<p class="mb-1 text-sm font-semibold text-white">Open Registration</p>
-				<p class="text-sm text-gray-400">Advance the season status to <span class="text-green-400">open</span> from the <a href="/admin/seasons" class="text-[#c9a84c] hover:underline">Seasons</a> page. Players can now request entries from their dashboard.</p>
+				<p class="text-sm text-gray-400">Advance the season to <span class="text-green-400">active</span> from the <a href="/admin/seasons" class="text-[#c9a84c] hover:underline">Seasons</a> page. Players can now request entries from their dashboard. Add entries manually via <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> for players who sign up offline.</p>
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Add NFL Teams & Odds</p>
-				<p class="text-sm text-gray-400">Confirm all 32 teams exist under <a href="/admin/teams" class="text-[#c9a84c] hover:underline">NFL Teams</a>. Then add Week 1 matchups and spreads via <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> before the pick deadline. The week card will warn you if no active odds are set.</p>
+				<p class="mb-1 text-sm font-semibold text-white">Enter Week 1 Odds <span class="ml-1 text-xs font-normal text-red-400">required before first deadline</span></p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add all Week 1 matchups with spreads. Mark each game <span class="text-green-400">active</span>. The scheduled function derives the auto-pick team (biggest favorite) directly from active odds at lock time — if no active odds exist, no auto-picks fire.</p>
+			</div>
+			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
+				<p class="mb-1 text-sm font-semibold text-white">Confirm Entries &amp; Payments</p>
+				<p class="text-sm text-gray-400">Filter <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a> by <span class="text-yellow-400">Pending Payment</span>. Mark entries paid once fees are collected. Only <span class="text-green-400">active</span> entries receive picks and are tracked in standings. New entries cannot be added after the first pick deadline.</p>
 			</div>
 		</div>
 	</div>
 
-	<!-- Phase 2: Entry management -->
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-		<div class="mb-4 flex items-center gap-3">
-			<span class="rounded-full border border-blue-700 bg-blue-950/40 px-3 py-0.5 text-xs font-semibold text-blue-400">Phase 2</span>
-			<h2 class="text-lg font-bold text-white">Entry Management</h2>
-			<span class="text-xs text-gray-600">— happens during registration, before week 1 locks</span>
-		</div>
-		<div class="grid gap-3 sm:grid-cols-2">
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Review Pending Entries</p>
-				<p class="text-sm text-gray-400">Go to <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries & Payments</a> and filter by <span class="text-yellow-400">Pending Payment</span>. These players have registered but haven't paid yet.</p>
-			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Collect & Confirm Payment</p>
-				<p class="text-sm text-gray-400">Once you've received a player's fee (Venmo, Zelle, cash, etc.), mark their entry as paid. Check the entry card — it highlights in <span class="text-purple-300">purple</span> when selected. Use <span class="text-gray-300">Bulk Mark Paid</span> to process multiple entries at once.</p>
-			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Activate Entries</p>
-				<p class="text-sm text-gray-400">Set paid entries to <span class="text-green-400">active</span> status. Only active entries can submit picks. Do this before the Week 1 pick deadline.</p>
-			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">Advance Season to Active</p>
-				<p class="text-sm text-gray-400">Once registration closes and entries are confirmed, advance the season to <span class="text-green-400">active</span>. This signals the pool is live and picks are being tracked.</p>
-			</div>
-		</div>
-	</div>
-
-	<!-- Phase 3: Weekly management -->
+	<!-- Phase 2: Weekly management -->
 	<div class="rounded-xl border border-green-900/60 bg-black/75 p-6 backdrop-blur-sm">
 		<div class="mb-1 flex items-center gap-3">
-			<span class="rounded-full border border-green-700 bg-green-950/40 px-3 py-0.5 text-xs font-semibold text-green-400">Phase 3</span>
+			<span class="rounded-full border border-green-700 bg-green-950/40 px-3 py-0.5 text-xs font-semibold text-green-400">Phase 2</span>
 			<h2 class="text-lg font-bold text-white">Weekly Management</h2>
 			<span class="text-xs text-gray-600">— repeats every week of the season</span>
 		</div>
-		<p class="mb-4 text-sm text-gray-500">This is the bulk of ongoing admin work. Most weeks it comes down to two tasks: keeping odds current and entering results.</p>
+		<p class="mb-4 text-sm text-gray-500">Two tasks per week: keep odds current before the deadline, enter results after games finish. Everything else is automated.</p>
 		<div class="grid gap-3 sm:grid-cols-2">
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">1 · Update Odds</p>
-				<p class="text-sm text-gray-400">Before the pick deadline each week, go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add or update that week's matchups, spreads, and moneylines. The current week card in <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> will show a warning badge if no active odds are set.</p>
+				<p class="mb-1 text-sm font-semibold text-white">1 · Update Odds <span class="ml-1 text-xs font-normal text-red-400">before the pick deadline</span></p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add or update that week's matchups, spreads, and moneylines. Mark games <span class="text-green-400">active</span>. The <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> week card shows a warning badge if no active odds are set — that means no auto-picks will fire at lock time. The LMS auto-pick badge shows which team will be assigned and whether it's a <span class="text-gray-400">preview</span> (can still change) or <span class="text-[#c9a84c]">locked in</span> (already committed by the scheduler).</p>
 			</div>
 			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">2 · Lock the Week</p>
-				<p class="text-sm text-gray-400">After the pick deadline passes, go to <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> and click <span class="text-gray-300">→ Lock Week</span> on the current week card. This prevents further pick changes and signals games are underway.</p>
+				<p class="mb-1 text-sm font-semibold text-white">2 · Enter Results <span class="ml-1 text-xs font-normal text-gray-500">after games finish</span></p>
+				<p class="text-sm text-gray-400">Go to <a href="/admin/results" class="text-[#c9a84c] hover:underline">Results</a> and set each game's outcome — <span class="text-blue-400">Away Win</span>, <span class="text-green-400">Home Win</span>, or <span class="text-gray-400">Tie</span>. Hit <span class="text-gray-300">Save Results</span> to record them and process eliminations. The week advances to <span class="text-orange-300">results pending</span> then <span class="text-green-300">complete</span> automatically.</p>
 			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">3 · Enter Win / Loss / Tie</p>
-				<p class="text-sm text-gray-400">Once games finish, go to <a href="/admin/results" class="text-[#c9a84c] hover:underline">Results</a> and set each game's outcome — <span class="text-blue-400">Away Win</span>, <span class="text-green-400">Home Win</span>, or <span class="text-gray-400">Tie</span>. Hit <span class="text-gray-300">Save Results</span> to record them and process eliminations automatically. The week advances to <span class="text-orange-300">results pending</span>.</p>
-			</div>
-			<div class="rounded-lg border border-gray-800 bg-black px-4 py-3">
-				<p class="mb-1 text-sm font-semibold text-white">4 · Mark Week Complete</p>
-				<p class="text-sm text-gray-400">Return to <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a>. The week card will be in <span class="text-orange-300">results pending</span> state with a pulsing <span class="text-orange-300">→ Mark Complete</span> button. Review eliminations, then click it to finalize. The week turns <span class="text-green-300">complete</span> and the next week opens automatically.</p>
-			</div>
+		</div>
+
+		<!-- Auto-pick callout -->
+		<div class="mt-3 rounded-lg border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.04)] px-4 py-3">
+			<p class="mb-1 text-sm font-semibold text-[#c9a84c]">How auto-pick works</p>
+			<p class="text-sm text-gray-400">At the pick deadline the scheduled function locks the week, scans all <span class="text-gray-300">active</span> game odds, and selects the team with the largest spread (biggest favorite) as the LMS auto-pick. It assigns that team to every active entry that hasn't submitted a pick. The Second Half auto-pick uses the biggest underdog. <strong class="font-semibold text-gray-300">Odds must be entered and marked active before the deadline</strong> — if none exist, no auto-picks fire and those entries go without a pick for the week.</p>
 		</div>
 	</div>
 
-	<!-- Updating a pick after the deadline -->
+	<!-- Exception: pick override -->
 	<div class="rounded-xl border border-yellow-900/60 bg-black/75 p-6 backdrop-blur-sm">
 		<div class="mb-4 flex items-center gap-3">
 			<span class="rounded-full border border-yellow-700 bg-yellow-950/40 px-3 py-0.5 text-xs font-semibold text-yellow-400">Exception</span>
@@ -126,27 +103,23 @@
 
 	<!-- Quick reference -->
 	<div class="rounded-xl border border-gray-800 bg-black/75 p-6 backdrop-blur-sm">
-		<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">Quick Reference — Weekly Checklist</h2>
+		<h2 class="mb-4 text-sm font-semibold uppercase tracking-wider text-gray-500">Weekly Checklist</h2>
 		<ol class="flex flex-col gap-2 text-sm text-gray-400">
 			<li class="flex items-start gap-3">
-				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Mon</span>
-				<span>Open the new week in <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> — set the deadline, the card shows as <span class="text-purple-300">Current</span>.</span>
+				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Early week</span>
+				<span>Add or update matchups and spreads in <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>. Mark games active. The odds warning badge on the week card disappears once active odds are set.</span>
 			</li>
 			<li class="flex items-start gap-3">
-				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Wed</span>
-				<span>Add or update matchups and spreads in <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>. The odds warning badge disappears once active odds are set.</span>
+				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Before deadline</span>
+				<span>Check <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> — confirm the LMS auto-pick badge shows the expected team. The scheduled function locks the week and fires auto-picks automatically at the deadline.</span>
 			</li>
 			<li class="flex items-start gap-3">
-				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Sun AM</span>
-				<span>Click <span class="text-gray-300">→ Lock Week</span> in <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> before kickoff.</span>
+				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">After games</span>
+				<span>Enter game outcomes (W/L/T) in <a href="/admin/results" class="text-[#c9a84c] hover:underline">Results</a>. Save Results to eliminate entries — the week advances to <span class="text-orange-300">results pending</span> then <span class="text-green-300">complete</span> automatically.</span>
 			</li>
 			<li class="flex items-start gap-3">
-				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Sun PM</span>
-				<span>Enter game outcomes (W/L/T) in <a href="/admin/results" class="text-[#c9a84c] hover:underline">Results</a> as games finish. Save Results to eliminate entries — week moves to <span class="text-orange-300">results pending</span>.</span>
-			</li>
-			<li class="flex items-start gap-3">
-				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Mon</span>
-				<span>Confirm eliminations look right, then click the pulsing <span class="text-orange-300">→ Mark Complete</span> in <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a>. Repeat.</span>
+				<span class="mt-0.5 shrink-0 rounded bg-gray-800 px-1.5 py-0.5 text-xs font-mono text-gray-500">Entries</span>
+				<span>Process outstanding payments in <a href="/admin/entries" class="text-[#c9a84c] hover:underline">Entries &amp; Payments</a>. New entries are blocked after the first pick deadline — use status changes to manage late situations.</span>
 			</li>
 		</ol>
 	</div>

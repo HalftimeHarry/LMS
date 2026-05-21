@@ -11,6 +11,7 @@
 	const entries           = $derived(data.entries           as any[]);
 	const picks             = $derived(data.picks             as any[]);
 	const eliminatedEntries = $derived(data.eliminatedEntries as any[]);
+	const autoPickByWeek    = $derived(data.autoPickByWeek    as Record<string, { abbreviation: string; city: string; name: string; spread: number; stored: boolean }>);
 
 	// Eliminated entries filtered to selected season
 	const seasonEliminated = $derived(
@@ -191,15 +192,56 @@
 	};
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
-	function seasonLabel(s: any) {
-		return s?.name ?? '—';
-	}
-
 	function isSecondHalf(s: any) {
 		return s?.name?.toLowerCase().includes('second half');
 	}
 
+	// Group seasons into display pairs: real seasons first, then test pairs
+	const seasonGroups = $derived(() => {
+		const real  = seasons.filter((s: any) => !s.name?.includes('[TEST]'));
+		const tests = seasons.filter((s: any) =>  s.name?.includes('[TEST]'));
+
+		// Pair test seasons by their timestamp tag
+		const pairMap = new Map<string, any[]>();
+		for (const s of tests) {
+			const tag = s.name.replace(/^\[TEST\]\s*\d{4}\s*-\s*\d{4}\s*(LMS|Second Half)\s*/i, '').trim();
+			if (!pairMap.has(tag)) pairMap.set(tag, []);
+			pairMap.get(tag)!.push(s);
+		}
+
+		// Real seasons: pair LMS + 2H by year
+		const realPairMap = new Map<string, any[]>();
+		for (const s of real) {
+			const key = String(s.year ?? s.name);
+			if (!realPairMap.has(key)) realPairMap.set(key, []);
+			realPairMap.get(key)!.push(s);
+		}
+
+		return {
+			realPairs: [...realPairMap.entries()],
+			testPairs: [...pairMap.entries()],
+		};
+	});
+
+	// Auto-select first real season (or first test season) on load
+	$effect(() => {
+		if (selectedSeasonId) return;
+		const first = seasons[0];
+		if (first) selectedSeasonId = first.id;
+	});
+
 	const selectedSeason = $derived(seasons.find((s: any) => s.id === selectedSeasonId));
+
+	// Current week for a season (first open, else last)
+	function currentWeekFor(seasonId: string) {
+		const sw = weeks.filter((w: any) => w.season === seasonId).sort((a: any, b: any) => a.week - b.week);
+		return sw.find((w: any) => w.status === 'open' || w.status === 'locked') ?? sw[sw.length - 1] ?? null;
+	}
+
+	// Entry count for a season
+	function entryCountFor(seasonId: string) {
+		return entries.filter((e: any) => e.season === seasonId).length;
+	}
 </script>
 
 <svelte:head><title>Manage Pools — Admin</title></svelte:head>
@@ -220,36 +262,97 @@
 	</div>
 
 	<!-- ── Season cards ───────────────────────────────────────────────────── -->
-	<div class="mb-4 grid gap-3 sm:grid-cols-2">
-		{#each seasons as s}
-			{@const sh       = isSecondHalf(s)}
-			{@const selected = selectedSeasonId === s.id}
-			<button
-				type="button"
-				onclick={() => selectedSeasonId = s.id}
-				class="relative overflow-hidden rounded-xl border text-left transition hover:brightness-110
-					{selected ? (sh ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-black' : 'ring-2 ring-[#c9a84c] ring-offset-1 ring-offset-black') : ''}"
-				style={sh
-					? 'border-color: rgba(96,165,250,0.4); background: radial-gradient(ellipse at 70% 50%, rgba(96,165,250,0.1) 0%, transparent 70%), linear-gradient(135deg, #080c14 0%, #090e1a 50%, #080c14 100%);'
-					: 'border-color: rgba(201,168,76,0.4); background: radial-gradient(ellipse at 70% 50%, rgba(201,168,76,0.12) 0%, transparent 70%), linear-gradient(135deg, #0a0a0a 0%, #111008 50%, #0a0a0a 100%);'}
-			>
-				<div class="pointer-events-none absolute inset-0 opacity-[0.04]"
+
+	<!-- Real season pairs -->
+	{#each seasonGroups().realPairs as [, pair]}
+		<div class="mb-3 grid gap-2 sm:grid-cols-2">
+			{#each pair.sort((a: any, b: any) => (isSecondHalf(a) ? 1 : -1) - (isSecondHalf(b) ? 1 : -1)) as s}
+				{@const sh       = isSecondHalf(s)}
+				{@const selected = selectedSeasonId === s.id}
+				{@const curWeek  = currentWeekFor(s.id)}
+				{@const eCount   = entryCountFor(s.id)}
+				<button type="button" onclick={() => selectedSeasonId = s.id}
+					class="relative overflow-hidden rounded-xl border text-left transition hover:brightness-110
+						{selected ? (sh ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-black' : 'ring-2 ring-[#c9a84c] ring-offset-1 ring-offset-black') : ''}"
 					style={sh
-						? 'background-image: repeating-linear-gradient(90deg,#60a5fa 0,#60a5fa 1px,transparent 1px,transparent 10%); background-size:10% 100%;'
-						: 'background-image: repeating-linear-gradient(90deg,#c9a84c 0,#c9a84c 1px,transparent 1px,transparent 10%); background-size:10% 100%;'}
-				></div>
-				<div class="relative px-5 py-4">
-					<p class="text-xs font-semibold uppercase tracking-widest {sh ? 'text-blue-500/60' : 'text-[rgba(201,168,76,0.6)]'}">
-						{sh ? 'Second Half' : 'LMS'}
-					</p>
-					<p class="mt-0.5 font-bold text-white">{seasonLabel(s)}</p>
-					{#if selected}
-						<p class="mt-1 text-xs {sh ? 'text-blue-400' : 'text-[#c9a84c]'}">● viewing</p>
-					{/if}
-				</div>
-			</button>
-		{/each}
-	</div>
+						? 'border-color: rgba(96,165,250,0.4); background: radial-gradient(ellipse at 70% 50%, rgba(96,165,250,0.1) 0%, transparent 70%), #080c14;'
+						: 'border-color: rgba(201,168,76,0.4); background: radial-gradient(ellipse at 70% 50%, rgba(201,168,76,0.12) 0%, transparent 70%), #0a0a0a;'}
+				>
+					<div class="relative px-5 py-4">
+						<p class="text-xs font-semibold uppercase tracking-widest {sh ? 'text-blue-500/60' : 'text-[rgba(201,168,76,0.6)]'}">{sh ? 'Second Half' : 'LMS'}</p>
+						<p class="mt-0.5 font-bold text-white">{s.name}</p>
+						<div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+							{#if curWeek}
+								<span>Wk {curWeek.week}
+									<span class="ml-1 rounded border px-1 py-0.5 text-[10px]
+										{weekStatusColors[curWeek.status] ?? 'text-gray-500 border-gray-700'}">
+										{weekStatusLabels[curWeek.status] ?? curWeek.status}
+									</span>
+								</span>
+								{#if curWeek.status === 'open'}
+									<span class="font-mono {isUrgent(curWeek.deadline) ? 'text-red-400' : 'text-[#c9a84c]'}">⏱ {timeUntil(curWeek.deadline)}</span>
+								{/if}
+							{/if}
+							<span>{eCount} entr{eCount === 1 ? 'y' : 'ies'}</span>
+						</div>
+						{#if selected}<p class="mt-1 text-xs {sh ? 'text-blue-400' : 'text-[#c9a84c]'}">● viewing</p>{/if}
+					</div>
+				</button>
+			{/each}
+		</div>
+	{/each}
+
+	<!-- Test season pairs -->
+	{#each seasonGroups().testPairs as [tag, pair]}
+		<div class="mb-3">
+			<p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-500/60">[TEST] {tag}</p>
+			<div class="grid gap-2 sm:grid-cols-2">
+				{#each pair.sort((a: any, b: any) => (isSecondHalf(a) ? 1 : -1) - (isSecondHalf(b) ? 1 : -1)) as s}
+					{@const sh       = isSecondHalf(s)}
+					{@const selected = selectedSeasonId === s.id}
+					{@const curWeek  = currentWeekFor(s.id)}
+					{@const eCount   = entryCountFor(s.id)}
+					{@const autoPick = curWeek ? autoPickByWeek[`${s.id}:${curWeek.week}`] : null}
+					<button type="button" onclick={() => selectedSeasonId = s.id}
+						class="relative overflow-hidden rounded-xl border text-left transition hover:brightness-110
+							{selected ? (sh ? 'ring-2 ring-blue-400 ring-offset-1 ring-offset-black' : 'ring-2 ring-[#c9a84c] ring-offset-1 ring-offset-black') : ''}"
+						style={sh
+							? 'border-color: rgba(96,165,250,0.25); background: #080c14;'
+							: 'border-color: rgba(201,168,76,0.25); background: #0a0a0a;'}
+					>
+						<div class="relative px-4 py-3">
+							<div class="flex items-center justify-between gap-2">
+								<p class="text-xs font-semibold uppercase tracking-widest {sh ? 'text-blue-500/60' : 'text-orange-500/60'}">{sh ? 'Second Half' : 'LMS'}</p>
+								<span class="font-mono text-[10px] text-gray-700">{s.id.slice(-6)}</span>
+							</div>
+							<div class="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+								{#if curWeek}
+									<span class="text-gray-400">Wk {curWeek.week}
+										<span class="ml-1 rounded border px-1 py-0.5 text-[10px]
+											{weekStatusColors[curWeek.status] ?? 'text-gray-500 border-gray-700'}">
+											{weekStatusLabels[curWeek.status] ?? curWeek.status}
+										</span>
+									</span>
+									{#if curWeek.status === 'open'}
+										<span class="font-mono text-[11px] {isUrgent(curWeek.deadline) ? 'text-red-400' : 'text-[#c9a84c]'}">⏱ {timeUntil(curWeek.deadline)}</span>
+									{/if}
+								{/if}
+								<span>{eCount} entr{eCount === 1 ? 'y' : 'ies'}</span>
+								{#if autoPick && !sh}
+									<span class="flex items-center gap-1">
+										<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-3.5 w-3.5 object-contain" />
+										<span class="{autoPick.stored ? 'text-[#c9a84c]' : 'text-gray-500'}">{autoPick.abbreviation}</span>
+										<span class="text-[9px] {autoPick.stored ? 'text-[#c9a84c]/50' : 'text-gray-700'}">{autoPick.stored ? '●' : '○'}</span>
+									</span>
+								{/if}
+							</div>
+							{#if selected}<p class="mt-1 text-[10px] {sh ? 'text-blue-400' : 'text-[#c9a84c]'}">● viewing</p>{/if}
+						</div>
+					</button>
+				{/each}
+			</div>
+		</div>
+	{/each}
 
 	<!-- ── Prompt when no season selected ─────────────────────────────────── -->
 	{#if !selectedSeasonId}
@@ -264,9 +367,10 @@
 		<p class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Select Week</p>
 		<div class="flex flex-wrap gap-2">
 			{#each seasonWeeks as w}
-				{@const sel      = selectedWeekId === w.id}
-				{@const urgent   = w.status === 'open' && isUrgent(w.deadline)}
+				{@const sel       = selectedWeekId === w.id}
+				{@const urgent    = w.status === 'open' && isUrgent(w.deadline)}
 				{@const countdown = w.status === 'open' ? timeUntil(w.deadline) : null}
+				{@const autoPick  = autoPickByWeek[`${w.season}:${w.week}`]}
 				<button
 					type="button"
 					onclick={() => { selectedWeekId = w.id; selectedEntryIds = new Set(); }}
@@ -292,6 +396,13 @@
 					{:else if w.status !== 'open'}
 						<div class="mt-1 text-[10px] text-gray-600">
 							{w.deadline ? new Date(w.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'No deadline'}
+						</div>
+					{/if}
+					{#if autoPick}
+						<div class="mt-1.5 flex items-center gap-1">
+							<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-3.5 w-3.5 object-contain" />
+							<span class="text-[10px] font-bold {sel ? 'text-[#c9a84c]' : 'text-gray-400'}">{autoPick.abbreviation}</span>
+							<span class="text-[9px] {autoPick.stored ? 'text-[#c9a84c]/60' : 'text-gray-600'}">{autoPick.stored ? '●' : '○'}</span>
 						</div>
 					{/if}
 				</button>

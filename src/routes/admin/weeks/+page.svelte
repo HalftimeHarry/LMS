@@ -77,11 +77,37 @@
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 
-	function switchSeason(id: string) { updateParam('season', id); }
+	function switchSeason(id: string) {
+		// Auto-switch pool type if the selected season only supports one pool
+		const s = (data.seasons as any[]).find(x => x.id === id);
+		if (s) {
+			const sh = s.name?.toLowerCase().includes('second half');
+			if (!sh) ctrl.poolType = 'lms';
+			else     ctrl.poolType = 'second_half';
+		}
+		updateParam('season', id);
+	}
 	function switchPoolType(type: EntryType) {
 		ctrl.poolType = type;
 		updateParam('poolType', type);
 	}
+
+	// Group seasons for the rich picker
+	const seasonGroups = $derived(() => {
+		const all = data.seasons as any[];
+		const real  = all.filter(s => !s.name?.includes('[TEST]'));
+		const tests = all.filter(s =>  s.name?.includes('[TEST]'));
+
+		// Pair test seasons by their timestamp tag e.g. "(1h/week) 2026-05-21T15:32"
+		const pairMap = new Map<string, any[]>();
+		for (const s of tests) {
+			// Extract tag: everything after the first ']'
+			const tag = s.name.replace(/^\[TEST\]\s*\d{4}\s*-\s*\d{4}\s*(LMS|Second Half)\s*/, '').trim();
+			if (!pairMap.has(tag)) pairMap.set(tag, []);
+			pairMap.get(tag)!.push(s);
+		}
+		return { real, testPairs: [...pairMap.entries()] };
+	});
 
 
 </script>
@@ -96,21 +122,73 @@
 	</div>
 
 	<!-- Row 1: season selector + pool toggle -->
-	<div class="flex flex-wrap items-center justify-between gap-3">
-		<div class="flex flex-wrap items-center gap-3">
-			<div class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Season</span>
-				<select
-					value={data.activeSeason?.id ?? ''}
-					onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-				>
-					{#each data.seasons as s}
-						<option value={s.id}>{s.name}</option>
-					{/each}
-				</select>
-			</div>
+	<div class="flex flex-col gap-4">
 
+		<!-- Real seasons -->
+		{#if seasonGroups().real.length}
+			<div>
+				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Seasons</p>
+				<div class="flex flex-wrap gap-2">
+					{#each seasonGroups().real as s}
+						{@const active = data.activeSeason?.id === s.id}
+						<button type="button" onclick={() => switchSeason(s.id)}
+							class="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition
+								{active ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-gray-500 hover:text-white'}"
+						>
+							<span class="font-medium">{s.name}</span>
+							<span class="rounded px-1.5 py-0.5 text-xs
+								{s.status === 'active' ? 'bg-green-950 text-green-400' :
+								 s.status === 'open'   ? 'bg-blue-950 text-blue-400' :
+								 s.status === 'setup'  ? 'bg-gray-800 text-gray-500' :
+								                         'bg-gray-900 text-gray-600'}">{s.status}</span>
+							{#if !s.name?.toLowerCase().includes('second half')}
+								<span class="text-xs text-[#c9a84c]">LMS</span>
+							{:else}
+								<span class="text-xs text-blue-400">2H</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Test season pairs -->
+		{#if seasonGroups().testPairs.length}
+			<div>
+				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Test Seasons</p>
+				<div class="flex flex-col gap-2">
+					{#each seasonGroups().testPairs as [tag, pair]}
+						<div class="flex flex-wrap items-center gap-1.5 rounded-lg border border-orange-900/40 bg-orange-950/10 px-3 py-2">
+							<span class="mr-1 text-xs text-orange-500/70 shrink-0">{tag}</span>
+							{#each pair as s}
+								{@const active = data.activeSeason?.id === s.id}
+								{@const isLMS = !s.name?.toLowerCase().includes('second half')}
+								<button type="button" onclick={() => switchSeason(s.id)}
+									class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition
+										{active
+											? (isLMS ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.12)] text-[#c9a84c]' : 'border-blue-500 bg-blue-950/40 text-blue-300')
+											: 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-gray-500 hover:text-white'}"
+								>
+									{#if isLMS}
+										<span class="rounded bg-[rgba(201,168,76,0.15)] px-1 text-[10px] font-bold text-[#c9a84c]">LMS</span>
+									{:else}
+										<span class="rounded bg-blue-950/60 px-1 text-[10px] font-bold text-blue-400">2H</span>
+									{/if}
+									<span class="rounded px-1 text-[10px]
+										{s.status === 'active' ? 'text-green-400' :
+										 s.status === 'open'   ? 'text-blue-400' :
+										                         'text-gray-600'}">{s.status}</span>
+									<span class="font-mono text-gray-500">{s.id.slice(-6)}</span>
+								</button>
+							{/each}
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Pool type toggle + active season summary -->
+		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-800 pt-3">
 			<div class="flex flex-col gap-1">
 				<span class="text-xs text-gray-500">Pool type</span>
 				<div class="flex overflow-hidden rounded border border-gray-700">
@@ -122,14 +200,20 @@
 					>2nd Half</button>
 				</div>
 			</div>
-		</div>
-
-		<!-- Viewing label -->
-		<div class="text-right">
-			<p class="text-xs text-gray-500">Viewing</p>
-			<p class="text-sm font-semibold text-white">
-				{data.activeSeason?.name ?? '—'}
-			</p>
+			{#if data.activeSeason}
+				<div class="text-right text-xs text-gray-500">
+					<span class="text-gray-300 font-medium">{data.activeSeason.name}</span>
+					{#if (data.activeSeason as any).firstPickDeadline}
+						<span class="ml-2">· deadline {new Date((data.activeSeason as any).firstPickDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+					{/if}
+					{#if (data.activeSeason as any).lmsEntryFee}
+						<span class="ml-2">· LMS ${(data.activeSeason as any).lmsEntryFee}</span>
+					{/if}
+					{#if (data.activeSeason as any).secondHalfEntryFee}
+						<span class="ml-2">· 2H ${(data.activeSeason as any).secondHalfEntryFee}</span>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -407,6 +491,11 @@
 											<img src={teamLogoUrl(picks.lms.abbreviation)} alt={picks.lms.abbreviation} class="h-4 w-4 object-contain" />
 											<span class="text-gray-300">{picks.lms.city} {picks.lms.name}</span>
 											<span class="text-gray-500">{picks.lms.spread}</span>
+											{#if (picks.lms as any).stored}
+												<span class="rounded bg-[rgba(201,168,76,0.15)] px-1 text-[10px] font-semibold uppercase tracking-wider text-[#c9a84c]">locked in</span>
+											{:else}
+												<span class="rounded bg-gray-800 px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">preview</span>
+											{/if}
 										</span>
 									{/if}
 									{#if picks.sh}
