@@ -1,6 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import { submitPickSchema } from '$lib/schemas';
+import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
@@ -31,8 +32,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			.catch(() => []);
 	}
 
-	const openWeeks   = allWeeks.filter(w => w.status === 'open');
-	const closedWeeks = allWeeks.filter(w => w.status !== 'open');
+	// 2H entries may only see weeks >= secondHalfStartWeek
+	const secondHalfStartWeek = entry.entryType === 'second_half'
+		? (season?.secondHalfStartWeek ?? 6)
+		: 0;
+	const visibleWeeks = allWeeks.filter(w => w.week >= secondHalfStartWeek);
+
+	const openWeeks   = visibleWeeks.filter(w => w.status === 'open');
+	const closedWeeks = visibleWeeks.filter(w => w.status !== 'open');
 
 	// All NFL teams (only needed for the open-week picker)
 	const teams = openWeeks.length
@@ -70,9 +77,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		usedByWeek[week.id] = [...usedElsewhere];
 	}
 
-	const picksRequired = entry.entryType === 'lms'
-		? 1
-		: (season?.secondHalfPicksPerWeek ?? 1);
+	// Per-week picks required: LMS always 1; 2H uses ramp (1 for weeks 6-9, 2 from week 10+)
+	const picksRequiredByWeek: Record<string, number> = {};
+	for (const w of openWeeks) {
+		picksRequiredByWeek[w.id] = entry.entryType === 'lms'
+			? 1
+			: SeasonProvider.secondHalfPicksForWeek(season, w.week);
+	}
 
 	const isLms = entry.entryType === 'lms';
 
@@ -195,12 +206,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		entry,
 		season,
-		openWeeks:    openWeeks    as any[],
-		closedWeeks:  closedWeeks  as any[],
-		teams:        teams        as any[],
+		openWeeks:           openWeeks           as any[],
+		closedWeeks:         closedWeeks         as any[],
+		teams:               teams               as any[],
 		pickByWeek,
 		usedByWeek,
-		picksRequired,
+		picksRequiredByWeek,
 		oddsByWeek,
 		teamSpreadByWeek,
 		recommendationsByWeek,
@@ -249,10 +260,10 @@ export const actions: Actions = {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 
-		const season = await pb.collection('seasons').getOne(entry.season);
+		const season = await pb.collection('seasons').getOne(entry.season) as unknown as import('$lib/providers/SeasonProvider').Season;
 		const picksRequired = entryType === 'lms'
 			? 1
-			: (week.secondHalfPicksPerWeek ?? season.secondHalfPicksPerWeek ?? 1);
+			: SeasonProvider.secondHalfPicksForWeek(season, week.week);
 
 		if (teams.length !== picksRequired) {
 			return fail(400, {

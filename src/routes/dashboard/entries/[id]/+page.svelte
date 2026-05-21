@@ -13,7 +13,7 @@
 	const teams                  = $derived(data.teams                  as any[]);
 	const pickByWeek             = $derived(data.pickByWeek             as Record<string, any>);
 	const usedByWeek             = $derived(data.usedByWeek             as Record<string, string[]>);
-	const picksRequired          = $derived(data.picksRequired          as number);
+	const picksRequiredByWeek    = $derived(data.picksRequiredByWeek    as Record<string, number>);
 	const oddsByWeek             = $derived((data as any).oddsByWeek             as Record<string, any[]>);
 	const teamSpreadByWeek       = $derived((data as any).teamSpreadByWeek       as Record<string, Record<string, number>>);
 	const recommendationsByWeek  = $derived((data as any).recommendationsByWeek  as Record<string, any[]>);
@@ -82,12 +82,13 @@
 	});
 
 	function toggleTeam(weekId: string, teamId: string) {
-		const cur = selections[weekId] ?? [];
+		const cur      = selections[weekId] ?? [];
+		const required = picksRequiredByWeek[weekId] ?? 1;
 		if (cur.includes(teamId)) {
 			selections = { ...selections, [weekId]: cur.filter((t) => t !== teamId) };
-		} else if (picksRequired === 1) {
+		} else if (required === 1) {
 			selections = { ...selections, [weekId]: [teamId] };
-		} else if (cur.length < picksRequired) {
+		} else if (cur.length < required) {
 			selections = { ...selections, [weekId]: [...cur, teamId] };
 		}
 	}
@@ -362,6 +363,7 @@
 		<!-- Week cards -->
 		<div class="flex flex-col gap-3">
 			{#each allDisplayWeeks as week (week.id)}
+				{@const picksRequired = picksRequiredByWeek[week.id] ?? 1}
 				{@const isOpen      = week.status === 'open'}
 				{@const pick        = pickByWeek[week.id]}
 				{@const sel         = selections[week.id] ?? []}

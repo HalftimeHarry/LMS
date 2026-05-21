@@ -100,33 +100,35 @@
 
 <svelte:head><title>Dashboard — LMS Pool</title></svelte:head>
 
-<!-- Welcome -->
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4">
-	<div>
-		<h1 class="text-3xl font-bold text-white">
-			Welcome back, <span class="text-[#c9a84c]">{data.user.displayName}</span>
-		</h1>
-		{#if selectedGroup}
-			<p class="mt-1 text-sm text-gray-500">{selectedGroup.season.name}</p>
-		{:else}
-			<p class="mt-1 text-gray-400">No active season right now. Check back soon.</p>
+<!-- Welcome card -->
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-6 py-5 backdrop-blur-sm"
+	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.06) 0%, transparent 60%), #0a0a0a;">
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<div>
+			<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Welcome back</p>
+			<h1 class="mt-0.5 text-2xl font-bold text-white">{data.user.displayName}</h1>
+			{#if selectedGroup}
+				<p class="mt-1 text-sm text-gray-500">{selectedGroup.season.name}</p>
+			{:else}
+				<p class="mt-1 text-sm text-gray-500">No active season right now. Check back soon.</p>
+			{/if}
+		</div>
+		{#if selectableSeasons.length > 1}
+			<div class="flex flex-col items-end gap-1">
+				<label for="season-select" class="text-xs text-gray-600">Season</label>
+				<select
+					id="season-select"
+					value={selectedSeasonId}
+					onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
+					class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-2 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
+				>
+					{#each selectableSeasons as g}
+						<option value={g.season.id}>{g.season.name}</option>
+					{/each}
+				</select>
+			</div>
 		{/if}
 	</div>
-	{#if selectableSeasons.length > 1}
-		<div class="flex flex-col items-end gap-1">
-			<label for="season-select" class="text-xs text-gray-600">Season</label>
-			<select
-				id="season-select"
-				value={selectedSeasonId}
-				onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-				class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-2 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
-			>
-				{#each selectableSeasons as g}
-					<option value={g.season.id}>{g.season.name}</option>
-				{/each}
-			</select>
-		</div>
-	{/if}
 </div>
 
 <!-- Stat cards — pool-wide for selected season -->
