@@ -57,7 +57,25 @@ SeasonProvider.secondHalfPicksForWeek(season, weekNumber)
 // → 2  for weeks >= secondHalfPicksStartWeek (uses secondHalfPicksPerWeek)
 ```
 
-**Important:** the pick submission action (`dashboard/picks/+page.server.ts`) does **not** apply this ramp. It reads `week.secondHalfPicksPerWeek ?? season.secondHalfPicksPerWeek` directly. The ramp is enforced by the seeder and the UI pick form — not the server action. This is intentional: the week record can carry a per-week override.
+The ramp is enforced in three places:
+
+1. **Load function** (`dashboard/entries/[id]/+page.server.ts`) — builds a `picksRequiredByWeek` map keyed by `weekly_settings` ID, one entry per open week
+2. **Submit action** (same file) — calls `SeasonProvider.secondHalfPicksForWeek(season, week.week)` to validate the submitted team count
+3. **Svelte page** — derives `picksRequired` per week inside the `{#each}` block from `picksRequiredByWeek`
+
+---
+
+## Week visibility filter
+
+2H entries only see weeks at or after `secondHalfStartWeek` (default: week 6). Weeks before that are hidden from both the open picker and the closed-week history.
+
+This is applied in the load function before `openWeeks` and `closedWeeks` are derived:
+
+```ts
+const visibleWeeks = allWeeks.filter(w => w.week >= secondHalfStartWeek);
+const openWeeks    = visibleWeeks.filter(w => w.status === 'open');
+const closedWeeks  = visibleWeeks.filter(w => w.status !== 'open');
+```
 
 ---
 
@@ -149,9 +167,29 @@ Integration tests for the `dashboard/picks` action. PocketBase is mocked via `vi
 
 ---
 
+### `src/tests/integration/picks-load.test.ts` — updated
+
+The load function tests were updated to reflect the `picksRequiredByWeek` map (replacing the flat `picksRequired` value):
+
+- `picksRequired=1` for LMS entries
+- Week-level `secondHalfPicksPerWeek` override respected
+- Season-level fallback when week has no override
+- `picksRequired=0` when no open week exists
+
+---
+
 ### `src/tests/integration/entries-admin.test.ts` — updated
 
 The existing delete-block tests were updated to:
 - Use a past deadline (`2020-01-01`) so tests are not date-sensitive
 - Match the actual error message (`/deadline has passed/i`)
 - Add a new test confirming `[TEST]` seasons bypass the deadline gate entirely
+
+---
+
+## Current test totals
+
+```
+Test Files  10 passed
+Tests       155 passed
+```
