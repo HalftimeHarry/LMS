@@ -48,9 +48,9 @@ async function send({ templateId, params }: SendOptions): Promise<void> {
 /**
  * Send the welcome email to a newly registered user.
  *
- * Template variables expected in the EmailJS template:
- *   {{to_name}}  — user's display name
- *   {{to_email}} — user's email address
+ * Template variables sent:
+ *   {{name}}     — user's display name
+ *   {{to_email}} — user's email address (EmailJS "To Email" field)
  *   {{app_url}}  — base URL of the app (e.g. https://lmspool.com)
  */
 export async function sendWelcomeEmail(opts: {
@@ -64,7 +64,7 @@ export async function sendWelcomeEmail(opts: {
 	await send({
 		templateId,
 		params: {
-			to_name:  opts.displayName,
+			name:     opts.displayName,
 			to_email: opts.email,
 			app_url:  opts.appUrl,
 		},
