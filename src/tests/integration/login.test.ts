@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Bypass rate limiting in unit tests
+vi.mock('$lib/server/rate-limit', () => ({
+	isRateLimited: vi.fn().mockReturnValue(false),
+	clientIp:      vi.fn().mockReturnValue('127.0.0.1'),
+}));
+
 // Must mock before importing the action so the module sees the mock
 vi.mock('pocketbase', () => {
 	const MockPocketBase = vi.fn(function (this: any) {

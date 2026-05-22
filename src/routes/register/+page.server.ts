@@ -3,6 +3,7 @@ import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
 import { env } from '$env/dynamic/private';
 import { redirect, fail } from '@sveltejs/kit';
 import { sendWelcomeEmail } from '$lib/server/emailjs';
+import { isRateLimited, clientIp } from '$lib/server/rate-limit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -12,6 +13,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	default: async ({ request, cookies }) => {
+		// Rate limit: 5 registrations per IP per hour
+		const ip = clientIp(request);
+		if (isRateLimited(`register:${ip}`, 5, 60 * 60 * 1000)) {
+			return fail(429, { error: 'Too many registration attempts. Please try again later.' });
+		}
+
 		const data = await request.formData();
 		const displayName = data.get('displayName') as string;
 		const email       = data.get('email')       as string;
