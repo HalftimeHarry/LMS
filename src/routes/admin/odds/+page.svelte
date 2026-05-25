@@ -12,6 +12,7 @@
 	const weekNum      = $derived(data.weekNum      as number);
 	const games        = $derived(data.games        as any[]);
 	const weekSummary  = $derived(data.weekSummary  as any[]);
+	const isSuperAdmin = $derived(!!(data as any).isSuperAdmin);
 
 	// Is the current week fully activated?
 	const currentSummary = $derived(weekSummary.find((w: any) => w.week === weekNum));
@@ -95,11 +96,12 @@
 <div class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
 	<div>
 		<h1 class="text-2xl font-bold text-white">Manage Odds</h1>
-		{#if activeSeason && seasons?.length <= 1}
+		{#if activeSeason}
 			<p class="mt-1 text-sm text-gray-500">{activeSeason.name}</p>
 		{/if}
 	</div>
-	{#if seasons?.length > 1}
+	<!-- Season selector — super_admin only; pool_admin gets the active season automatically -->
+	{#if isSuperAdmin && seasons?.length > 1}
 		<div class="flex items-center gap-2">
 			<label for="season-select" class="text-xs font-medium uppercase tracking-wider text-gray-500">Season</label>
 			<select
@@ -118,7 +120,7 @@
 
 {#if !activeSeason}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
-		<p class="text-sm text-gray-500">Select a season above to view and manage odds.</p>
+		<p class="text-sm text-gray-500">No active season found.</p>
 	</div>
 {:else}
 

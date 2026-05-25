@@ -27,13 +27,15 @@ function buildStats(entries: any[], season: any, totalUsers: number) {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const pb = await pbAdmin();
+	const pb            = await pbAdmin();
+	const isSuperAdmin  = locals.role === 'super_admin';
 
 	const seasonProvider = new SeasonProvider(pb);
 	const entryProvider  = new EntryProvider(pb);
 	const weekProvider   = new WeekProvider(pb);
 
-	const seasons      = await seasonProvider.getAll();
+	const allSeasons    = await seasonProvider.getAll();
+	const seasons       = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
 	const activeSeasons = seasons.filter(s => s.status === 'active' || s.status === 'open');
 	// Default selected season: first LMS one, fallback to first active
 	const activeSeason = activeSeasons.find(s => !s.name?.toLowerCase().includes('second half'))
@@ -81,8 +83,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	// Seed a new test season pair (LMS + Second Half)
-	seedTestSeason: async ({ request }) => {
+	// Seed a new test season pair (LMS + Second Half) — super_admin only
+	seedTestSeason: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const formData = await request.formData();
 		const interval = (formData.get('interval') ?? '1h') as '1h' | '1d';
@@ -98,8 +101,9 @@ export const actions: Actions = {
 		}
 	},
 
-	// Clear a single test season and all its data
-	clearTestSeason: async ({ request }) => {
+	// Clear a single test season and all its data — super_admin only
+	clearTestSeason: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const formData = await request.formData();
 		const seasonId = formData.get('seasonId') as string;
@@ -112,8 +116,9 @@ export const actions: Actions = {
 		}
 	},
 
-	// Clear all test seasons then seed a fresh pair
-	resetTestSeason: async ({ request }) => {
+	// Clear all test seasons then seed a fresh pair — super_admin only
+	resetTestSeason: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const formData = await request.formData();
 		const interval  = (formData.get('interval') ?? '1h') as '1h' | '1d';

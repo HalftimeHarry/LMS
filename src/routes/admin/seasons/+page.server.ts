@@ -2,9 +2,13 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	const pb = await pbAdmin();
-	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
+export const load: PageServerLoad = async ({ locals }) => {
+	const pb           = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
+	const allSeasons   = await pb.collection('seasons').getFullList({ sort: '-year' });
+	const seasons      = isSuperAdmin
+		? allSeasons
+		: (allSeasons as any[]).filter((s: any) => !s.name?.includes('[TEST]'));
 	return { seasons };
 };
 

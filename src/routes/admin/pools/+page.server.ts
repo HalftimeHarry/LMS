@@ -2,14 +2,19 @@ import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	const pb = await pbAdmin();
+export const load: PageServerLoad = async ({ locals }) => {
+	const pb           = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
 
-	// All active seasons
-	const seasons = await pb.collection('seasons').getFullList({
+	// All active seasons — pool_admin sees no [TEST] seasons
+	const allSeasons = await pb.collection('seasons').getFullList({
 		filter: 'status = "active" || status = "open"',
 		sort:   'name'
 	}).catch(() => []);
+
+	const seasons = isSuperAdmin
+		? allSeasons
+		: (allSeasons as any[]).filter((s: any) => !s.name?.includes('[TEST]'));
 
 	// All weeks for active seasons, sorted
 	const seasonIds = seasons.map((s: any) => s.id);
