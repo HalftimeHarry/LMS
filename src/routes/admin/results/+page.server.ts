@@ -2,150 +2,194 @@ import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
-	const pb       = await pbAdmin();
-	const seasonId  = url.searchParams.get('season') ?? '';
-	const weekParam = url.searchParams.get('week');
+// ── helpers ───────────────────────────────────────────────────────────────────
 
-	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => []) as any[];
-
-	// No auto-default — require explicit ?season= param to prevent acting on wrong season
-	const activeSeason = seasonId
-		? (seasons.find((s: any) => s.id === seasonId) ?? null)
-		: null;
-
-	if (!activeSeason) {
-		return { seasons, activeSeason: null, weekNum: 1, weekSetting: null, games: [], picks: [], pickResults: [] };
-	}
-
-	// Smart default: locked/results_pending first, then most recent complete, then week 1
-	let weekNum = weekParam ? Number(weekParam) : 0;
-	if (!weekNum) {
-		const allWeeksForDefault = await pb.collection('weekly_settings').getFullList({
-			filter: `season = "${activeSeason.id}"`,
-			fields: 'week,status',
-			sort:   'week'
-		}).catch(() => []) as any[];
-
-		// Priority: locked (needs results) → results_pending → open → last complete
-		const locked          = allWeeksForDefault.find((w: any) => w.status === 'locked');
-		const resultsPending  = allWeeksForDefault.find((w: any) => w.status === 'results_pending');
-		const firstOpen       = allWeeksForDefault.find((w: any) => w.status === 'open');
-		const lastComplete    = [...allWeeksForDefault].reverse().find((w: any) => w.status === 'complete');
-
-		weekNum = locked?.week ?? resultsPending?.week ?? firstOpen?.week ?? lastComplete?.week ?? 1;
-
-		// Redirect to canonical URL so the tab highlights correctly
-		const { redirect } = await import('@sveltejs/kit');
-		redirect(302, `/admin/results?season=${activeSeason.id}&week=${weekNum}`);
-	}
-
-	// Week setting for selected week
-	const weekSetting = await pb.collection('weekly_settings')
-		.getFirstListItem(`season = "${activeSeason.id}" && week = ${weekNum}`, { expand: 'biggestFavoriteTeam' })
-		.catch(() => null) as any;
-
-	// Games for this week with teams expanded
-	const games = await pb.collection('game_odds').getFullList({
-		filter: `season = "${activeSeason.id}" && week = ${weekNum}`,
-		expand: 'homeTeam,awayTeam',
-		sort:   'gameTime'
-	}).catch(() => []) as any[];
-
-	// All picks for this week with entry + user + teams expanded
-	const picks = weekSetting
+async function fetchPicksAndResults(pb: any, weekId: string) {
+	const picks = weekId
 		? await pb.collection('picks').getFullList({
-				filter: `week = "${weekSetting.id}"`,
+				filter: `week = "${weekId}"`,
 				expand: 'entry,entry.user,pickedTeams',
 				sort:   'created'
 		  }).catch(() => []) as any[]
 		: [];
 
-	// Existing pick_results for this week's picks
 	const pickIds = picks.map((p: any) => p.id);
 	let pickResults: any[] = [];
-	if (pickIds.length) {
-		const CHUNK = 20;
-		for (let i = 0; i < pickIds.length; i += CHUNK) {
-			const chunk  = pickIds.slice(i, i + CHUNK);
-			const filter = chunk.map((id: string) => `pick = "${id}"`).join(' || ');
-			const batch  = await pb.collection('pick_results').getFullList({ filter, expand: 'team' }).catch(() => []);
-			pickResults.push(...batch);
-		}
+	const CHUNK = 20;
+	for (let i = 0; i < pickIds.length; i += CHUNK) {
+		const chunk  = pickIds.slice(i, i + CHUNK);
+		const filter = chunk.map((id: string) => `pick = "${id}"`).join(' || ');
+		const batch  = await pb.collection('pick_results').getFullList({ filter }).catch(() => []);
+		pickResults.push(...batch);
+	}
+	return { picks, pickResults };
+}
+
+// ── load ──────────────────────────────────────────────────────────────────────
+
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const pb        = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
+	const yearParam = url.searchParams.get('year') ?? '';
+	const weekParam = url.searchParams.get('week');
+
+	// All seasons — pool_admin sees no [TEST] seasons
+	const allSeasons = await pb.collection('seasons').getFullList({ sort: '-year' }).catch(() => []) as any[];
+	const seasons    = isSuperAdmin ? allSeasons : allSeasons.filter((s: any) => !s.name?.includes('[TEST]'));
+
+	// Group real seasons into year-pairs: { year, lmsSeason, shSeason }
+	const yearMap = new Map<string, { lms: any; sh: any }>();
+	for (const s of seasons.filter((s: any) => !s.name?.includes('[TEST]'))) {
+		const key = String(s.year ?? '');
+		if (!yearMap.has(key)) yearMap.set(key, { lms: null, sh: null });
+		const pair = yearMap.get(key)!;
+		if (s.secondHalfEnabled && !s.lmsEnabled) pair.sh  = s;
+		else                                       pair.lms = s;
+	}
+	const yearPairs = [...yearMap.entries()]
+		.map(([year, pair]) => ({ year, lms: pair.lms, sh: pair.sh }))
+		.filter(p => p.lms || p.sh)
+		.sort((a, b) => Number(b.year) - Number(a.year));
+
+	// Active pair — default to most recent
+	const activePair = yearParam
+		? (yearPairs.find(p => p.year === yearParam) ?? yearPairs[0] ?? null)
+		: (yearPairs[0] ?? null);
+
+	if (!activePair) {
+		return { seasons, yearPairs, activePair: null, weekNum: 1, lmsWeek: null, shWeek: null, games: [], lmsPicks: [], shPicks: [], lmsPickResults: [], shPickResults: [], allWeeks: [] };
 	}
 
-	// Week nav — which weeks exist and their status
+	// Use LMS season as the source of truth for week nav + games (same NFL schedule)
+	const anchorSeason = activePair.lms ?? activePair.sh;
+
+	// Smart default week: locked → results_pending → open → last complete
+	let weekNum = weekParam ? Number(weekParam) : 0;
+	if (!weekNum) {
+		const allWeeksForDefault = await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${anchorSeason.id}"`,
+			fields: 'week,status',
+			sort:   'week'
+		}).catch(() => []) as any[];
+
+		const locked         = allWeeksForDefault.find((w: any) => w.status === 'locked');
+		const resultsPending = allWeeksForDefault.find((w: any) => w.status === 'results_pending');
+		const firstOpen      = allWeeksForDefault.find((w: any) => w.status === 'open');
+		const lastComplete   = [...allWeeksForDefault].reverse().find((w: any) => w.status === 'complete');
+		weekNum = locked?.week ?? resultsPending?.week ?? firstOpen?.week ?? lastComplete?.week ?? 1;
+
+		const { redirect } = await import('@sveltejs/kit');
+		redirect(302, `/admin/results?year=${activePair.year}&week=${weekNum}`);
+	}
+
+	// Load week settings for both seasons in parallel
+	const [lmsWeek, shWeek] = await Promise.all([
+		activePair.lms
+			? pb.collection('weekly_settings')
+				.getFirstListItem(`season = "${activePair.lms.id}" && week = ${weekNum}`, { expand: 'biggestFavoriteTeam' })
+				.catch(() => null)
+			: null,
+		activePair.sh
+			? pb.collection('weekly_settings')
+				.getFirstListItem(`season = "${activePair.sh.id}" && week = ${weekNum}`, { expand: 'biggestFavoriteTeam' })
+				.catch(() => null)
+			: null,
+	]) as [any, any];
+
+	// Games come from the LMS season (same schedule for both pools)
+	const games = await pb.collection('game_odds').getFullList({
+		filter: `season = "${anchorSeason.id}" && week = ${weekNum}`,
+		expand: 'homeTeam,awayTeam',
+		sort:   'gameTime'
+	}).catch(() => []) as any[];
+
+	// Picks + results for each pool in parallel
+	const [lmsData, shData] = await Promise.all([
+		lmsWeek ? fetchPicksAndResults(pb, lmsWeek.id) : { picks: [], pickResults: [] },
+		shWeek  ? fetchPicksAndResults(pb, shWeek.id)  : { picks: [], pickResults: [] },
+	]);
+
+	// Week nav from anchor season
 	const allWeeks = await pb.collection('weekly_settings').getFullList({
-		filter: `season = "${activeSeason.id}"`,
+		filter: `season = "${anchorSeason.id}"`,
 		fields: 'id,week,status',
 		sort:   'week'
 	}).catch(() => []) as any[];
 
+	// 2H start week from season config
+	const shStartWeek = activePair.sh?.secondHalfStartWeek ?? 6;
+
 	return {
 		seasons,
-		activeSeason,
+		yearPairs,
+		activePair,
 		weekNum,
-		weekSetting,
+		lmsWeek,
+		shWeek,
 		games,
-		picks,
-		pickResults,
-		allWeeks
+		lmsPicks:       lmsData.picks,
+		shPicks:        shData.picks,
+		lmsPickResults: lmsData.pickResults,
+		shPickResults:  shData.pickResults,
+		allWeeks,
+		shStartWeek,
 	};
 };
 
 export const actions: Actions = {
 	/**
-	 * Record game outcomes for a week.
-	 * Expects form fields:
-	 *   gameId_<id> = 'home' | 'away' | 'tie'   (which side won)
+	 * Record game outcomes for a week — applies to both LMS and 2H simultaneously.
 	 *
-	 * For each game with a result:
-	 *   - Determines the winning team ID
-	 *   - Finds all picks that included that team
-	 *   - Creates/updates pick_results (correct for winners, incorrect for losers)
+	 * Form fields:
+	 *   gameId_<id>  = 'home' | 'away' | 'tie'
+	 *   lmsWeekId    = weekly_settings id for the LMS season (may be empty)
+	 *   shWeekId     = weekly_settings id for the 2H season (may be empty)
+	 *   lmsSeasonId  = LMS season id
+	 *   shSeasonId   = 2H season id
+	 *   weekNum      = NFL week number
+	 *   draft        = '1' → keep weeks at locked (partial save); omit → advance to results_pending
 	 *
-	 * After all results are recorded:
-	 *   - Entries whose picks are ALL correct → stay active
-	 *   - Entries with ANY incorrect pick → eliminated
-	 *   - Week status → results_pending (admin confirms → complete via weeks page)
+	 * Elimination logic:
+	 *   LMS:      picked team WINS  → eliminated
+	 *   2H:       picked team LOSES → eliminated
+	 *
+	 * Draft mode: saves pick_results and fires eliminations immediately so
+	 * standings update live, but leaves week status as 'locked'.
 	 */
 	recordResults: async ({ request }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
-		const weekId   = data.get('weekId')   as string;
-		const seasonId = data.get('seasonId') as string;
-		const weekNum  = Number(data.get('weekNum'));
+		const lmsWeekId  = (data.get('lmsWeekId')  as string) || null;
+		const shWeekId   = (data.get('shWeekId')   as string) || null;
+		const lmsSeasonId = (data.get('lmsSeasonId') as string) || null;
+		const shSeasonId  = (data.get('shSeasonId')  as string) || null;
+		const weekNum    = Number(data.get('weekNum'));
+		const isDraft    = data.get('draft') === '1';
 
-		if (!weekId) return fail(400, { error: 'Week is required.' });
+		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 
-		// Parse game outcomes from form: gameId_<id> = home|away|tie
+		// Parse game outcomes: gameId_<id> = home|away|tie
 		const outcomes: Record<string, 'home' | 'away' | 'tie'> = {};
 		for (const [key, val] of data.entries()) {
 			if (key.startsWith('gameId_')) {
-				const gameId = key.replace('gameId_', '');
-				outcomes[gameId] = val as 'home' | 'away' | 'tie';
+				outcomes[key.replace('gameId_', '')] = val as 'home' | 'away' | 'tie';
 			}
 		}
+		if (!Object.keys(outcomes).length) return fail(400, { error: 'No game outcomes provided.' });
 
-		if (!Object.keys(outcomes).length) {
-			return fail(400, { error: 'No game outcomes provided.' });
-		}
-
-		// Load games to get team IDs
+		// Load games from whichever season has them (same schedule for both)
+		const anchorSeasonId = lmsSeasonId ?? shSeasonId!;
 		const games = await pb.collection('game_odds').getFullList({
-			filter: `season = "${seasonId}" && week = ${weekNum}`,
+			filter: `season = "${anchorSeasonId}" && week = ${weekNum}`,
 			expand: 'homeTeam,awayTeam'
 		}).catch(() => []) as any[];
 
-		// Build map: teamId → 'correct' | 'incorrect' based on outcomes
-		// 'correct' = team won. Elimination logic differs by pool type:
-		//   LMS:        pick a team to LOSE → eliminated if picked team WINS (result=correct)
-		//   2nd Half:   pick a team to WIN  → eliminated if picked team LOSES (result=incorrect)
+		// Build teamId → result map from entered outcomes
 		const teamResult: Record<string, 'correct' | 'incorrect'> = {};
 		for (const game of games) {
 			const outcome = outcomes[game.id];
-			if (!outcome) continue; // no result entered for this game yet
+			if (!outcome) continue;
 			const homeId = game.expand?.homeTeam?.id ?? game.homeTeam;
 			const awayId = game.expand?.awayTeam?.id ?? game.awayTeam;
 			if (outcome === 'home') {
@@ -155,140 +199,148 @@ export const actions: Actions = {
 				teamResult[awayId] = 'correct';
 				teamResult[homeId] = 'incorrect';
 			} else {
-				// tie — both teams correct (neither side loses)
+				// tie — neither side loses
 				teamResult[homeId] = 'correct';
 				teamResult[awayId] = 'correct';
 			}
 		}
 
-		// Load all picks for this week
-		const picks = await pb.collection('picks').getFullList({
-			filter: `week = "${weekId}"`,
-			expand: 'entry'
-		}).catch(() => []) as any[];
-
 		let resultsWritten = 0;
 		let eliminated     = 0;
 
-		// For each pick, write pick_results for each picked team
-		for (const pick of picks) {
-			const teams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
-			const isLms = pick.entryType === 'lms';
-			let shouldEliminate = false;
+		// Process picks for a single week record
+		async function processWeek(weekId: string, seasonId: string) {
+			const picks = await pb.collection('picks').getFullList({
+				filter: `week = "${weekId}"`,
+				expand: 'entry'
+			}).catch(() => []) as any[];
 
-			for (const teamId of teams) {
-				const result = teamResult[teamId];
-				if (!result) continue; // game not yet recorded — skip
+			for (const pick of picks) {
+				const teams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
+				const isLms = pick.entryType === 'lms';
+				let shouldEliminate = false;
 
-				// LMS:       eliminated when picked team WINS (result=correct)
-				// 2nd Half:  eliminated when picked team LOSES (result=incorrect)
-				if (isLms ? result === 'correct' : result === 'incorrect') {
-					shouldEliminate = true;
-				}
+				for (const teamId of teams) {
+					const result = teamResult[teamId];
+					if (!result) continue; // game not yet entered — skip
 
-				// Upsert pick_result
-				const existing = await pb.collection('pick_results')
-					.getFirstListItem(`pick = "${pick.id}" && team = "${teamId}"`)
-					.catch(() => null) as any;
-
-				try {
-					if (existing) {
-						await pb.collection('pick_results').update(existing.id, { result });
-					} else {
-						await pb.collection('pick_results').create({ pick: pick.id, team: teamId, result });
+					if (isLms ? result === 'correct' : result === 'incorrect') {
+						shouldEliminate = true;
 					}
-					resultsWritten++;
-				} catch { /* skip */ }
+
+					// Upsert pick_result
+					const existing = await pb.collection('pick_results')
+						.getFirstListItem(`pick = "${pick.id}" && team = "${teamId}"`)
+						.catch(() => null) as any;
+					try {
+						if (existing) {
+							await pb.collection('pick_results').update(existing.id, { result });
+						} else {
+							await pb.collection('pick_results').create({ pick: pick.id, team: teamId, result });
+						}
+						resultsWritten++;
+					} catch { /* skip */ }
+				}
+
+				if (shouldEliminate) {
+					const entry = pick.expand?.entry ?? null;
+					if (entry?.status === 'active') {
+						await pb.collection('entries').update(entry.id, {
+							status:           'eliminated',
+							eliminatedWeek:   weekNum,
+							eliminatedReason: isLms ? 'Picked a winning team' : 'Picked a losing team'
+						}).catch(() => {});
+						eliminated++;
+					}
+				}
 			}
 
-			// Eliminate entry if pick outcome triggers elimination for this pool type
-			if (shouldEliminate) {
-				const entry = pick.expand?.entry ?? null;
-				if (entry && entry.status === 'active') {
-					await pb.collection('entries').update(entry.id, {
-						status:           'eliminated',
-						eliminatedWeek:   weekNum,
-						eliminatedReason: isLms ? 'Picked a winning team' : 'Picked a losing team'
-					}).catch(() => {});
-					eliminated++;
+			// Advance week status unless draft save or already complete
+			if (!isDraft) {
+				const weekRec = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+				if (weekRec?.status !== 'complete') {
+					await pb.collection('weekly_settings').update(weekId, { status: 'results_pending' }).catch(() => {});
 				}
 			}
 		}
 
-		// Advance week to results_pending (only if not already complete)
-		const weekRec = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
-		if (weekRec?.status !== 'complete') {
-			await pb.collection('weekly_settings').update(weekId, { status: 'results_pending' }).catch(() => {});
-		}
+		// Run both pools in parallel
+		await Promise.all([
+			lmsWeekId ? processWeek(lmsWeekId, lmsSeasonId!) : Promise.resolve(),
+			shWeekId  ? processWeek(shWeekId,  shSeasonId!)  : Promise.resolve(),
+		]);
 
-		return { success: true, resultsWritten, eliminated };
+		return { success: true, resultsWritten, eliminated, isDraft };
 	},
 
 	/**
-	 * Mark a week complete after results have been reviewed.
-	 * Transitions: results_pending → complete
-	 */
-	/**
-	 * Reset a week back to locked state — clears all pick_results, reinstates
-	 * eliminated entries, and sets week status back to locked so results can
-	 * be re-entered from scratch.
+	 * Reset results for both LMS and 2H weeks simultaneously.
+	 * Clears pick_results, reinstates eliminated entries, returns weeks to locked.
 	 */
 	resetWeekResults: async ({ request }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
-		const weekId   = data.get('weekId')   as string;
-		const seasonId = data.get('seasonId') as string;
-		if (!weekId || !seasonId) return fail(400, { error: 'weekId and seasonId required.' });
 
-		// Find all picks for this week
-		const picks = await pb.collection('picks').getFullList({
-			filter: `week = "${weekId}"`, fields: 'id'
-		}).catch(() => []) as any[];
+		const lmsWeekId   = (data.get('lmsWeekId')   as string) || null;
+		const shWeekId    = (data.get('shWeekId')    as string) || null;
+		const lmsSeasonId = (data.get('lmsSeasonId') as string) || null;
+		const shSeasonId  = (data.get('shSeasonId')  as string) || null;
+		const weekNum     = Number(data.get('weekNum'));
 
-		// Delete all pick_results for those picks
+		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
+
 		const CHUNK = 20;
 		let deletedResults = 0;
-		for (let i = 0; i < picks.length; i += CHUNK) {
-			const chunk  = picks.slice(i, i + CHUNK);
-			const filter = chunk.map((p: any) => `pick = "${p.id}"`).join(' || ');
-			const results = await pb.collection('pick_results').getFullList({ filter }).catch(() => []) as any[];
-			for (const r of results) {
-				await pb.collection('pick_results').delete(r.id).catch(() => {});
-				deletedResults++;
+		let reinstated     = 0;
+
+		async function resetWeek(weekId: string, seasonId: string) {
+			const picks = await pb.collection('picks').getFullList({
+				filter: `week = "${weekId}"`, fields: 'id'
+			}).catch(() => []) as any[];
+
+			for (let i = 0; i < picks.length; i += CHUNK) {
+				const chunk  = picks.slice(i, i + CHUNK);
+				const filter = chunk.map((p: any) => `pick = "${p.id}"`).join(' || ');
+				const results = await pb.collection('pick_results').getFullList({ filter }).catch(() => []) as any[];
+				for (const r of results) {
+					await pb.collection('pick_results').delete(r.id).catch(() => {});
+					deletedResults++;
+				}
 			}
+
+			const elim = await pb.collection('entries').getFullList({
+				filter: `season = "${seasonId}" && status = "eliminated" && eliminatedWeek = ${weekNum}`
+			}).catch(() => []) as any[];
+			for (const e of elim) {
+				await pb.collection('entries').update(e.id, {
+					status: 'active', eliminatedWeek: 0, eliminatedReason: ''
+				}).catch(() => {});
+				reinstated++;
+			}
+
+			await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
 		}
 
-		// Find the week number so we can match eliminatedWeek
-		const weekRecord = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
-		const weekNum = weekRecord?.week ?? 0;
+		await Promise.all([
+			lmsWeekId ? resetWeek(lmsWeekId, lmsSeasonId!) : Promise.resolve(),
+			shWeekId  ? resetWeek(shWeekId,  shSeasonId!)  : Promise.resolve(),
+		]);
 
-		// Reinstate entries eliminated this week
-		const eliminated = await pb.collection('entries').getFullList({
-			filter: `season = "${seasonId}" && status = "eliminated" && eliminatedWeek = ${weekNum}`
-		}).catch(() => []) as any[];
-		for (const e of eliminated) {
-			await pb.collection('entries').update(e.id, {
-				status: 'active', eliminatedWeek: 0, eliminatedReason: ''
-			}).catch(() => {});
-		}
-
-		// Reset week status to locked
-		await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
-
-		return {
-			resetDone: true,
-			deletedResults,
-			reinstated: eliminated.length,
-		};
+		return { resetDone: true, deletedResults, reinstated };
 	},
 
+	// Mark both LMS and 2H weeks complete simultaneously
 	completeWeek: async ({ request }) => {
-		const pb   = await pbAdmin();
-		const data = await request.formData();
-		const weekId = data.get('weekId') as string;
-		if (!weekId) return fail(400, { error: 'Week is required.' });
+		const pb         = await pbAdmin();
+		const data       = await request.formData();
+		const lmsWeekId  = (data.get('lmsWeekId') as string) || null;
+		const shWeekId   = (data.get('shWeekId')  as string) || null;
+		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 		try {
-			await pb.collection('weekly_settings').update(weekId, { status: 'complete' });
+			await Promise.all([
+				lmsWeekId ? pb.collection('weekly_settings').update(lmsWeekId, { status: 'complete' }) : Promise.resolve(),
+				shWeekId  ? pb.collection('weekly_settings').update(shWeekId,  { status: 'complete' }) : Promise.resolve(),
+			]);
 		} catch (e: any) {
 			return fail(400, { error: e?.message ?? 'Failed.' });
 		}
@@ -300,37 +352,36 @@ export const actions: Actions = {
 	 * Transitions: open → locked
 	 * Also auto-assigns biggestFavoriteTeam pick to entries that haven't picked.
 	 */
+	// Lock both LMS and 2H weeks simultaneously, auto-picking for each
 	lockWeek: async ({ request }) => {
-		const pb   = await pbAdmin();
-		const data = await request.formData();
-		const weekId   = data.get('weekId')   as string;
-		const seasonId = data.get('seasonId') as string;
-		const weekNum  = Number(data.get('weekNum'));
+		const pb         = await pbAdmin();
+		const data       = await request.formData();
+		const lmsWeekId  = (data.get('lmsWeekId')   as string) || null;
+		const shWeekId   = (data.get('shWeekId')    as string) || null;
+		const lmsSeasonId = (data.get('lmsSeasonId') as string) || null;
+		const shSeasonId  = (data.get('shSeasonId')  as string) || null;
+		const weekNum    = Number(data.get('weekNum'));
 
-		if (!weekId) return fail(400, { error: 'Week is required.' });
+		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 
-		// Lock the week
-		await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
+		let autoPicked = 0;
 
-		// Auto-pick: assign biggestFavoriteTeam to entries that haven't picked
-		const weekSetting = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
-		const autoTeamId  = weekSetting?.biggestFavoriteTeam ?? null;
-		let   autoPicked  = 0;
+		async function lockOne(weekId: string, seasonId: string) {
+			await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
 
-		if (autoTeamId && seasonId) {
-			// Active entries for this season
+			const weekSetting = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+			const autoTeamId  = weekSetting?.biggestFavoriteTeam ?? null;
+			if (!autoTeamId) return;
+
 			const entries = await pb.collection('entries').getFullList({
 				filter: `season = "${seasonId}" && status = "active"`
 			}).catch(() => []) as any[];
 
-			// Entries that already have a pick this week
 			const existingPicks = await pb.collection('picks').getFullList({
-				filter: `week = "${weekId}"`,
-				fields: 'entry'
+				filter: `week = "${weekId}"`, fields: 'entry'
 			}).catch(() => []) as any[];
 			const pickedEntryIds = new Set(existingPicks.map((p: any) => p.entry));
 
-			// Create auto-picks for entries that missed the deadline
 			for (const entry of entries) {
 				if (pickedEntryIds.has(entry.id)) continue;
 				try {
@@ -342,9 +393,14 @@ export const actions: Actions = {
 						isAutoPick:  true
 					});
 					autoPicked++;
-				} catch { /* skip — may already exist */ }
+				} catch { /* skip */ }
 			}
 		}
+
+		await Promise.all([
+			lmsWeekId ? lockOne(lmsWeekId, lmsSeasonId!) : Promise.resolve(),
+			shWeekId  ? lockOne(shWeekId,  shSeasonId!)  : Promise.resolve(),
+		]);
 
 		return { success: true, autoPicked };
 	},
