@@ -1,237 +1,143 @@
-# Hosting on Bluehost
+# Deploying The Blizzard of Odds
 
-## The core problem
+## Stack
 
-This app is a **server-side rendered SvelteKit application**. It runs Node.js on every request — it is not a static site. Bluehost shared hosting does not support persistent Node.js processes.
-
-**Your options on Bluehost:**
-
-| Plan | Node.js SSR? | Verdict |
-|------|-------------|---------|
-| Shared hosting | ❌ No | Won't work |
-| VPS (unmanaged) | ✅ Yes | Works — requires manual setup |
-| Cloud (managed VPS) | ✅ Yes | Works — easier |
-
-If you are on a shared plan, you need to either upgrade to a Bluehost VPS or use a different host. The current stack (Netlify + Railway) is cheaper and simpler for this app — see the bottom of this doc.
+| Layer | Service | URL |
+|-------|---------|-----|
+| Frontend (SvelteKit) | Netlify | theblizzardofodds.com |
+| Backend (PocketBase) | Railway | your-pocketbase.up.railway.app |
 
 ---
 
-## Option A — Bluehost VPS
+## 1. Deploy Frontend to Netlify
 
-### What you need
+### Connect the repository
 
-- Bluehost VPS plan (Ubuntu recommended)
-- SSH access to the server
-- A domain pointed at the VPS IP
+1. Push the project to GitHub (already done)
+2. Log in to [netlify.com](https://netlify.com)
+3. Click **Add new site → Import from GitHub**
+4. Select the `LMS` repository
 
-### 1. Point your domain
+### Build settings
 
-In Bluehost DNS settings, set an A record for your domain (e.g. `lmspool.com`) pointing to your VPS IP address. Allow up to 24 hours for propagation.
+| Setting | Value |
+|---------|-------|
+| Base directory | *(leave blank)* |
+| Build command | `npm run build` |
+| Publish directory | `build` |
 
-### 2. Install Node.js on the VPS
+The `netlify.toml` in the repo root sets these automatically — Netlify will detect it.
 
-SSH into the server, then:
+### SvelteKit adapter
 
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node -v   # should print v22.x
-```
-
-### 3. Install pnpm
-
-```bash
-npm install -g pnpm
-```
-
-### 4. Install and configure Nginx
-
-Nginx acts as a reverse proxy — it receives HTTP/HTTPS traffic and forwards it to the Node.js process.
-
-```bash
-sudo apt-get install -y nginx
-```
-
-Create `/etc/nginx/sites-available/lms`:
-
-```nginx
-server {
-    listen 80;
-    server_name lmspool.com www.lmspool.com;
-
-    location / {
-        proxy_pass         http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header   Upgrade $http_upgrade;
-        proxy_set_header   Connection 'upgrade';
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Enable it:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/lms /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-### 5. Install SSL (HTTPS)
-
-```bash
-sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d lmspool.com -d www.lmspool.com
-```
-
-Certbot auto-renews. Verify with:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-### 6. Switch the SvelteKit adapter
-
-The app currently uses `@sveltejs/adapter-netlify`. For a Node.js VPS you need `@sveltejs/adapter-node`.
-
-```bash
-pnpm remove @sveltejs/adapter-netlify
-pnpm add -D @sveltejs/adapter-node
-```
-
-Update `svelte.config.js`:
-
-```js
-import adapter from '@sveltejs/adapter-node';
-
-const config = {
-    kit: {
-        adapter: adapter({ out: 'build' })
-    }
-};
-
-export default config;
-```
-
-Remove `netlify.toml` (no longer needed).
-
-### 7. Deploy the app
-
-On the VPS, clone the repo and build:
-
-```bash
-git clone https://github.com/HalftimeHarry/LMS.git /var/www/lms
-cd /var/www/lms
-cp .env.example .env
-# Edit .env with production values (see Environment Variables section below)
-pnpm install --frozen-lockfile
-pnpm build
-```
-
-### 8. Run with PM2 (process manager)
-
-PM2 keeps the app running and restarts it on crash or reboot.
-
-```bash
-npm install -g pm2
-pm2 start build/index.js --name lms -- --port 3000
-pm2 save
-pm2 startup   # follow the printed command to enable auto-start on reboot
-```
-
-Check it's running:
-
-```bash
-pm2 status
-pm2 logs lms
-```
-
-### 9. Deploying updates
-
-```bash
-cd /var/www/lms
-git pull
-pnpm install --frozen-lockfile
-pnpm build
-pm2 restart lms
-```
+Already configured. `svelte.config.js` uses `@sveltejs/adapter-netlify` and `netlify.toml` is present.
 
 ---
 
-## Option B — Keep Netlify + Railway (recommended)
+## 2. Configure Custom Domain
 
-The current setup already works and costs less than a Bluehost VPS:
+In Netlify → **Site Settings → Domain Management**:
 
-| Service | Cost | What it runs |
-|---------|------|-------------|
-| Netlify (free tier) | $0/mo | SvelteKit frontend |
-| Railway (hobby) | ~$5/mo | PocketBase backend |
+1. Click **Add a domain**
+2. Add `theblizzardofodds.com`
+3. Add `www.theblizzardofodds.com`
 
-If you want your domain on Bluehost DNS but host the app elsewhere:
-
-1. In Bluehost DNS, add a CNAME record: `www` → `your-netlify-app.netlify.app`
-2. Add an A record for the apex domain using Netlify's load balancer IPs (shown in Netlify domain settings)
-3. Set your custom domain in Netlify → Site settings → Domain management
-
-You keep the Bluehost domain registration and DNS, but the app runs on Netlify.
+Netlify provisions SSL automatically via Let's Encrypt.
 
 ---
 
-## Environment variables
+## 3. Configure DNS
 
-These must be set on whichever host runs the app. On a VPS, put them in `/var/www/lms/.env`. On Netlify, set them in Site settings → Environment variables.
+### Option A — Netlify DNS (recommended)
 
-| Variable | Where to get it |
-|----------|----------------|
-| `PUBLIC_POCKETBASE_URL` | Your Railway PocketBase URL |
-| `PUBLIC_APP_URL` | Your production domain, e.g. `https://lmspool.com` |
-| `POCKETBASE_ADMIN_EMAIL` | PocketBase admin account email |
-| `POCKETBASE_ADMIN_PASSWORD` | PocketBase admin account password |
-| `ODDS_API_KEY` | [the-odds-api.com](https://the-odds-api.com) |
-| `PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile dashboard |
-| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile dashboard |
-| `PUBLIC_EMAILJS_PUBLIC_KEY` | EmailJS dashboard |
-| `EMAILJS_PRIVATE_KEY` | EmailJS dashboard |
-| `EMAILJS_SERVICE_ID` | EmailJS dashboard |
-| `EMAILJS_WELCOME_TEMPLATE_ID` | EmailJS dashboard |
+1. In Netlify domain settings, click **Set up Netlify DNS**
+2. Netlify provides 4 nameservers (e.g. `dns1.p01.nsone.net`)
+3. At your domain registrar (Bluehost), replace the existing nameservers with the Netlify ones
+4. Allow up to 24 hours for propagation
 
-**Never commit `.env` to git.** It is already in `.gitignore`.
+### Option B — Keep existing DNS provider
+
+Add these records at your registrar:
+
+| Type | Name | Value |
+|------|------|-------|
+| CNAME | `www` | `your-site.netlify.app` |
+| A | `@` | *(Netlify load balancer IP — shown in Netlify dashboard)* |
 
 ---
 
-## PocketBase (backend)
+## 4. Deploy PocketBase on Railway
 
-PocketBase is a separate binary — it is not part of the SvelteKit build. It currently runs on Railway. If you want to move it to the same Bluehost VPS:
+PocketBase runs as a separate service from the SvelteKit frontend.
 
-1. Download the PocketBase binary for Linux from [pocketbase.io](https://pocketbase.io/docs/)
-2. Upload it to the VPS: `scp pocketbase user@your-vps-ip:/var/www/pocketbase/`
-3. Make it executable: `chmod +x /var/www/pocketbase/pocketbase`
-4. Run it with PM2:
-   ```bash
-   pm2 start /var/www/pocketbase/pocketbase --name pocketbase -- serve --http=0.0.0.0:8090
-   pm2 save
+1. Create a new project at [railway.app](https://railway.app)
+2. Deploy the PocketBase service (use the PocketBase template or deploy the binary)
+3. Expose port `8090`
+4. Note your generated domain, e.g.:
    ```
-5. Add a second Nginx server block proxying `pb.lmspool.com` → `localhost:8090`
-6. Update `PUBLIC_POCKETBASE_URL` to `https://pb.lmspool.com`
-7. In PocketBase admin → Settings → Application URL, set `https://pb.lmspool.com`
-
-Back up the PocketBase data directory (`pb_data/`) regularly — it contains the SQLite database.
+   https://pocketbase-production-2547.up.railway.app
+   ```
+5. In PocketBase admin → **Settings → Application URL**, set `https://theblizzardofodds.com`
 
 ---
 
-## Pre-launch checklist
+## 5. Environment Variables
 
-- [ ] Domain DNS pointing to host
-- [ ] SSL certificate installed and auto-renewing
-- [ ] All environment variables set
+Set these in **Netlify → Site Settings → Environment Variables**.
+
+| Variable | Description |
+|----------|-------------|
+| `PUBLIC_POCKETBASE_URL` | Railway PocketBase URL |
+| `PUBLIC_APP_URL` | `https://theblizzardofodds.com` |
+| `POCKETBASE_ADMIN_EMAIL` | PocketBase admin email |
+| `POCKETBASE_ADMIN_PASSWORD` | PocketBase admin password |
+| `ODDS_API_KEY` | [the-odds-api.com](https://the-odds-api.com) |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile (public) |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile (secret) |
+| `PUBLIC_EMAILJS_PUBLIC_KEY` | EmailJS (public) |
+| `EMAILJS_PRIVATE_KEY` | EmailJS (private) |
+| `EMAILJS_SERVICE_ID` | EmailJS service ID |
+| `EMAILJS_WELCOME_TEMPLATE_ID` | EmailJS welcome template ID |
+
+See `.env.example` for the full template. Never commit `.env` to GitHub.
+
+---
+
+## 6. Continuous Deployment
+
+Every push to `main` automatically deploys:
+
+- **Frontend** → Netlify (build + CDN deploy)
+- **Backend** → Railway (if connected to GitHub)
+
+No manual SSH or server management required.
+
+---
+
+## Pre-launch Checklist
+
+- [ ] Netlify build succeeds with no errors
+- [ ] Custom domain added in Netlify and DNS propagated
+- [ ] SSL certificate active (Netlify provisions automatically)
+- [ ] All environment variables set in Netlify
 - [ ] `PUBLIC_APP_URL` matches the live domain exactly
-- [ ] PocketBase `ORIGIN` setting matches the live domain
-- [ ] Cloudflare Turnstile site key registered for the live domain
+- [ ] PocketBase Application URL set to `https://theblizzardofodds.com`
+- [ ] Cloudflare Turnstile site registered for `theblizzardofodds.com`
 - [ ] EmailJS templates tested with a real send
 - [ ] PocketBase admin password changed from default
-- [ ] PocketBase `pb_data/` backup scheduled
-- [ ] PM2 startup hook enabled (app survives VPS reboot)
+- [ ] PocketBase `pb_data/` backup scheduled on Railway
+
+---
+
+## Why Netlify + Railway
+
+| | Netlify + Railway | Traditional VPS |
+|--|-------------------|-----------------|
+| Deployments | Automatic on push | Manual SSH |
+| SSL | Automatic | Manual (Certbot) |
+| CDN | Included | Manual setup |
+| Server maintenance | None | Full responsibility |
+| Cost | ~$5/mo (Railway hobby) | $10–20/mo (VPS) |
+| Scaling | Automatic | Manual |
+
+A VPS (e.g. Bluehost Cloud) is only worth considering if you need heavy background jobs, WebSocket scaling, or custom server infrastructure. See `READMEHOST.md` (VPS section) for those instructions.
