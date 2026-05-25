@@ -324,8 +324,9 @@
 				</thead>
 				<tbody>
 					{#each filteredEntries() as entry}
-						{@const isElim  = entry.status === 'eliminated'}
-						{@const isMe    = entry.user === userId}
+						{@const isElim    = entry.status === 'eliminated'}
+						{@const isMe      = entry.user === userId}
+						{@const needsPick = isMe && entry.status === 'active' && openWeeks.some(ow => !pickGrid[entry.id]?.[ow.id])}
 						<tr class="border-b border-gray-800/40 transition hover:bg-white/[0.02]
 							{isElim ? 'opacity-50' : ''}
 							{isMe   ? 'bg-[rgba(201,168,76,0.03)]' : ''}">
@@ -333,11 +334,21 @@
 							<!-- Entry name (sticky) -->
 							<td class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-2.5
 								{isMe ? 'border-l-2 border-[#c9a84c]/40' : ''}">
-								<p class="font-medium leading-tight {isMe ? 'text-[#c9a84c]' : 'text-white'}">
-									{entry.entryName}
-									{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
-								</p>
-								<p class="text-xs text-gray-500">{entry.expand?.user?.displayName ?? ''}</p>
+								<div class="flex items-center gap-2">
+									<div>
+										<p class="font-medium leading-tight {isMe ? 'text-[#c9a84c]' : 'text-white'}">
+											{entry.entryName}
+											{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
+										</p>
+										<p class="text-xs text-gray-500">{entry.expand?.user?.displayName ?? ''}</p>
+									</div>
+									{#if needsPick}
+										<a href="/dashboard/entries/{entry.id}"
+											class="ml-1 shrink-0 rounded border border-yellow-700 bg-yellow-950/50 px-2 py-0.5 text-[10px] font-semibold text-yellow-400 transition hover:bg-yellow-900/60 whitespace-nowrap">
+											⚠ Pick →
+										</a>
+									{/if}
+								</div>
 							</td>
 
 							<!-- Status -->

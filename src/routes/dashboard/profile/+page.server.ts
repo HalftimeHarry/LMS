@@ -3,15 +3,17 @@ import { PUBLIC_POCKETBASE_URL } from '$env/static/public';
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/profile');
+	const pickView = (cookies.get('pick_view') ?? 'entries') as 'entries' | 'standings';
 	return {
 		user: {
 			id:          locals.user.id,
 			displayName: locals.user.displayName as string,
 			email:       locals.user.email       as string,
-			role:        locals.user.role        as string
-		}
+			role:        locals.user.role        as string,
+		},
+		pickView,
 	};
 };
 
@@ -84,5 +86,20 @@ export const actions: Actions = {
 		}
 
 		redirect(302, '/login?message=password_changed');
-	}
+	},
+
+	setPickView: async ({ request, cookies }) => {
+		const data = await request.formData();
+		const view = data.get('pickView') as string;
+		if (view === 'entries' || view === 'standings') {
+			cookies.set('pick_view', view, {
+				path:     '/',
+				httpOnly: true,
+				sameSite: 'lax',
+				secure:   process.env.NODE_ENV === 'production',
+				maxAge:   60 * 60 * 24 * 365, // 1 year
+			});
+		}
+		return { success: true, action: 'pickView' };
+	},
 };

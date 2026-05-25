@@ -12,9 +12,12 @@
 
 	const role = $derived(roleLabel[data.user.role] ?? { label: data.user.role, color: 'bg-gray-800 text-gray-400 border-gray-700' });
 
-	let displayName   = $state(data.user.displayName as string ?? '');
-	let profileLoading = $state(false);
+	let displayName     = $state(data.user.displayName as string ?? '');
+	let profileLoading  = $state(false);
 	let passwordLoading = $state(false);
+	let pickViewLoading = $state(false);
+
+	const pickView = $derived((data as any).pickView as 'entries' | 'standings');
 
 	// Show password section toggle
 	let showPasswordForm = $state(false);
@@ -103,6 +106,68 @@
 				class="rounded bg-[#c9a84c] py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50"
 			>
 				{profileLoading ? 'Saving…' : 'Save changes'}
+			</button>
+		</form>
+	</section>
+
+	<!-- Pick view preference -->
+	<section class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
+		<h2 class="mb-1 text-lg font-semibold text-[#c9a84c]">Pick Preference</h2>
+		<p class="mb-4 text-sm text-gray-500">Choose where "View / Pick" links take you by default.</p>
+
+		{#if form?.action === 'pickView' && form?.success}
+			<p class="mb-4 rounded border border-green-800 bg-green-950/60 px-3 py-2 text-sm text-green-400">Preference saved.</p>
+		{/if}
+
+		<form method="POST" action="?/setPickView" use:enhance={() => {
+			pickViewLoading = true;
+			return async ({ update }) => { await update(); pickViewLoading = false; };
+		}}>
+			<div class="mb-4 grid grid-cols-2 gap-3">
+				<!-- Entries view -->
+				<label class="flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition
+					{pickView === 'entries'
+						? 'border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.08)]'
+						: 'border-gray-700 bg-gray-900/40 hover:border-gray-500'}">
+					<input type="radio" name="pickView" value="entries"
+						checked={pickView === 'entries'}
+						class="sr-only" />
+					<div class="flex items-center gap-2">
+						<span class="text-lg">📋</span>
+						<span class="font-semibold text-white text-sm">Entry Page</span>
+						{#if pickView === 'entries'}
+							<span class="ml-auto text-xs text-[#c9a84c]">current</span>
+						{/if}
+					</div>
+					<p class="text-xs text-gray-500 leading-relaxed">
+						Opens your entry's pick history. Best for reviewing past picks and submitting one entry at a time.
+					</p>
+				</label>
+
+				<!-- Standings view -->
+				<label class="flex cursor-pointer flex-col gap-2 rounded-lg border p-4 transition
+					{pickView === 'standings'
+						? 'border-blue-600 bg-blue-950/20'
+						: 'border-gray-700 bg-gray-900/40 hover:border-gray-500'}">
+					<input type="radio" name="pickView" value="standings"
+						checked={pickView === 'standings'}
+						class="sr-only" />
+					<div class="flex items-center gap-2">
+						<span class="text-lg">🏆</span>
+						<span class="font-semibold text-white text-sm">Standings</span>
+						{#if pickView === 'standings'}
+							<span class="ml-auto text-xs text-blue-400">current</span>
+						{/if}
+					</div>
+					<p class="text-xs text-gray-500 leading-relaxed">
+						Opens the standings grid. Best if you have multiple entries — pick directly from the grid row.
+					</p>
+				</label>
+			</div>
+
+			<button type="submit" disabled={pickViewLoading}
+				class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
+				{pickViewLoading ? 'Saving…' : 'Save preference'}
 			</button>
 		</form>
 	</section>

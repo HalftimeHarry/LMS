@@ -2,10 +2,11 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/entries');
 
-	const pb = await pbAdmin();
+	const pb       = await pbAdmin();
+	const pickView = (cookies.get('pick_view') ?? 'entries') as 'entries' | 'standings';
 
 	const [entries, seasons] = await Promise.all([
 		pb.collection('entries').getFullList({
@@ -19,5 +20,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 	]);
 
-	return { entries, seasons };
+	return { entries, seasons, pickView };
 };
