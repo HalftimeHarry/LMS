@@ -1,5 +1,5 @@
 [build]
-  command = "pnpm build"
+  command = "npm run build"
   publish = "build"
 
 [build.environment]
@@ -8,3 +8,4 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
