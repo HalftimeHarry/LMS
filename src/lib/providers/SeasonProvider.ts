@@ -66,14 +66,30 @@ export class SeasonProvider extends BaseProvider {
 	 * Second Half entries open when:
 	 * - secondHalfEnabled is true (admin toggle)
 	 * - Season status is 'active'
-	 * - Current week >= secondHalfStartWeek (default 6)
+	 * - Now is before the week-6 pick deadline (when week6Deadline is provided)
+	 *   OR current week >= secondHalfStartWeek (legacy fallback when no deadline given)
 	 *
-	 * currentWeek is optional — if not provided the week check is skipped
-	 * (admin-side calls that don't have week context still work).
+	 * week6Deadline: ISO string of the weekly_settings.deadline for week 6 of the
+	 * paired LMS season. When provided this is the canonical entry cutoff — players
+	 * must register before the first week-6 game kicks off.
+	 *
+	 * currentWeek is used as a fallback when week6Deadline is not available.
 	 */
-	static isSecondHalfOpen(season: Season, currentWeek?: number): boolean {
+	static isSecondHalfOpen(
+		season:        Season,
+		currentWeek?:  number,
+		week6Deadline?: string | null,
+		now = new Date()
+	): boolean {
 		if (season.secondHalfEnabled === false) return false;
 		if (season.status !== 'active') return false;
+
+		if (week6Deadline) {
+			// Primary: entry window closes at the week-6 pick deadline
+			return now < new Date(week6Deadline);
+		}
+
+		// Fallback: use week number when no deadline record exists yet
 		if (currentWeek !== undefined) {
 			const startWeek = season.secondHalfStartWeek ?? 6;
 			if (currentWeek < startWeek) return false;
@@ -88,9 +104,14 @@ export class SeasonProvider extends BaseProvider {
 	 * - If only Second Half is open → 'second_half'
 	 * - If neither is open → null (registration closed)
 	 */
-	static defaultEntryType(season: Season, now = new Date(), currentWeek?: number): 'lms' | 'second_half' | null {
+	static defaultEntryType(
+		season:         Season,
+		now             = new Date(),
+		currentWeek?:   number,
+		week6Deadline?: string | null
+	): 'lms' | 'second_half' | null {
 		if (SeasonProvider.isLmsOpen(season, now)) return 'lms';
-		if (SeasonProvider.isSecondHalfOpen(season, currentWeek)) return 'second_half';
+		if (SeasonProvider.isSecondHalfOpen(season, currentWeek, week6Deadline, now)) return 'second_half';
 		return null;
 	}
 

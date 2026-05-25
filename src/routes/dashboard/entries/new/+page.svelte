@@ -12,6 +12,7 @@
 	const selectedSeason   = $derived(seasons.find((s: any) => s.id === selectedSeasonId));
 	const lmsOpen          = $derived(data.lmsOpen        as boolean);
 	const secondHalfOpen   = $derived(data.secondHalfOpen as boolean);
+	const week6Deadline    = $derived((data as any).week6Deadline as string | null);
 
 	// Fee shown in the info blurb
 	const entryFee = $derived(
@@ -105,9 +106,14 @@
 					<div>
 						<p class="text-sm font-semibold text-white">Second Half</p>
 						{#if secondHalfOpen}
-							<p class="text-xs text-gray-500">Pick the <strong class="text-green-400">winner</strong> · Weeks 10–18 · ${selectedSeason?.secondHalfEntryFee ?? '—'}</p>
+							<p class="text-xs text-gray-500">Pick the <strong class="text-green-400">winner</strong> · Starts week 6 · ${selectedSeason?.secondHalfEntryFee ?? '—'}
+								{#if week6Deadline}· Deadline: {new Date(week6Deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}{/if}
+							</p>
 						{:else}
-							<p class="text-xs text-gray-600">Opens when season starts</p>
+							<p class="text-xs text-gray-600">
+								Registration closed
+								{#if week6Deadline} — deadline was {new Date(week6Deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{/if}
+							</p>
 						{/if}
 					</div>
 				</label>

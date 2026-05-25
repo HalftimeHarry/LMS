@@ -4,32 +4,44 @@ import { entryRequestSchema } from '$lib/schemas';
 import { SeasonProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 
+/** Fetch the week-6 pick deadline for a season (the canonical 2H entry cutoff). */
+async function fetchWeek6Deadline(pb: any, seasonId: string, startWeek = 6): Promise<string | null> {
+	const week = await pb.collection('weekly_settings')
+		.getFirstListItem(`season = "${seasonId}" && week = ${startWeek}`, { fields: 'deadline' })
+		.catch(() => null) as any;
+	return week?.deadline ?? null;
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/entries/new');
 
 	const pb             = await pbAdmin();
 	const seasonProvider = new SeasonProvider(pb);
 
-	// Only seasons that have at least one open entry window
+	// Fetch all active/open seasons
 	const allSeasons = await seasonProvider.getAll();
-	const seasons    = allSeasons.filter(s =>
-		SeasonProvider.isLmsOpen(s) || SeasonProvider.isSecondHalfOpen(s)
-	);
+	const activeSeason = allSeasons.find(s => s.status === 'active' || s.status === 'open') ?? null;
 
-	if (seasons.length === 0) redirect(302, '/dashboard/entries');
+	if (!activeSeason) redirect(302, '/dashboard/entries');
 
-	const season          = seasons[0];
-	const defaultEntryType = SeasonProvider.defaultEntryType(season);
+	// Fetch the week-6 deadline from the LMS season (same schedule for both pools)
+	const shStartWeek    = activeSeason.secondHalfStartWeek ?? 6;
+	const week6Deadline  = await fetchWeek6Deadline(pb, activeSeason.id, shStartWeek);
 
-	// If no window is open (shouldn't happen given filter above, but guard anyway)
+	const lmsOpen        = SeasonProvider.isLmsOpen(activeSeason);
+	const secondHalfOpen = SeasonProvider.isSecondHalfOpen(activeSeason, undefined, week6Deadline);
+
+	if (!lmsOpen && !secondHalfOpen) redirect(302, '/dashboard/entries');
+
+	const defaultEntryType = SeasonProvider.defaultEntryType(activeSeason, new Date(), undefined, week6Deadline);
 	if (!defaultEntryType) redirect(302, '/dashboard/entries');
 
 	return {
-		seasons,
+		seasons:        [activeSeason],
 		defaultEntryType,
-		// Pass window state so the UI can show/disable options without extra fetches
-		lmsOpen:        SeasonProvider.isLmsOpen(season),
-		secondHalfOpen: SeasonProvider.isSecondHalfOpen(season)
+		lmsOpen,
+		secondHalfOpen,
+		week6Deadline,
 	};
 };
 
@@ -59,8 +71,13 @@ export const actions: Actions = {
 		if (entryType === 'lms' && !SeasonProvider.isLmsOpen(season)) {
 			return fail(400, { error: 'LMS registration is closed. The first pick deadline has passed.' });
 		}
-		if (entryType === 'second_half' && !SeasonProvider.isSecondHalfOpen(season)) {
-			return fail(400, { error: 'Second Half entries are only available once the season is active.' });
+		if (entryType === 'second_half') {
+			const shStartWeek   = season.secondHalfStartWeek ?? 6;
+			const week6Deadline = await fetchWeek6Deadline(pb, seasonId, shStartWeek);
+			if (!SeasonProvider.isSecondHalfOpen(season, undefined, week6Deadline)) {
+				const cutoff = week6Deadline ? ` The deadline was ${new Date(week6Deadline).toLocaleDateString()}.` : '';
+				return fail(400, { error: `Second Half registration is closed.${cutoff}` });
+			}
 		}
 
 		// Prevent duplicate entry names for same user + season
