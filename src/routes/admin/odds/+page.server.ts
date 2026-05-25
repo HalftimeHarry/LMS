@@ -2,20 +2,37 @@ import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
 	const pb           = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
 	const weekParam    = url.searchParams.get('week');
-	const seasonId     = url.searchParams.get('season') ?? null;
+	const seasonParam  = url.searchParams.get('season') ?? null;
 
-	const seasons = await pb.collection('seasons').getFullList({ sort: '-year' });
+	const allSeasons = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
 
-	// No auto-default — require explicit ?season= param
-	const activeSeason = seasonId
-		? (seasons.find(s => s.id === seasonId) ?? null)
-		: null;
+	// pool_admin never sees [TEST] seasons
+	const seasons = isSuperAdmin
+		? allSeasons
+		: allSeasons.filter((s: any) => !s.name?.includes('[TEST]'));
+
+	// For pool_admin: auto-select the active LMS season — no dropdown needed.
+	// Games are shared across LMS and 2H so one season's odds covers both pools.
+	// For super_admin: honour explicit ?season= param, fall back to first active.
+	let activeSeason: any = null;
+	if (isSuperAdmin) {
+		activeSeason = seasonParam
+			? (seasons.find((s: any) => s.id === seasonParam) ?? null)
+			: null;
+	} else {
+		// Auto-pick: prefer active LMS season, then any active/open season
+		activeSeason =
+			seasons.find((s: any) => (s.status === 'active' || s.status === 'open') && s.lmsEnabled !== false && s.secondHalfEnabled !== true) ??
+			seasons.find((s: any) => s.status === 'active' || s.status === 'open') ??
+			seasons[0] ?? null;
+	}
 
 	if (!activeSeason) {
-		return { seasons, activeSeason: null, weekNum: 1, games: [], teams: [], weekSummary: [] };
+		return { seasons, activeSeason: null, weekNum: 1, games: [], teams: [], weekSummary: [], isSuperAdmin };
 	}
 
 	// Default to the current open week for this season when no ?week= param is set
@@ -61,13 +78,14 @@ export const load: PageServerLoad = async ({ url }) => {
 	).catch(() => null) as any;
 
 	return {
-		seasons:     seasons     as any[],
+		seasons:      seasons      as any[],
 		activeSeason,
 		weekNum,
-		games:       games       as any[],
-		teams:       teams       as any[],
-		weekSummary: weekSummary as any[],
-		weekSetting: weekSetting ?? null,
+		games:        games        as any[],
+		teams:        teams        as any[],
+		weekSummary:  weekSummary  as any[],
+		weekSetting:  weekSetting  ?? null,
+		isSuperAdmin,
 	};
 };
 

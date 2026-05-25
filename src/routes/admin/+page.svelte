@@ -388,6 +388,7 @@
 </div>
 {/if}
 
+{#if isSuperAdmin}
 <!-- Test season management panel -->
 <div class="mb-6 rounded-xl border border-orange-800/50 bg-black/75 p-5 backdrop-blur-sm">
 
@@ -572,6 +573,7 @@
 		{/if}
 	</div>
 </div>
+{/if}
 
 <!-- Pending payment quick list -->
 {#if stats && stats.pendingPayment > 0}

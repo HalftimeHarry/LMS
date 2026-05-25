@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, url, depends }) => {
+export const load: PageServerLoad = async ({ locals, url, depends, cookies }) => {
 	depends('dashboard:season');
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
 	if (locals.role === 'super_admin' || locals.role === 'pool_admin') redirect(302, '/admin');
@@ -102,6 +102,22 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 		})
 	);
 
+	// Load Week 6 (2H start week) deadline for each season that has secondHalfEnabled.
+	// The 2H countdown card shows this deadline before the 2H pool opens.
+	const week6BySeason: Record<string, any> = {};
+	await Promise.all(
+		userSeasons
+			.filter((s: any) => s.secondHalfEnabled !== false)
+			.map(async (s: any) => {
+				const startWeek = s.secondHalfStartWeek ?? 6;
+				const w = await pb.collection('weekly_settings').getFirstListItem(
+					`season = "${s.id}" && week = ${startWeek}`,
+					{ sort: 'week' }
+				).catch(() => null);
+				if (w) week6BySeason[s.id] = w;
+			})
+	);
+
 	// Build a set of all current week IDs for quick lookup
 	const currentWeekIds = new Set(Object.values(currentWeekBySeason).map((w: any) => w.id));
 
@@ -148,6 +164,8 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 	// Pool-wide stats per season (all users)
 	const poolStatsBySeason: Record<string, {
 		total: number; active: number; pending: number; eliminated: number; pot: number;
+		lms: { total: number; active: number; eliminated: number; pot: number };
+		sh:  { total: number; active: number; eliminated: number; pot: number };
 	}> = {};
 
 	await Promise.all(
@@ -161,16 +179,31 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 				fields: 'id,status,paid,paymentMethod,entryType',
 			}).catch(() => []) as any[];
 
+			const lmsAll = all.filter((x: any) => x.entryType === 'lms');
+			const shAll  = all.filter((x: any) => x.entryType === 'second_half');
+
 			poolStatsBySeason[sid] = {
 				total:      all.length,
 				active:     all.filter((x: any) => x.status === 'active').length,
 				pending:    all.filter((x: any) => x.status === 'pending_payment').length,
 				eliminated: all.filter((x: any) => x.status === 'eliminated').length,
-				// Pot: paid non-complimentary entries × their pool's entry fee
 				pot: all
 					.filter((x: any) => x.paid && x.paymentMethod !== 'free')
 					.reduce((sum: number, x: any) =>
 						sum + (x.entryType === 'lms' ? lmsFee : shFee), 0),
+				// Per-pool breakdown
+				lms: {
+					total:      lmsAll.length,
+					active:     lmsAll.filter((x: any) => x.status === 'active').length,
+					eliminated: lmsAll.filter((x: any) => x.status === 'eliminated').length,
+					pot:        lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * lmsFee,
+				},
+				sh: {
+					total:      shAll.length,
+					active:     shAll.filter((x: any) => x.status === 'active').length,
+					eliminated: shAll.filter((x: any) => x.status === 'eliminated').length,
+					pot:        shAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * shFee,
+				},
 			};
 		})
 	);
@@ -178,6 +211,8 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 	// Stat cards only count real (non-test) season entries
 	const realSeasonIds = new Set(allSeasons.filter(s => !s.name?.includes('[TEST]')).map(s => s.id));
 	const realEntries   = e.filter(x => realSeasonIds.has(x.season));
+
+	const pickView = (cookies.get('pick_view') ?? 'entries') as 'entries' | 'standings';
 
 	return {
 		user: {
@@ -193,10 +228,12 @@ export const load: PageServerLoad = async ({ locals, url, depends }) => {
 		activeSeasons,
 		allSeasons,
 		currentWeekBySeason,
+		week6BySeason,
 		entriesBySeason,
 		poolStatsBySeason,
 		pickByEntry,
 		usedTeamCountByEntry,
-		selectedSeasonId: defaultSeasonId
+		selectedSeasonId: defaultSeasonId,
+		pickView,
 	};
 };

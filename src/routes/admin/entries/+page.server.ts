@@ -5,8 +5,9 @@ import { EntryProvider, SeasonProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryStatus } from '$lib/providers';
 
-export const load: PageServerLoad = async ({ url }) => {
-	const pb = await pbAdmin();
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const pb           = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
 
 	const seasonFilter = url.searchParams.get('season') ?? '';
 	const statusFilter = (url.searchParams.get('status') ?? 'all') as EntryStatus | 'all';
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const entryProvider  = new EntryProvider(pb);
 	const seasonProvider = new SeasonProvider(pb);
 
-	const [entries, seasons, participants] = await Promise.all([
+	const [allEntries, allSeasons, participants] = await Promise.all([
 		entryProvider.getAll({
 			seasonId:  seasonFilter || undefined,
 			status:    statusFilter,
@@ -29,8 +30,12 @@ export const load: PageServerLoad = async ({ url }) => {
 		})
 	]);
 
-	// Map seasonId → firstPickDeadline (ISO string) so the UI can gate delete per entry.
-	// [TEST] seasons are excluded — admins can always delete test data.
+	// pool_admin sees no [TEST] seasons or their entries
+	const seasons = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
+	const testSeasonIds = new Set(allSeasons.filter(s => s.name?.includes('[TEST]')).map(s => s.id));
+	const entries = isSuperAdmin ? allEntries : allEntries.filter(e => !testSeasonIds.has(e.season));
+
+	// Map seasonId → firstPickDeadline. [TEST] seasons are excluded — always deletable.
 	const deadlineMap: Record<string, string> = {};
 	for (const s of seasons) {
 		if (s.firstPickDeadline && !s.name.startsWith('[TEST]')) deadlineMap[s.id] = s.firstPickDeadline;

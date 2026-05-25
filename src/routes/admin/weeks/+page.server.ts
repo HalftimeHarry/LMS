@@ -7,20 +7,23 @@ import type { EntryType } from '$lib/providers';
 const RESULTS_DELAY_MS  = 10 * 60 * 1000;
 const COMPLETE_DELAY_MS = 18 * 60 * 1000;
 
-export const load: PageServerLoad = async ({ url }) => {
-	const pb       = await pbAdmin();
-	const seasonId = url.searchParams.get('season') ?? '';
-	const poolType = (url.searchParams.get('poolType') ?? 'lms') as EntryType;
+export const load: PageServerLoad = async ({ url, locals }) => {
+	const pb           = await pbAdmin();
+	const isSuperAdmin = locals.role === 'super_admin';
+	const seasonId     = url.searchParams.get('season') ?? '';
+	const poolType     = (url.searchParams.get('poolType') ?? 'lms') as EntryType;
 
 	const seasonProvider = new SeasonProvider(pb);
 	const weekProvider   = new WeekProvider(pb);
 	const teamProvider   = new TeamProvider(pb);
 	const entryProvider  = new EntryProvider(pb);
 
-	const [seasons, teams] = await Promise.all([
+	const [allSeasons, teams] = await Promise.all([
 		seasonProvider.getAll(),
 		teamProvider.getAll()
 	]);
+
+	const seasons = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
 
 	const activeSeason = seasonId
 		? seasons.find(s => s.id === seasonId) ?? seasons[0]
@@ -252,7 +255,8 @@ export const actions: Actions = {
 	 * Interval is derived from the season name: (1h/week) or (1d/week).
 	 * Does NOT touch entries, picks, or pick_results.
 	 */
-	startSeason: async ({ request }) => {
+	startSeason: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const data     = await request.formData();
 		const seasonId = data.get('seasonId') as string;
@@ -298,7 +302,8 @@ export const actions: Actions = {
 	 * Full reset: rewind all weeks to open, restore eliminated entries to active,
 	 * delete all pick_results and picks, re-seed picks for weeks 1–3, push deadlines forward.
 	 */
-	resetSeason: async ({ request }) => {
+	resetSeason: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const data     = await request.formData();
 		const seasonId = data.get('seasonId') as string;
@@ -408,7 +413,8 @@ export const actions: Actions = {
 	 * Manually runs the advance-weeks logic for a single season.
 	 * Useful in dev where the Netlify scheduled function doesn't run.
 	 */
-	advanceNow: async ({ request }) => {
+	advanceNow: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const data     = await request.formData();
 		const seasonId = data.get('seasonId') as string;
