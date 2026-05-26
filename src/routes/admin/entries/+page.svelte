@@ -130,9 +130,16 @@
 		return !s || s.secondHalfEnabled !== false;
 	})());
 
+	// LMS is only available before the Week 1 pick deadline; Second Half only after
+	const canSelectLms = $derived(!activeDeadlinePast);
+	const canSelectSh  = $derived(activeDeadlinePast);
+
 	$effect(() => {
 		if (modalHasLms && !modalHasSh) entryType = 'lms';
 		if (!modalHasLms && modalHasSh) entryType = 'second_half';
+		// Auto-switch when deadline flips
+		if (!canSelectLms && entryType === 'lms')          entryType = 'second_half';
+		if (!canSelectSh  && entryType === 'second_half')  entryType = 'lms';
 	});
 
 	// Base name — auto-fills from player + entry type, stays editable
@@ -515,17 +522,24 @@
 			<div class="flex flex-col gap-1.5">
 				<p class="text-xs font-medium text-gray-400">Pool type</p>
 				<div class="grid grid-cols-2 gap-2">
-					<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
-						{entryType === 'lms' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 text-gray-400 hover:border-gray-600'}">
-						<input type="radio" bind:group={entryType} value="lms" class="accent-[#c9a84c]" />
+					<label class="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
+						{!canSelectLms ? 'cursor-not-allowed opacity-40 border-gray-800 text-gray-600' : 'cursor-pointer'}
+						{canSelectLms && entryType === 'lms' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : ''}
+						{canSelectLms && entryType !== 'lms' ? 'border-gray-700 text-gray-400 hover:border-gray-600' : ''}">
+						<input type="radio" bind:group={entryType} value="lms" disabled={!canSelectLms} class="accent-[#c9a84c]" />
 						<span>LMS Full Season</span>
 					</label>
-					<label class="flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
-						{entryType === 'second_half' ? 'border-blue-500 bg-blue-950/30 text-white' : 'border-gray-700 text-gray-400 hover:border-gray-600'}">
-						<input type="radio" bind:group={entryType} value="second_half" class="accent-blue-400" />
+					<label class="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm transition
+						{!canSelectSh ? 'cursor-not-allowed opacity-40 border-gray-800 text-gray-600' : 'cursor-pointer'}
+						{canSelectSh && entryType === 'second_half' ? 'border-blue-500 bg-blue-950/30 text-white' : ''}
+						{canSelectSh && entryType !== 'second_half' ? 'border-gray-700 text-gray-400 hover:border-gray-600' : ''}">
+						<input type="radio" bind:group={entryType} value="second_half" disabled={!canSelectSh} class="accent-blue-400" />
 						<span>Second Half</span>
 					</label>
 				</div>
+				<p class="text-xs text-gray-600">
+					{#if canSelectLms}LMS available until Week 1 pick deadline · Second Half opens after{:else}Second Half available · LMS closed after Week 1 deadline{/if}
+				</p>
 			</div>
 			{/if}
 
