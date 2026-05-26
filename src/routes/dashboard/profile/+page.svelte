@@ -12,8 +12,8 @@
 
 	const role = $derived(roleLabel[data.user.role] ?? { label: data.user.role, color: 'bg-gray-800 text-gray-400 border-gray-700' });
 
-	let displayName     = $state(data.user.displayName as string ?? '');
-	let profileLoading  = $state(false);
+	let displayName    = $state(data.user.displayName as string ?? '');
+	let profileLoading = $state(false);
 	let passwordLoading = $state(false);
 	let pickViewLoading = $state(false);
 
@@ -69,26 +69,16 @@
 		>
 			<div class="flex flex-col gap-1">
 				<label for="displayName" class="text-xs font-medium text-gray-400">Display name</label>
-				<input
-					id="displayName"
-					name="displayName"
-					type="text"
+				<input id="displayName" name="displayName" type="text"
 					bind:value={displayName}
-					required
-					minlength="2"
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none"
-				/>
+					required minlength="2"
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 			</div>
 
 			<div class="flex flex-col gap-1">
 				<label for="email-display" class="text-xs font-medium text-gray-400">Email</label>
-				<input
-					id="email-display"
-					type="email"
-					value={data.user.email}
-					disabled
-					class="rounded border border-gray-800 bg-gray-900/50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
-				/>
+				<input id="email-display" type="email" value={data.user.email} disabled
+					class="cursor-not-allowed rounded border border-gray-800 bg-gray-900/50 px-3 py-2 text-sm text-gray-500" />
 				<p class="text-xs text-gray-600">Email cannot be changed here. Contact an admin.</p>
 			</div>
 
@@ -100,11 +90,8 @@
 				</div>
 			</div>
 
-			<button
-				type="submit"
-				disabled={profileLoading}
-				class="rounded bg-[#c9a84c] py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50"
-			>
+			<button type="submit" disabled={profileLoading}
+				class="rounded bg-[#c9a84c] py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
 				{profileLoading ? 'Saving…' : 'Save changes'}
 			</button>
 		</form>

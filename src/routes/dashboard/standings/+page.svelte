@@ -6,7 +6,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const seasons      = $derived(data.seasons      as any[]);
+
 	const activeSeason = $derived(data.activeSeason as any);
 	const weeks        = $derived(data.weeks        as any[]);
 	const entries      = $derived(data.entries      as any[]);
@@ -90,11 +90,6 @@
 		goto(`?${params.toString()}`, { replaceState: true });
 	}
 
-	function switchSeason(id: string) {
-		const params = new URLSearchParams($page.url.searchParams);
-		params.set('season', id);
-		goto(`?${params.toString()}`, { replaceState: true });
-	}
 
 	// ── Style maps ────────────────────────────────────────────────────────────
 	const statusColors: Record<string, string> = {
@@ -125,23 +120,6 @@
 	</div>
 
 	<div class="flex flex-wrap items-center gap-3">
-		<!-- Season selector — always visible -->
-		{#if seasons?.length > 1}
-			<div class="flex items-center gap-2">
-				<label for="standings-season" class="text-xs text-gray-500">Season</label>
-				<select
-					id="standings-season"
-					value={activeSeason?.id ?? ''}
-					onchange={(e) => switchSeason((e.target as HTMLSelectElement).value)}
-					class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-1.5 text-xs text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
-				>
-					{#each seasons as s}
-						<option value={s.id}>{s.name}</option>
-					{/each}
-				</select>
-			</div>
-		{/if}
-
 		<!-- Pool toggle -->
 		<div class="flex overflow-hidden rounded border border-gray-700">
 			<button type="button" onclick={() => switchPool('lms')}

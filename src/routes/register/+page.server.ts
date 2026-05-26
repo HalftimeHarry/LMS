@@ -19,32 +19,51 @@ export const actions: Actions = {
 			return fail(429, { error: 'Too many registration attempts. Please try again later.' });
 		}
 
-		const data = await request.formData();
-		const displayName = data.get('displayName') as string;
-		const email       = data.get('email')       as string;
-		const password    = data.get('password')    as string;
-		const confirm     = data.get('confirm')     as string;
+		const data        = await request.formData();
+		const displayName = (data.get('displayName') as string)?.trim();
+		const email       = (data.get('email')       as string)?.trim();
+		const password    = data.get('password') as string;
+		const confirm     = data.get('confirm')  as string;
 		const remember    = data.get('remember') === 'on';
 
+		const fields = { displayName, email };
+
+		if (!displayName || displayName.length < 2) return fail(400, { error: 'Full name is required.', fields });
+		if (!email)                                  return fail(400, { error: 'Email is required.',     fields });
+
 		if (password !== confirm) {
-			return fail(400, { error: 'Passwords do not match.' });
+			return fail(400, { error: 'Passwords do not match.', fields });
 		}
 		if (password.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters.' });
+			return fail(400, { error: 'Password must be at least 8 characters.', fields });
 		}
 
-		// Verify Turnstile when configured
+		// Verify Turnstile when configured — skipped in dev when keys are absent
 		const turnstileSecret = env.TURNSTILE_SECRET_KEY;
 		if (turnstileSecret) {
 			const token = data.get('cf-turnstile-response') as string | null;
-			if (!token) return fail(400, { error: 'CAPTCHA verification required.' });
-			const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ secret: turnstileSecret, response: token }),
-			});
-			const verify = await verifyRes.json() as { success: boolean };
-			if (!verify.success) return fail(400, { error: 'CAPTCHA verification failed. Please try again.' });
+			if (!token) return fail(400, { error: 'Please complete the CAPTCHA.', fields });
+			try {
+				const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						secret:   turnstileSecret,
+						response: token,
+						remoteip: clientIp(request),
+					}),
+				});
+				if (!verifyRes.ok) throw new Error(`Turnstile HTTP ${verifyRes.status}`);
+				const verify = await verifyRes.json() as { success: boolean; 'error-codes'?: string[] };
+				if (!verify.success) {
+					const codes = verify['error-codes']?.join(', ') ?? 'unknown';
+					console.error('Turnstile failed:', codes);
+					return fail(400, { error: 'CAPTCHA verification failed. Please try again.', fields });
+				}
+			} catch (e) {
+				console.error('Turnstile error:', e);
+				return fail(500, { error: 'CAPTCHA check failed. Please try again.', fields });
+			}
 		}
 
 		const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
@@ -54,12 +73,12 @@ export const actions: Actions = {
 				password,
 				passwordConfirm: confirm,
 				displayName,
-				role: 'participant'
+				role: 'participant',
 			});
 			await pb.collection('users').authWithPassword(email, password);
 		} catch (e: unknown) {
 			const msg = (e as { message?: string })?.message ?? 'Registration failed.';
-			return fail(400, { error: msg });
+			return fail(400, { error: msg, fields });
 		}
 
 		// Send welcome email — fire-and-forget, never blocks registration
