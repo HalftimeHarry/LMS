@@ -45,6 +45,29 @@
 	let maintenanceSaved    = $state(false);
 	let maintenanceError    = $state('');
 
+	// Inline deadline editing
+	let editDeadlineId    = $state<string | null>(null);
+	let editDeadlineValue = $state('');
+	let deadlineSaving    = $state(false);
+	let deadlineSavedId   = $state<string | null>(null);
+	let deadlineError     = $state('');
+
+	function startEditDeadline(week: any) {
+		// Convert stored UTC ISO to a datetime-local string in PT
+		const d = new Date(week.deadline);
+		const ptStr = d.toLocaleString('en-US', {
+			timeZone: 'America/Los_Angeles',
+			year: 'numeric', month: '2-digit', day: '2-digit',
+			hour: '2-digit', minute: '2-digit', hour12: false,
+		});
+		// Reformat MM/DD/YYYY, HH:mm → YYYY-MM-DDTHH:mm
+		const [datePart, timePart] = ptStr.split(', ');
+		const [mm, dd, yyyy] = datePart.split('/');
+		editDeadlineValue = `${yyyy}-${mm}-${dd}T${timePart}`;
+		editDeadlineId    = week.id;
+		deadlineError     = '';
+	}
+
 	async function runSeasonAction(action: 'startSeason' | 'resetSeason') {
 		if (!data.activeSeason) return;
 		if (seasonActionConfirm !== action) { seasonActionConfirm = action; return; }
@@ -636,17 +659,70 @@
 									</span>
 								{/if}
 							</div>
-							<div class="mt-0.5 flex items-center gap-3">
-								<p class="text-sm text-gray-400">
-									Deadline: {new Date(week.deadline).toLocaleString('en-US', {
-										weekday: 'short', month: 'short', day: 'numeric',
-										hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-									})}
-								</p>
-								{#if deadlineLabel}
-									<span class="font-mono text-sm font-bold {deadlineUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
-										{deadlineLabel}
-									</span>
+							<div class="mt-0.5 flex flex-wrap items-center gap-3">
+								{#if editDeadlineId === week.id}
+									<!-- Inline deadline editor -->
+									<form method="POST" action="?/updateDeadline"
+										use:enhance={() => {
+											deadlineSaving = true;
+											deadlineError  = '';
+											return async ({ result, update }) => {
+												await update({ reset: false });
+												deadlineSaving = false;
+												if (result.type === 'success') {
+													deadlineSavedId   = week.id;
+													editDeadlineId    = null;
+													setTimeout(() => { deadlineSavedId = null; }, 3000);
+												} else if (result.type === 'failure') {
+													deadlineError = (result.data as any)?.error ?? 'Save failed.';
+												}
+											};
+										}}
+										class="flex flex-wrap items-center gap-2"
+									>
+										<input type="hidden" name="id" value={week.id} />
+										<input
+											type="datetime-local"
+											name="deadline"
+											bind:value={editDeadlineValue}
+											class="rounded border border-[rgba(201,168,76,0.5)] bg-gray-900 px-2 py-1 text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+										/>
+										<span class="text-xs text-gray-600">PT</span>
+										<button type="submit" disabled={deadlineSaving}
+											class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-3 py-1 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
+											{deadlineSaving ? 'Saving…' : 'Save'}
+										</button>
+										<button type="button" onclick={() => { editDeadlineId = null; deadlineError = ''; }}
+											class="rounded border border-gray-700 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-800">
+											Cancel
+										</button>
+										{#if deadlineError}
+											<span class="text-xs text-red-400">{deadlineError}</span>
+										{/if}
+									</form>
+								{:else}
+									<p class="text-sm text-gray-400">
+										Deadline: {new Date(week.deadline).toLocaleString('en-US', {
+											weekday: 'short', month: 'short', day: 'numeric',
+											hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+											timeZone: 'America/Los_Angeles'
+										})}
+									</p>
+									{#if deadlineSavedId === week.id}
+										<span class="text-xs text-green-400">Saved</span>
+									{/if}
+									{#if deadlineLabel}
+										<span class="font-mono text-sm font-bold {deadlineUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+											{deadlineLabel}
+										</span>
+									{/if}
+									<!-- Edit button — only on open/locked weeks -->
+									{#if week.status === 'open' || week.status === 'locked'}
+										<button type="button" onclick={() => startEditDeadline(week)}
+											class="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-500 transition hover:border-gray-500 hover:text-gray-300">
+											Edit
+										</button>
+									{/if}
 								{/if}
 							</div>
 	

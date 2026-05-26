@@ -60,7 +60,9 @@
 	// Week setting for this week (to apply auto-pick)
 	const weekSetting = $derived((data as any).weekSetting as any ?? null);
 
-	let savingOdds    = $state(false);
+	let savingGames   = $state(new Set<string>());
+	let savedGames    = $state(new Set<string>());
+	let errorGames    = $state<Record<string, string>>({});
 	let activating    = $state(false);
 	let applyingLms   = $state(false);
 	let applying2h    = $state(false);
@@ -176,7 +178,7 @@
 			{#if games.length > 0}
 				<form method="POST" action="?/activateWeek" use:enhance={() => {
 					activating = true;
-					return async ({ update }) => { await update(); activating = false; };
+					return async ({ update }) => { await update({ reset: false }); activating = false; };
 				}}>
 					<input type="hidden" name="seasonId" value={activeSeason.id} />
 					<input type="hidden" name="week"     value={weekNum} />
@@ -215,7 +217,7 @@
 						</div>
 						<form method="POST" action="?/applyAutoPickFromOdds" use:enhance={() => {
 							applyingLms = true;
-							return async ({ update }) => { await update(); applyingLms = false; };
+							return async ({ update }) => { await update({ reset: false }); applyingLms = false; };
 						}}>
 							<input type="hidden" name="weekSettingId" value={weekSetting.id} />
 							<input type="hidden" name="teamId"        value={fav.team?.id} />
@@ -240,7 +242,7 @@
 						</div>
 						<form method="POST" action="?/applyAutoPickFromOdds" use:enhance={() => {
 							applying2h = true;
-							return async ({ update }) => { await update(); applying2h = false; };
+							return async ({ update }) => { await update({ reset: false }); applying2h = false; };
 						}}>
 							<input type="hidden" name="weekSettingId" value={weekSetting.id} />
 							<input type="hidden" name="teamId"        value={shot.team?.id} />
@@ -254,135 +256,146 @@
 			{/each}
 		{/if}
 
-		<!-- Games table -->
-		<form method="POST" action="?/saveOdds" use:enhance={() => {
-			savingOdds = true;
-			return async ({ update }) => { await update(); savingOdds = false; };
-		}}>
-			<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-							<th class="px-4 py-3">Matchup</th>
-							<th class="px-4 py-3">Time</th>
-							<th class="px-4 py-3 text-center">Spread</th>
-							<th class="px-4 py-3 text-center">Home ML</th>
-							<th class="px-4 py-3 text-center">Away ML</th>
-							<th class="px-4 py-3 text-center">Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each games as game}
-							{@const home = game.expand?.homeTeam}
-							{@const away = game.expand?.awayTeam}
-							<tr class="border-b border-gray-800/50 transition hover:bg-white/[0.02]
-								{game.isActive ? 'bg-green-950/5' : ''}">
-
-								<!-- Matchup -->
-								<td class="px-4 py-3">
-									<div class="flex items-center gap-2">
-										<div class="flex items-center gap-1.5">
-											<img src={teamLogoUrl(away?.abbreviation)} alt={away?.abbreviation} class="h-6 w-6 object-contain opacity-70" />
-											<span class="text-gray-400 text-xs">{away?.abbreviation}</span>
-										</div>
-										<span class="text-gray-600 text-xs">@</span>
-										<div class="flex items-center gap-1.5">
-											<img src={teamLogoUrl(home?.abbreviation)} alt={home?.abbreviation} class="h-6 w-6 object-contain" />
-											<span class="text-white text-xs font-medium">{home?.abbreviation}</span>
-										</div>
-										{#if game.notes}
-											<span class="ml-1 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-500">{game.notes}</span>
-										{/if}
-									</div>
-									<p class="mt-0.5 text-xs text-gray-600">
-										{away?.city} {away?.name} at {home?.city} {home?.name}
-									</p>
-								</td>
-
-								<!-- Game time -->
-								<td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-									{#if game.gameTime}
-										{new Date(game.gameTime).toLocaleString('en-US', {
-											weekday: 'short', month: 'short', day: 'numeric',
-											hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-										})}
-									{:else}
-										TBD
-									{/if}
-								</td>
-
-								<!-- Spread input -->
-								<td class="px-3 py-2 text-center">
-									<div class="flex flex-col items-center gap-0.5">
-										<input
-											type="number"
-											name="{game.id}_homeSpread"
-											value={game.homeSpread ?? ''}
-											step="0.5"
-											placeholder="0"
-											class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs text-white focus:border-[#c9a84c] focus:outline-none"
-										/>
-										{#if game.homeSpread != null}
-											<span class="text-[10px] text-gray-600">
-												{spreadLabel(game.homeSpread, home?.abbreviation, away?.abbreviation)}
-											</span>
-										{/if}
-									</div>
-								</td>
-
-								<!-- Home moneyline -->
-								<td class="px-3 py-2 text-center">
-									<input
-										type="number"
-										name="{game.id}_homeMoneyline"
-										value={game.homeMoneyline ?? ''}
-										placeholder="-110"
-										class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs
-											{game.homeMoneyline != null && game.homeMoneyline < 0 ? 'text-[#c9a84c]' : 'text-blue-400'}
-											focus:border-[#c9a84c] focus:outline-none"
-									/>
-								</td>
-
-								<!-- Away moneyline -->
-								<td class="px-3 py-2 text-center">
-									<input
-										type="number"
-										name="{game.id}_awayMoneyline"
-										value={game.awayMoneyline ?? ''}
-										placeholder="+110"
-										class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs
-											{game.awayMoneyline != null && game.awayMoneyline > 0 ? 'text-blue-400' : 'text-[#c9a84c]'}
-											focus:border-[#c9a84c] focus:outline-none"
-									/>
-								</td>
-
-								<!-- Active status -->
-								<td class="px-4 py-3 text-center">
-									{#if game.isActive}
-										<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs text-green-400">Live</span>
-									{:else}
-										<span class="rounded border border-gray-700 px-2 py-0.5 text-xs text-gray-600">Draft</span>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+		<!-- Games list — one form per row -->
+		<div class="overflow-hidden rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+			<!-- Header row -->
+			<div class="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-x-2 border-b border-gray-800 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">
+				<span>Matchup</span>
+				<span class="w-32 text-center">Time</span>
+				<span class="w-20 text-center">Spread</span>
+				<span class="w-20 text-center">Home ML</span>
+				<span class="w-20 text-center">Away ML</span>
+				<span class="w-14 text-center">Status</span>
+				<span class="w-14 text-center"></span>
 			</div>
 
-			<div class="mt-3 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/60 px-4 py-3 backdrop-blur-sm">
-				<p class="text-xs text-gray-500">
-					<span class="font-medium text-gray-400">Spread:</span> negative = home favored (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-7</code> = home -7).
-					&nbsp;
-					<span class="font-medium text-gray-400">Moneyline:</span> negative = favorite (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-350</code>).
-				</p>
-			</div>
-			<div class="mt-3 flex justify-end">
-				<button type="submit" disabled={savingOdds}
-					class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
-					{savingOdds ? 'Saving…' : 'Save Odds'}
-				</button>
-			</div>
-		</form>
+			{#each games as game (game.id)}
+				{@const home   = game.expand?.homeTeam}
+				{@const away   = game.expand?.awayTeam}
+				{@const saving = savingGames.has(game.id)}
+				{@const saved  = savedGames.has(game.id)}
+				{@const errMsg = errorGames[game.id]}
+
+				<form method="POST" action="?/saveOdds"
+					use:enhance={() => {
+						savingGames = new Set([...savingGames, game.id]);
+						savedGames  = new Set([...savedGames].filter(id => id !== game.id));
+						errorGames  = { ...errorGames, [game.id]: '' };
+						return async ({ result, update }) => {
+							await update({ reset: false });
+							savingGames = new Set([...savingGames].filter(id => id !== game.id));
+							if (result.type === 'success') {
+								savedGames = new Set([...savedGames, game.id]);
+								setTimeout(() => {
+									savedGames = new Set([...savedGames].filter(id => id !== game.id));
+								}, 2500);
+							} else if (result.type === 'failure') {
+								errorGames = { ...errorGames, [game.id]: (result.data as any)?.error ?? 'Save failed.' };
+							}
+						};
+					}}
+					class="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-x-2 border-b border-gray-800/50 px-4 py-2.5 transition
+						{game.isActive ? 'bg-green-950/5' : ''}
+						{saved ? 'bg-[rgba(201,168,76,0.04)]' : ''}
+						hover:bg-white/[0.02]"
+				>
+					<!-- Matchup -->
+					<div>
+						<div class="flex items-center gap-2">
+							<div class="flex items-center gap-1.5">
+								<img src={teamLogoUrl(away?.abbreviation)} alt={away?.abbreviation} class="h-6 w-6 object-contain opacity-70" />
+								<span class="text-xs text-gray-400">{away?.abbreviation}</span>
+							</div>
+							<span class="text-xs text-gray-600">@</span>
+							<div class="flex items-center gap-1.5">
+								<img src={teamLogoUrl(home?.abbreviation)} alt={home?.abbreviation} class="h-6 w-6 object-contain" />
+								<span class="text-xs font-medium text-white">{home?.abbreviation}</span>
+							</div>
+							{#if game.notes}
+								<span class="ml-1 rounded bg-gray-800 px-1.5 py-0.5 text-[10px] text-gray-500">{game.notes}</span>
+							{/if}
+						</div>
+						<p class="mt-0.5 text-xs text-gray-600">{away?.city} {away?.name} at {home?.city} {home?.name}</p>
+					</div>
+
+					<!-- Game time -->
+					<div class="w-32 text-center text-xs text-gray-500">
+						{#if game.gameTime}
+							{new Date(game.gameTime).toLocaleString('en-US', {
+								weekday: 'short', month: 'short', day: 'numeric',
+								hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+							})}
+						{:else}
+							TBD
+						{/if}
+					</div>
+
+					<!-- Spread -->
+					<div class="flex w-20 flex-col items-center gap-0.5">
+						<input
+							type="number"
+							name="{game.id}_homeSpread"
+							value={game.homeSpread ?? ''}
+							step="0.5"
+							placeholder="0"
+							class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+						/>
+						{#if game.homeSpread != null}
+							<span class="text-[10px] text-gray-600">{spreadLabel(game.homeSpread, home?.abbreviation, away?.abbreviation)}</span>
+						{/if}
+					</div>
+
+					<!-- Home ML -->
+					<input
+						type="number"
+						name="{game.id}_homeMoneyline"
+						value={game.homeMoneyline ?? ''}
+						placeholder="-110"
+						class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs focus:border-[#c9a84c] focus:outline-none
+							{game.homeMoneyline != null && game.homeMoneyline < 0 ? 'text-[#c9a84c]' : 'text-blue-400'}"
+					/>
+
+					<!-- Away ML -->
+					<input
+						type="number"
+						name="{game.id}_awayMoneyline"
+						value={game.awayMoneyline ?? ''}
+						placeholder="+110"
+						class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs focus:border-[#c9a84c] focus:outline-none
+							{game.awayMoneyline != null && game.awayMoneyline > 0 ? 'text-blue-400' : 'text-[#c9a84c]'}"
+					/>
+
+					<!-- Status badge -->
+					<div class="w-14 text-center">
+						{#if game.isActive}
+							<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-xs text-green-400">Live</span>
+						{:else}
+							<span class="rounded border border-gray-700 px-2 py-0.5 text-xs text-gray-600">Draft</span>
+						{/if}
+					</div>
+
+					<!-- Save button + feedback -->
+					<div class="flex w-14 flex-col items-center gap-1">
+						<button type="submit" disabled={saving}
+							class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-3 py-1 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
+							{saving ? '…' : 'Save'}
+						</button>
+						{#if saved}
+							<span class="text-[10px] text-green-400">Saved ✓</span>
+						{:else if errMsg}
+							<span class="text-[10px] text-red-400" title={errMsg}>Error</span>
+						{/if}
+					</div>
+				</form>
+			{/each}
+		</div>
+
+		<div class="mt-3 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/60 px-4 py-3 backdrop-blur-sm">
+			<p class="text-xs text-gray-500">
+				<span class="font-medium text-gray-400">Spread:</span> negative = home favored (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-7</code> = home -7).
+				&nbsp;
+				<span class="font-medium text-gray-400">Moneyline:</span> negative = favorite (e.g. <code class="rounded bg-gray-800 px-1 text-gray-300">-350</code>).
+			</p>
+		</div>
 	{/if}
 {/if}
