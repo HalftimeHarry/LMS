@@ -20,11 +20,11 @@ export interface Week {
 }
 
 export interface WeekFilter {
-	seasonId:   string;
-	/** When set, only returns weeks relevant to the given pool type.
-	 *  Currently all weeks apply to both pool types, but this allows
-	 *  future divergence (e.g. second_half starts at week 10). */
-	poolType?:  EntryType;
+	seasonId:             string;
+	/** When set, only returns weeks relevant to the given pool type. */
+	poolType?:            EntryType;
+	/** First week of the 2H pool — filters out earlier weeks when poolType is second_half. Defaults to 6. */
+	secondHalfStartWeek?: number;
 }
 
 export class WeekProvider extends BaseProvider {
@@ -36,9 +36,10 @@ export class WeekProvider extends BaseProvider {
 	async getAll(filter: WeekFilter): Promise<Week[]> {
 		const parts = [`season = "${filter.seasonId}"`];
 
-		// Second Half pool only participates from week 10 onward
+		// Second Half pool only participates from secondHalfStartWeek onward (default 6)
 		if (filter.poolType === 'second_half') {
-			parts.push('week >= 10');
+			const startWeek = filter.secondHalfStartWeek ?? 6;
+			parts.push(`week >= ${startWeek}`);
 		}
 
 		return this.pb.collection(this.collection).getFullList<Week>({

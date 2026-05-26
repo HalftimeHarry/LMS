@@ -23,14 +23,36 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		teamProvider.getAll()
 	]);
 
-	const seasons = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
+	const allFiltered = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
 
-	const activeSeason = seasonId
-		? seasons.find(s => s.id === seasonId) ?? seasons[0]
+	// Deduplicate by year — one season per year, preferring the one whose name
+	// does NOT contain 'second half' (i.e. the LMS anchor record)
+	const seasonsByYear = new Map<string, any>();
+	for (const s of allFiltered as any[]) {
+		const key = s.year ? String(s.year) : s.id;
+		if (!seasonsByYear.has(key)) {
+			seasonsByYear.set(key, s);
+		} else {
+			const existing = seasonsByYear.get(key);
+			const sIsLms   = !s.name?.toLowerCase().includes('second half');
+			const exIsLms  = !existing.name?.toLowerCase().includes('second half');
+			if (sIsLms && !exIsLms) seasonsByYear.set(key, s);
+		}
+	}
+	const seasons = [...seasonsByYear.values()];
+
+	// Resolve activeSeason — if URL points to an orphaned/secondary season record,
+	// redirect to the year-group anchor (the deduplicated LMS season for that year)
+	const rawActive = seasonId
+		? (allFiltered as any[]).find((s: any) => s.id === seasonId) ?? seasons[0]
+		: seasons[0];
+	const activeSeason = rawActive
+		? (seasons as any[]).find((s: any) => s.year && s.year === rawActive.year) ?? rawActive
 		: seasons[0];
 
+	const shStartWeek = (activeSeason as any)?.secondHalfStartWeek ?? 6;
 	const weeks = activeSeason
-		? await weekProvider.getAll({ seasonId: activeSeason.id, poolType })
+		? await weekProvider.getAll({ seasonId: activeSeason.id, poolType, secondHalfStartWeek: shStartWeek })
 		: [];
 
 	// Pick counts per week — only fetch if there are weeks to show
@@ -50,17 +72,22 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		}
 	}
 
-	// Active entry count for the season (to compute "missing picks")
-	const activeEntryCount = activeSeason
-		? (await entryProvider.getStatsFields(activeSeason.id))
-				.filter(e => e.status === 'active').length
-		: 0;
+	// Active entry counts — total and per pool type (for payout math)
+	const allEntries = activeSeason
+		? (await entryProvider.getStatsFields(activeSeason.id)).filter(e => e.status === 'active')
+		: [];
+	const activeEntryCount    = allEntries.length;
+	const lmsEntryCount       = allEntries.filter(e => e.entryType === 'lms').length;
+	const shEntryCount        = allEntries.filter(e => e.entryType === 'second_half').length;
 
 	// Existing week numbers so the UI can show how many are missing
 	const existingWeekNumbers = weeks.map(w => w.week);
 
 	// Earliest game time for week 1 — used to pre-fill the deadline field
 	let firstGameTime: string | null = null;
+	// Entry deadlines: 20 min before first kickoff of week 1 (LMS) and shStartWeek (2H)
+	let lmsEntryDeadline: string | null = null;
+	let shEntryDeadline:  string | null = null;
 	// Per-week auto-pick candidates derived from active odds:
 	//   longestShotByWeek   — biggest underdog (most positive spread)  → 2H auto-pick
 	//   biggestFavoriteByWeek — biggest favorite (most negative spread) → LMS auto-pick
@@ -73,6 +100,19 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 				{ sort: 'gameTime', fields: 'gameTime' }
 			);
 			firstGameTime = odds.gameTime;
+			const t = new Date(odds.gameTime);
+			t.setMinutes(t.getMinutes() - 20);
+			lmsEntryDeadline = t.toISOString();
+		} catch { /* no odds yet */ }
+
+		try {
+			const shOdds = await pb.collection('game_odds').getFirstListItem(
+				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
+				{ sort: 'gameTime', fields: 'gameTime' }
+			);
+			const t = new Date(shOdds.gameTime);
+			t.setMinutes(t.getMinutes() - 20);
+			shEntryDeadline = t.toISOString();
 		} catch { /* no odds yet */ }
 
 		try {
@@ -156,14 +196,20 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		poolType,
 		pickCountsByWeek,
 		activeEntryCount,
+		lmsEntryCount,
+		shEntryCount,
 		existingWeekNumbers,
 		firstGameTime,
+		lmsEntryDeadline,
+		shEntryDeadline,
 		nextActions,
 		isTestSeason,
+		isSuperAdmin,
 		serverNow: now,
 		longestShotByWeek,
 		biggestFavoriteByWeek,
 		activeOddsWeeks: [...activeOddsWeeks],
+		maintenanceFee: (activeSeason as any)?.maintenanceFee ?? 0,
 	};
 };
 
@@ -524,7 +570,8 @@ export const actions: Actions = {
 
 		const seasonId  = data.get('seasonId')  as string;
 		const poolType  = (data.get('poolType') as EntryType) ?? 'lms';
-		const startWeek = poolType === 'second_half' ? 10 : 1;
+		const season    = seasonId ? await pb.collection('seasons').getOne(seasonId, { fields: 'secondHalfStartWeek' }).catch(() => null) as any : null;
+		const startWeek = poolType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
 		const endWeek   = 18;
 
 		if (!seasonId) return fail(400, { error: 'Season is required.' });
@@ -560,5 +607,28 @@ export const actions: Actions = {
 		}
 
 		return { success: true, bulkCreated: created };
-	}
+	},
+
+	/**
+	 * Save the maintenance fee for a season.
+	 * The fee is deducted from total pool revenue before payouts are calculated.
+	 */
+	saveMaintenance: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+
+		const seasonId = data.get('seasonId') as string;
+		const fee      = Number(data.get('maintenanceFee') ?? 0);
+
+		if (!seasonId) return fail(400, { error: 'Season is required.' });
+		if (isNaN(fee) || fee < 0) return fail(400, { error: 'Fee must be 0 or a positive number.' });
+
+		try {
+			await pb.collection('seasons').update(seasonId, { maintenanceFee: fee });
+		} catch (e: unknown) {
+			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to save.' });
+		}
+		return { success: true, savedFee: fee };
+	},
 };

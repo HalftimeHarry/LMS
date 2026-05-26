@@ -24,7 +24,6 @@
 					{ href: '/admin/entries',   label: 'Entries & Payments' },
 					{ href: '/admin/weeks',     label: 'Season Settings' },
 					{ href: '/admin/results',   label: 'Results' },
-					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
 					{ href: '/admin/duties',    label: 'Admin Duties' },
 			  ]

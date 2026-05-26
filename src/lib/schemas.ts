@@ -21,6 +21,8 @@ export const seasonSchema = z.object({
 	secondHalfStartWeek:     z.coerce.number().int().min(1).max(18).default(6),
 	// Week number when 2nd Half picks increase to secondHalfPicksPerWeek (default 10)
 	secondHalfPicksStartWeek: z.coerce.number().int().min(1).max(18).default(10),
+	// Shared operating cost deducted proportionally from each pool's payout (default 0)
+	maintenanceFee: z.coerce.number().min(0).default(0),
 });
 
 export const entryRequestSchema = z.object({

@@ -13,7 +13,8 @@
 	const pickGrid     = $derived(data.pickGrid     as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
 	const currentWeek  = $derived(data.currentWeek  as any);
 	const poolType     = $derived(data.poolType     as 'lms' | 'second_half');
-	const userId       = $derived(data.userId       as string);
+	const userId       = $derived(data.userId       as string | null);
+	const isLoggedIn   = $derived(!!userId);
 
 	const isLms = $derived(poolType === 'lms');
 
@@ -168,6 +169,26 @@
 	</div>
 
 {:else}
+
+	<!-- ── Guest banner ─────────────────────────────────────────────────────── -->
+	{#if !isLoggedIn}
+		<div class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.04)] px-5 py-3 backdrop-blur-sm">
+			<p class="text-sm text-gray-400">
+				<span class="text-[#c9a84c] font-medium">Viewing as guest.</span>
+				Sign in to see your picks, submit picks for open weeks, and track your entries.
+			</p>
+			<div class="flex gap-2">
+				<a href="/login"
+					class="rounded border border-[#c9a84c] bg-black/80 px-4 py-1.5 text-sm font-semibold text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black">
+					Sign In
+				</a>
+				<a href="/register"
+					class="rounded bg-[#c9a84c] px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-[#e8c96a]">
+					Register
+				</a>
+			</div>
+		</div>
+	{/if}
 
 	<!-- ── Summary bar ──────────────────────────────────────────────────────── -->
 	<div class="mb-5 flex flex-wrap items-center gap-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-3 backdrop-blur-sm">
@@ -423,6 +444,11 @@
 										<a href="/dashboard/entries/{entry.id}"
 											class="text-[10px] text-yellow-600 hover:text-yellow-400 underline underline-offset-2">
 											Pick
+										</a>
+									{:else if !isLoggedIn}
+										<!-- Guest — prompt to sign in -->
+										<a href="/login" class="text-[10px] text-gray-700 hover:text-gray-500">
+											🔒
 										</a>
 									{:else}
 										<!-- Other entries — hidden until deadline -->

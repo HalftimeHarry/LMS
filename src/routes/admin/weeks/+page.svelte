@@ -10,7 +10,17 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
-	const ctrl = createWeeksController(data.weeks as any[], (data.poolType ?? 'lms') as EntryType);
+	const ctrl = createWeeksController(
+		data.weeks as any[],
+		(data.poolType ?? 'lms') as EntryType,
+		(data.activeSeason as any)?.secondHalfStartWeek ?? 6
+	);
+
+	const entryDeadline = $derived(
+		ctrl.poolType === 'second_half'
+			? (data.shEntryDeadline as string | null)
+			: (data.lmsEntryDeadline as string | null)
+	);
 	// Keep controller in sync when page data reloads
 	$effect(() => ctrl.setWeeks(data.weeks as any[]));
 
@@ -28,6 +38,12 @@
 	let seasonActionBusy    = $state(false);
 	let seasonActionConfirm = $state<'startSeason' | 'resetSeason' | null>(null);
 	let deleteWeekConfirmId = $state<string | null>(null);
+
+	// Maintenance fee form state
+	let maintenanceFeeInput = $state(String(data.maintenanceFee ?? 0));
+	let maintenanceSaving   = $state(false);
+	let maintenanceSaved    = $state(false);
+	let maintenanceError    = $state('');
 
 	async function runSeasonAction(action: 'startSeason' | 'resetSeason') {
 		if (!data.activeSeason) return;
@@ -61,9 +77,10 @@
 		const id = setInterval(() => { nowTick = Date.now(); }, 1_000);
 		return () => clearInterval(id);
 	});
-	const now         = $derived(nowTick);
-	const nextActions = $derived(data.nextActions as { weekNum: number; at: number; action: string }[]);
+	const now          = $derived(nowTick);
+	const nextActions  = $derived(data.nextActions as { weekNum: number; at: number; action: string }[]);
 	const isTestSeason = $derived(data.isTestSeason as boolean);
+	const isSuperAdmin = $derived(data.isSuperAdmin as boolean);
 
 	const actionLabel: Record<string, string> = {
 		lock:     'Picks lock',
@@ -92,9 +109,9 @@
 		updateParam('poolType', type);
 	}
 
-	// Group seasons for the rich picker
+	// Group seasons for the rich picker — server already deduplicates by year
 	const seasonGroups = $derived(() => {
-		const all = data.seasons as any[];
+		const all  = data.seasons as any[];
 		const real  = all.filter(s => !s.name?.includes('[TEST]'));
 		const tests = all.filter(s =>  s.name?.includes('[TEST]'));
 
@@ -141,11 +158,6 @@
 								 s.status === 'open'   ? 'bg-blue-950 text-blue-400' :
 								 s.status === 'setup'  ? 'bg-gray-800 text-gray-500' :
 								                         'bg-gray-900 text-gray-600'}">{s.status}</span>
-							{#if !s.name?.toLowerCase().includes('second half')}
-								<span class="text-xs text-[#c9a84c]">LMS</span>
-							{:else}
-								<span class="text-xs text-blue-400">2H</span>
-							{/if}
 						</button>
 					{/each}
 				</div>
@@ -203,8 +215,8 @@
 			{#if data.activeSeason}
 				<div class="text-right text-xs text-gray-500">
 					<span class="text-gray-300 font-medium">{data.activeSeason.name}</span>
-					{#if (data.activeSeason as any).firstPickDeadline}
-						<span class="ml-2">· deadline {new Date((data.activeSeason as any).firstPickDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+					{#if entryDeadline}
+						<span class="ml-2">· deadline {new Date(entryDeadline).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
 					{/if}
 					{#if (data.activeSeason as any).lmsEntryFee}
 						<span class="ml-2">· LMS ${(data.activeSeason as any).lmsEntryFee}</span>
@@ -341,6 +353,162 @@
 	{/if}
 </div>
 
+<!-- ── Maintenance Fee + Payout Breakdown ──────────────────────────────── -->
+{#if data.activeSeason && isSuperAdmin}
+{@const season        = data.activeSeason as any}
+{@const lmsFee        = season.lmsEntryFee        ?? 0}
+{@const shFee         = season.secondHalfEntryFee ?? 0}
+{@const lmsCount      = (data.lmsEntryCount  as number) ?? 0}
+{@const shCount       = (data.shEntryCount   as number) ?? 0}
+{@const totalCount    = lmsCount + shCount}
+{@const lmsRevenue    = lmsFee  * lmsCount}
+{@const shRevenue     = shFee   * shCount}
+{@const totalRevenue  = lmsRevenue + shRevenue}
+{@const mFee          = Number(maintenanceFeeInput) || 0}
+{@const lmsShare      = totalRevenue > 0 ? lmsRevenue / totalRevenue : 0}
+{@const shShare       = totalRevenue > 0 ? shRevenue  / totalRevenue : 0}
+{@const lmsMaintCost  = Math.round(mFee * lmsShare  * 100) / 100}
+{@const shMaintCost   = Math.round(mFee * shShare   * 100) / 100}
+{@const lmsPayout     = Math.max(0, lmsRevenue - lmsMaintCost)}
+{@const shPayout      = Math.max(0, shRevenue  - shMaintCost)}
+<div class="rounded-xl border border-gray-800 bg-black/75 p-5 backdrop-blur-sm">
+	<div class="mb-4 flex items-center justify-between gap-3">
+		<div>
+			<h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400">Maintenance Fee &amp; Payout Breakdown</h2>
+			<p class="mt-0.5 text-xs text-gray-600">Operating cost deducted from pool revenue before payouts. Split proportionally by each pool's share of total revenue.</p>
+		</div>
+	</div>
+
+	<div class="grid gap-5 sm:grid-cols-2">
+
+		<!-- Fee input form -->
+		<form method="POST" action="?/saveMaintenance"
+			use:enhance={() => {
+				maintenanceSaving = true;
+				maintenanceSaved  = false;
+				maintenanceError  = '';
+				return async ({ result, update }) => {
+					await update({ reset: false });
+					maintenanceSaving = false;
+					if (result.type === 'success') {
+						maintenanceSaved = true;
+						setTimeout(() => { maintenanceSaved = false; }, 3000);
+					} else if (result.type === 'failure') {
+						maintenanceError = (result.data as any)?.error ?? 'Save failed.';
+					}
+				};
+			}}
+			class="flex flex-col gap-3"
+		>
+			<input type="hidden" name="seasonId" value={season.id} />
+
+			<div>
+				<label for="maintenanceFee" class="mb-1 block text-xs font-medium text-gray-400">
+					Total maintenance fee ($)
+				</label>
+				<div class="flex items-center gap-2">
+					<span class="text-sm text-gray-500">$</span>
+					<input
+						id="maintenanceFee"
+						name="maintenanceFee"
+						type="number"
+						min="0"
+						step="0.01"
+						bind:value={maintenanceFeeInput}
+						class="w-32 rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+					/>
+					<button type="submit" disabled={maintenanceSaving}
+						class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-4 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.15)] disabled:opacity-40">
+						{maintenanceSaving ? 'Saving…' : 'Save'}
+					</button>
+					{#if maintenanceSaved}
+						<span class="text-xs text-green-400">Saved</span>
+					{/if}
+					{#if maintenanceError}
+						<span class="text-xs text-red-400">{maintenanceError}</span>
+					{/if}
+				</div>
+				<p class="mt-1.5 text-xs text-gray-600">
+					Set to $0 if there are no operating costs this season.
+					The fee is split between pools in proportion to their revenue — a larger pool absorbs a larger share.
+				</p>
+			</div>
+
+			<!-- Revenue inputs summary -->
+			<div class="rounded-lg border border-gray-800 bg-black px-3 py-2.5 text-xs text-gray-500">
+				<div class="flex justify-between">
+					<span>LMS entries</span>
+					<span class="text-gray-300">{lmsCount} × ${lmsFee} = <span class="text-white font-medium">${lmsRevenue.toLocaleString()}</span></span>
+				</div>
+				<div class="mt-1 flex justify-between">
+					<span>2nd Half entries</span>
+					<span class="text-gray-300">{shCount} × ${shFee} = <span class="text-white font-medium">${shRevenue.toLocaleString()}</span></span>
+				</div>
+				<div class="mt-2 flex justify-between border-t border-gray-800 pt-2">
+					<span class="font-medium text-gray-400">Total revenue</span>
+					<span class="font-semibold text-white">${totalRevenue.toLocaleString()}</span>
+				</div>
+			</div>
+		</form>
+
+		<!-- Payout breakdown -->
+		<div class="flex flex-col gap-3">
+			<p class="text-xs font-medium text-gray-400">Estimated payouts after maintenance</p>
+
+			<!-- LMS pool -->
+			<div class="rounded-lg border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.04)] px-4 py-3">
+				<div class="flex items-center justify-between">
+					<span class="text-xs font-semibold text-[#c9a84c]">LMS Pool</span>
+					<span class="text-lg font-bold text-white">${lmsPayout.toLocaleString()}</span>
+				</div>
+				<div class="mt-1.5 flex flex-col gap-0.5 text-xs text-gray-500">
+					<div class="flex justify-between">
+						<span>Revenue</span><span class="text-gray-400">${lmsRevenue.toLocaleString()}</span>
+					</div>
+					<div class="flex justify-between">
+						<span>Maintenance share ({Math.round(lmsShare * 100)}%)</span>
+						<span class="text-red-400">−${lmsMaintCost.toLocaleString()}</span>
+					</div>
+					{#if lmsCount > 0}
+					<div class="mt-1 flex justify-between border-t border-[rgba(201,168,76,0.1)] pt-1">
+						<span>Per-entry payout (winner takes all)</span>
+						<span class="text-[#c9a84c] font-medium">${lmsPayout.toLocaleString()}</span>
+					</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- 2H pool -->
+			<div class="rounded-lg border border-blue-900/40 bg-blue-950/10 px-4 py-3">
+				<div class="flex items-center justify-between">
+					<span class="text-xs font-semibold text-blue-400">2nd Half Pool</span>
+					<span class="text-lg font-bold text-white">${shPayout.toLocaleString()}</span>
+				</div>
+				<div class="mt-1.5 flex flex-col gap-0.5 text-xs text-gray-500">
+					<div class="flex justify-between">
+						<span>Revenue</span><span class="text-gray-400">${shRevenue.toLocaleString()}</span>
+					</div>
+					<div class="flex justify-between">
+						<span>Maintenance share ({Math.round(shShare * 100)}%)</span>
+						<span class="text-red-400">−${shMaintCost.toLocaleString()}</span>
+					</div>
+					{#if shCount > 0}
+					<div class="mt-1 flex justify-between border-t border-blue-900/30 pt-1">
+						<span>Per-entry payout (winner takes all)</span>
+						<span class="text-blue-400 font-medium">${shPayout.toLocaleString()}</span>
+					</div>
+					{/if}
+				</div>
+			</div>
+
+			{#if totalCount === 0}
+				<p class="text-xs text-gray-600">No active entries yet — payouts will appear once entries are confirmed.</p>
+			{/if}
+		</div>
+	</div>
+</div>
+{/if}
+
 {#if !data.activeSeason}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
 		<p class="text-gray-400">No seasons found. <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Create one first.</a></p>
@@ -448,7 +616,7 @@
 							<div class="flex items-center gap-3">
 								<p class="font-semibold text-white">Week {week.week}</p>
 
-								{#if week.status === 'open'}
+								{#if week.status === 'open' && isSuperAdmin}
 									{#if isNextOpen}
 										<span class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.12)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">Current</span>
 									{:else}
@@ -557,8 +725,8 @@
 
 	
 
-							<!-- Delete (open weeks only) -->
-							{#if week.status === 'open'}
+							<!-- Delete (open weeks, super_admin only) -->
+							{#if week.status === 'open' && isSuperAdmin}
 								{#if deleteWeekConfirmId === week.id}
 									<div class="flex items-center gap-1">
 										<form method="POST" action="?/deleteWeek" use:enhance={() => { deleteWeekConfirmId = null; }}>
