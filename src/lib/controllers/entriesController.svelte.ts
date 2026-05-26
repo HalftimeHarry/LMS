@@ -17,7 +17,7 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 	let entries      = $state<Entry[]>(initialEntries);
 	let search       = $state('');
 	let seasonId     = $state('');
-	let statusFilter = $state<EntryStatus | 'all'>('pending_payment');
+	let statusFilter = $state<EntryStatus | 'all'>('all');
 	let poolType     = $state<EntryType | 'all'>('all');
 
 	// Bulk selection — set of entry ids

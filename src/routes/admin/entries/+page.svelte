@@ -15,8 +15,13 @@
 	});
 
 	const ctrl = createEntriesController(data.entries as any[]);
-	// Keep controller in sync when page data reloads after form actions
-	$effect(() => ctrl.setEntries(data.entries as any[]));
+	// Keep controller in sync when page data reloads after form actions or URL filter changes
+	$effect(() => {
+		ctrl.setEntries(data.entries as any[]);
+		// Server already filters by status — keep controller's statusFilter in sync
+		// so the client-side derived doesn't double-filter and hide results
+		ctrl.statusFilter = (data.statusFilter ?? 'all') as any;
+	});
 
 	const statusOptions = [
 		{ value: 'pending_payment', label: 'Pending Payment' },
@@ -57,13 +62,13 @@
 		playerSearch     = '';
 		selectedUserId   = '';
 		selectedSeasonId = defaultSeason?.id ?? '';
-		baseName         = 'Entry';
 		entryType        = 'lms';
 		complimentary    = false;
 		entryCount       = 1;
 		referredBy       = '';
 		modalStep        = 1;
 		showCreateForm   = true;
+		// baseName is set reactively by $effect based on selectedUser + entryType
 	}
 	function closeModal() {
 		showCreateForm = false;
@@ -112,21 +117,75 @@
 	let selectedSeasonId = $state('');
 	$effect(() => { if (defaultSeason && !selectedSeasonId) selectedSeasonId = defaultSeason.id; });
 
-	// Base name — writable so it auto-fills when a player is selected but stays editable
-	let baseName = $state('Entry');
-	$effect(() => {
-		baseName = selectedUser?.displayName ? `${selectedUser.displayName} Entry` : 'Entry';
-	});
-
-	// Entry type — default lms
+	// Entry type — default lms; auto-set when season only supports one pool
 	let entryType     = $state('lms');
 	let complimentary = $state(false);
+
+	const modalHasLms = $derived((() => {
+		const s = (data.seasons as any[]).find((s: any) => s.id === selectedSeasonId);
+		return !s || s.lmsEnabled !== false;
+	})());
+	const modalHasSh = $derived((() => {
+		const s = (data.seasons as any[]).find((s: any) => s.id === selectedSeasonId);
+		return !s || s.secondHalfEnabled !== false;
+	})());
+
+	$effect(() => {
+		if (modalHasLms && !modalHasSh) entryType = 'lms';
+		if (!modalHasLms && modalHasSh) entryType = 'second_half';
+	});
+
+	// Base name — auto-fills from player + entry type, stays editable
+	let baseName = $state('LMS');
+	$effect(() => {
+		if (!selectedUser?.displayName) {
+			baseName = entryType === 'second_half' ? '2nd Half' : 'LMS';
+		} else {
+			baseName = entryType === 'second_half'
+				? `${selectedUser.displayName} 2nd Half`
+				: `${selectedUser.displayName} LMS`;
+		}
+	});
 
 	// Client-side search and pool type filter delegated to controller
 	const visibleEntries = $derived(ctrl.filtered);
 
 	// Deadline helpers — keyed by seasonId
-	const deadlineMap = $derived(data.deadlineMap as Record<string, string>);
+	const deadlineMap        = $derived(data.deadlineMap as Record<string, string>);
+	const PST = 'America/Los_Angeles';
+	function fmtDeadline(iso: string) {
+		return new Date(iso).toLocaleString('en-US', {
+			timeZone: PST, month: 'short', day: 'numeric',
+			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+		});
+	}
+	function deadlineDiff(iso: string) { return new Date(iso).getTime() - now; }
+
+	// LMS deadline — 20 min before week 1 first kickoff
+	const activeDeadline     = $derived((data.lmsEntryDeadline as string | null) ?? null);
+	const activeDeadlinePast = $derived(activeDeadline ? now > new Date(activeDeadline).getTime() : false);
+	const activeDeadlineDiff = $derived(activeDeadline ? deadlineDiff(activeDeadline) : 0);
+	const activeDeadlineDays = $derived(activeDeadlineDiff > 0 ? Math.floor(activeDeadlineDiff / 86_400_000) : 0);
+	const activeDeadlineH    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 86_400_000) / 3_600_000) : 0);
+	const activeDeadlineM    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 3_600_000) / 60_000) : 0);
+	const activeDeadlineS    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 60_000) / 1_000) : 0);
+
+	// 2H deadline — 20 min before week 6 first kickoff
+	const shDeadline     = $derived((data.shEntryDeadline as string | null) ?? null);
+	const shDeadlinePast = $derived(shDeadline ? now > new Date(shDeadline).getTime() : false);
+	const shDeadlineDiff = $derived(shDeadline ? deadlineDiff(shDeadline) : 0);
+	const shDeadlineDays = $derived(shDeadlineDiff > 0 ? Math.floor(shDeadlineDiff / 86_400_000) : 0);
+	const shDeadlineH    = $derived(shDeadlineDiff > 0 ? Math.floor((shDeadlineDiff % 86_400_000) / 3_600_000) : 0);
+	const shDeadlineM    = $derived(shDeadlineDiff > 0 ? Math.floor((shDeadlineDiff % 3_600_000) / 60_000) : 0);
+	const shDeadlineS    = $derived(shDeadlineDiff > 0 ? Math.floor((shDeadlineDiff % 60_000) / 1_000) : 0);
+
+	// Which deadline applies to the current pool type filter
+	const currentDeadlinePast = $derived(filterPoolType === 'second_half' ? shDeadlinePast : activeDeadlinePast);
+	const currentDeadlineDiff = $derived(filterPoolType === 'second_half' ? shDeadlineDiff : activeDeadlineDiff);
+	const currentDeadlineDays = $derived(filterPoolType === 'second_half' ? shDeadlineDays : activeDeadlineDays);
+	const currentDeadlineH    = $derived(filterPoolType === 'second_half' ? shDeadlineH    : activeDeadlineH);
+	const currentDeadlineM    = $derived(filterPoolType === 'second_half' ? shDeadlineM    : activeDeadlineM);
+	const currentDeadlineS    = $derived(filterPoolType === 'second_half' ? shDeadlineS    : activeDeadlineS);
 	function canDelete(entry: any): boolean {
 		const dl = deadlineMap[entry.season];
 		return !dl || now < new Date(dl).getTime();
@@ -137,6 +196,14 @@
 		const d = new Date(dl);
 		return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 	}
+
+	// Local filter state — kept in sync with URL params so selects reflect current state
+	let filterStatus   = $state(data.statusFilter ?? 'all');
+	let filterPoolType = $state(data.poolType     ?? 'all');
+	$effect(() => {
+		filterStatus   = data.statusFilter ?? 'all';
+		filterPoolType = data.poolType     ?? 'all';
+	});
 
 	function updateFilter(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -166,6 +233,18 @@
 		if (result.success) { bulkStatusValue = ''; await invalidateAll(); }
 	}
 
+	// Inline rename
+	let renamingId    = $state<string | null>(null);
+	let renameValue   = $state('');
+	function startRename(entry: any) {
+		renamingId  = entry.id;
+		renameValue = entry.entryName;
+	}
+	function cancelRename() {
+		renamingId = null;
+		renameValue = '';
+	}
+
 	// Bulk delete
 	let bulkDeleteConfirm = $state(false);
 	let deleteConfirmId   = $state<string | null>(null);
@@ -185,44 +264,80 @@
 
 <svelte:head><title>Entries — Admin</title></svelte:head>
 
-<div class="mb-2 flex flex-wrap items-center justify-between gap-4">
-	<h1 class="text-2xl font-bold text-white">Entries & Payments</h1>
-	<div class="flex flex-wrap items-center gap-3">
-		<!-- Season filter -->
-		<div class="flex items-center gap-1.5">
-			<select
-				value={data.seasonFilter ?? ''}
-				onchange={(e) => updateFilter('season', (e.target as HTMLSelectElement).value)}
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-			>
-				<option value="">All seasons</option>
-				{#each data.seasons as s}
-					<option value={s.id}>{s.name}</option>
-				{/each}
-			</select>
-			<InfoTip text="Filter entries by season. Select a specific season to see its delete deadline and focus bulk actions on that pool." />
-		</div>
-		<!-- Status filter -->
-		<div class="flex items-center gap-1.5">
-			<select
-				value={data.statusFilter}
-				onchange={(e) => updateFilter('status', (e.target as HTMLSelectElement).value)}
-				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-			>
-				{#each statusOptions as opt}
-					<option value={opt.value}>{opt.label}</option>
-				{/each}
-			</select>
-			<InfoTip text="pending_payment — registered but not yet paid. active — paid and in the pool. eliminated — picked incorrectly and removed from contention. Filter to pending_payment to process outstanding fees." />
+<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
+	<div class="flex flex-wrap items-center justify-between gap-4">
+
+		<!-- Title + deadlines -->
+		<div>
+			<h1 class="text-2xl font-bold text-white">Entries & Payments</h1>
+			{#if data.activeSeason}
+				<div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-0.5">
+					{#if activeDeadline}
+						<p class="text-sm {activeDeadlinePast ? 'text-red-400' : 'text-yellow-400'}">
+							LMS · {activeDeadlinePast ? '⚠ closed' : 'deadline'} {fmtDeadline(activeDeadline)}
+						</p>
+					{/if}
+					{#if shDeadline}
+						<p class="text-sm {shDeadlinePast ? 'text-red-400' : 'text-blue-400'}">
+							2nd Half · {shDeadlinePast ? '⚠ closed' : 'deadline'} {fmtDeadline(shDeadline)}
+						</p>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
-		<button
+		<!-- Filters + button -->
+		<div class="flex flex-wrap items-center gap-3">
+			<!-- Pool type filter -->
+			<select
+				bind:value={filterPoolType}
+				onchange={() => updateFilter('poolType', filterPoolType)}
+				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				<option value="all">All entries</option>
+				<option value="lms">LMS only</option>
+				<option value="second_half">2nd Half only</option>
+			</select>
+
+			<!-- Status filter -->
+			<div class="flex items-center gap-1.5">
+				<select
+					bind:value={filterStatus}
+					onchange={() => updateFilter('status', filterStatus)}
+					class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+				>
+					{#each statusOptions as opt}
+						<option value={opt.value}>{opt.label}</option>
+					{/each}
+				</select>
+				<InfoTip text="pending_payment — registered but not yet paid. active — paid and in the pool. eliminated — picked incorrectly and removed from contention." />
+			</div>
+
+			<button
 			type="button"
 			onclick={openModal}
-			class="rounded bg-[#c9a84c] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a]"
-		>+ Add Entries</button>
-	</div>
-</div>
+			disabled={currentDeadlinePast}
+			title={currentDeadlinePast ? 'Entry deadline has passed — no new entries can be added' : 'Add new entries'}
+			class="rounded-lg px-5 py-2.5 text-base font-semibold text-white transition
+				{currentDeadlinePast
+					? 'cursor-not-allowed bg-gray-700 opacity-50'
+					: 'bg-green-600 hover:bg-green-500'}"
+		>
+			{#if currentDeadlinePast}
+				Entries Closed
+			{:else}
+				+ Add Entries
+				{#if currentDeadlineDiff > 0}
+					<span class="ml-2 font-mono text-xs font-normal opacity-80">
+						{#if currentDeadlineDays > 0}{currentDeadlineDays}d {/if}{String(currentDeadlineH).padStart(2,'0')}:{String(currentDeadlineM).padStart(2,'0')}:{String(currentDeadlineS).padStart(2,'0')}
+					</span>
+				{/if}
+			{/if}
+		</button>
+		</div><!-- /filters + button -->
+
+	</div><!-- /flex row -->
+</div><!-- /card -->
 
 <!-- Description card -->
 <div class="mb-6 grid gap-3 sm:grid-cols-3">
@@ -395,7 +510,8 @@
 				</select>
 			</div>
 
-			<!-- Pool type -->
+			<!-- Pool type — only shown when season supports both pools -->
+			{#if modalHasLms && modalHasSh}
 			<div class="flex flex-col gap-1.5">
 				<p class="text-xs font-medium text-gray-400">Pool type</p>
 				<div class="grid grid-cols-2 gap-2">
@@ -411,6 +527,7 @@
 					</label>
 				</div>
 			</div>
+			{/if}
 
 			<!-- Count + base name side by side -->
 			<div class="grid grid-cols-2 gap-3">
@@ -550,16 +667,7 @@
 <!-- Search + select + bulk actions card -->
 <div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
 
-	<!-- Deadline notice — shown when a single season is selected -->
-	{#if data.seasonFilter && deadlineMap[data.seasonFilter]}
-		{@const dl = deadlineMap[data.seasonFilter]}
-		{@const isPast = now > new Date(dl).getTime()}
-		<div class="mb-3 flex items-center gap-2 text-xs {isPast ? 'text-red-400' : 'text-yellow-400'}">
-			<span class="font-semibold">{isPast ? '⚠️ Delete window closed' : '🕐 Delete deadline'}:</span>
-			<span>{new Date(dl).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
-			{#if isPast}<span class="text-gray-500">— use status change to remove entries</span>{/if}
-		</div>
-	{/if}
+
 
 	<!-- Row 1: search + count + select-all -->
 	<div class="flex flex-wrap items-center gap-3">
@@ -706,7 +814,32 @@
 						</div>
 						<div>
 						<div class="flex flex-wrap items-center gap-2">
-							<p class="font-semibold text-white">{entry.entryName}</p>
+							{#if renamingId === entry.id}
+								<form
+									method="POST"
+									action="?/renameEntry"
+									use:enhance={() => async ({ update }) => { await update(); await invalidateAll(); cancelRename(); }}
+									class="flex items-center gap-1.5"
+								>
+									<input type="hidden" name="id" value={entry.id} />
+									<input
+										type="text"
+										name="name"
+										bind:value={renameValue}
+										class="rounded border border-[#c9a84c]/60 bg-gray-900 px-2 py-0.5 text-sm font-semibold text-white focus:border-[#c9a84c] focus:outline-none"
+										onkeydown={(e) => e.key === 'Escape' && cancelRename()}
+									/>
+									<button type="submit" class="rounded border border-green-800 bg-green-950/40 px-2 py-0.5 text-xs text-green-400 hover:bg-green-950/70">Save</button>
+									<button type="button" onclick={cancelRename} class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-xs text-gray-400 hover:text-white">✕</button>
+								</form>
+							{:else}
+								<button
+									type="button"
+									onclick={() => startRename(entry)}
+									class="font-semibold text-white hover:text-[#c9a84c] transition-colors text-left"
+									title="Click to rename"
+								>{entry.entryName}</button>
+							{/if}
 							<span class="rounded border px-2 py-0.5 text-xs font-medium {entryTypeBadge[entry.entryType] ?? 'border-gray-700 text-gray-400'}">
 								{entry.entryType === 'lms' ? 'LMS' : '2nd Half'}
 							</span>
