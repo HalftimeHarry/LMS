@@ -1,14 +1,11 @@
-import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
-	if (!locals.user) redirect(302, '/register?reason=standings');
-
 	const pb       = await pbAdmin();
 	const poolType = (url.searchParams.get('pool') ?? 'lms') as 'lms' | 'second_half';
 	const seasonId = url.searchParams.get('season') ?? null;
-	const userId   = locals.user.id;
+	const userId   = locals.user?.id ?? null;
 
 	const seasonsRaw = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
 	// Real seasons before test seasons so defaults always land on the real season

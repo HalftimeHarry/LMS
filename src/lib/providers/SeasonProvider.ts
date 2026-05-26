@@ -18,6 +18,8 @@ export interface Season {
 	secondHalfEnabled?:       boolean;
 	secondHalfStartWeek?:     number;   // week registration opens (default 6)
 	secondHalfPicksStartWeek?: number;  // week picks increase to secondHalfPicksPerWeek (default 10)
+	// Shared operating cost deducted proportionally from each pool's payout
+	maintenanceFee?:          number;
 }
 
 export class SeasonProvider extends BaseProvider {

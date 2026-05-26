@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { pb } from '$lib';
 	import logo from '$lib/assets/lms_images/h_group6.png';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	let pbStatus = $state<'checking' | 'ok' | 'error'>('checking');
 
@@ -14,18 +17,39 @@
 		'Pick one NFL team each week to <strong>lose</strong> its game outright. No point spread.',
 		'If your team loses — you survive. If your team wins or ties — you are eliminated.',
 		'Each team can only be used <strong>once per entry</strong> per season.',
-		'Picks are due <strong>Thursday at 3:00 PM Pacific</strong>. No exceptions.',
-		'Miss the deadline? You automatically receive the biggest favourite on the board. If that team is already used, your entry is eliminated.',
+		'Picks are due <strong>20 minutes before the first kickoff of the week</strong>. No exceptions.',
+		'Miss the deadline? You automatically receive the biggest favourite on the board.',
 		'Pool covers the <strong>NFL regular season only</strong>.',
 		'If 5 or fewer entries remain, players may propose a split — all active entries must agree.',
 	];
 
-	const stats = [
-		{ label: 'Entry Fee', value: '$100' },
-		{ label: 'Season', value: '2025 NFL' },
-		{ label: 'Deadline', value: 'Thu 3 PM PST' },
-		{ label: 'Weeks', value: '18' },
-	];
+	// Live countdown to the current LMS pick deadline
+	let now = $state(Date.now());
+	$effect(() => {
+		const t = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(t);
+	});
+
+	const deadline     = $derived(data.lmsDeadline ? new Date(data.lmsDeadline).getTime() : null);
+	const lmsWeek      = $derived(data.lmsWeek      as number | null);
+	const lmsEntryFee  = $derived(data.lmsEntryFee  as number | null);
+
+	const countdown = $derived(() => {
+		if (!deadline) return null;
+		const diff = deadline - now;
+		if (diff <= 0) return { label: 'Deadline passed', urgent: false, expired: true };
+		const d = Math.floor(diff / 86_400_000);
+		const h = Math.floor((diff % 86_400_000) / 3_600_000);
+		const m = Math.floor((diff % 3_600_000) / 60_000);
+		const s = Math.floor((diff % 60_000) / 1_000);
+		const urgent = diff < 3_600_000;
+		const label = d > 0
+			? `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`
+			: h > 0
+				? `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`
+				: `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+		return { label, urgent, expired: false };
+	});
 </script>
 
 <svelte:head>
@@ -59,12 +83,38 @@
 
 <!-- Stats bar -->
 <section class="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
-	{#each stats as stat}
-		<div class="rounded-lg border border-[rgba(201,168,76,0.3)] bg-black/70 p-5 text-center backdrop-blur-sm">
-			<div class="text-2xl font-bold text-[#c9a84c]">{stat.value}</div>
-			<div class="mt-1 text-sm text-gray-400">{stat.label}</div>
+	<!-- Entry fee -->
+	<div class="rounded-lg border border-[rgba(201,168,76,0.3)] bg-black/70 p-5 text-center backdrop-blur-sm">
+		<div class="text-2xl font-bold text-[#c9a84c]">
+			{lmsEntryFee != null ? `$${lmsEntryFee}` : '$—'}
 		</div>
-	{/each}
+		<div class="mt-1 text-sm text-gray-400">Entry Fee</div>
+	</div>
+
+	<!-- Season -->
+	<div class="rounded-lg border border-[rgba(201,168,76,0.3)] bg-black/70 p-5 text-center backdrop-blur-sm">
+		<div class="text-2xl font-bold text-[#c9a84c]">2025 NFL</div>
+		<div class="mt-1 text-sm text-gray-400">Season</div>
+	</div>
+
+	<!-- Live LMS countdown -->
+	<div class="col-span-2 rounded-lg border backdrop-blur-sm p-5 text-center
+		{countdown()?.urgent ? 'border-red-800 bg-red-950/60' : countdown()?.expired ? 'border-gray-700 bg-black/70' : deadline ? 'border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.06)]' : 'border-[rgba(201,168,76,0.3)] bg-black/70'}">
+		{#if countdown() && !countdown()?.expired}
+			<div class="font-mono text-2xl font-bold tabular-nums {countdown()?.urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+				{countdown()?.label}
+			</div>
+			<div class="mt-1 text-sm text-gray-400">
+				{lmsWeek ? `Week ${lmsWeek} pick deadline` : 'Pick deadline'}
+			</div>
+		{:else if countdown()?.expired}
+			<div class="text-2xl font-bold text-gray-500">—</div>
+			<div class="mt-1 text-sm text-gray-500">Deadline passed</div>
+		{:else}
+			<div class="text-2xl font-bold text-gray-500">—</div>
+			<div class="mt-1 text-sm text-gray-500">Season not started</div>
+		{/if}
+	</div>
 </section>
 
 <!-- How it works -->

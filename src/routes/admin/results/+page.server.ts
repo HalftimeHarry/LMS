@@ -199,9 +199,9 @@ export const actions: Actions = {
 				teamResult[awayId] = 'correct';
 				teamResult[homeId] = 'incorrect';
 			} else {
-				// tie — neither side loses
-				teamResult[homeId] = 'correct';
-				teamResult[awayId] = 'correct';
+				// tie — both teams survive (no eliminations for either pool)
+				teamResult[homeId] = 'tie';
+				teamResult[awayId] = 'tie';
 			}
 		}
 
@@ -224,7 +224,8 @@ export const actions: Actions = {
 					const result = teamResult[teamId];
 					if (!result) continue; // game not yet entered — skip
 
-					if (isLms ? result === 'correct' : result === 'incorrect') {
+					// Tie = no elimination for either pool type
+					if (result !== 'tie' && (isLms ? result === 'correct' : result === 'incorrect')) {
 						shouldEliminate = true;
 					}
 

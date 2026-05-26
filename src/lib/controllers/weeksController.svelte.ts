@@ -11,7 +11,7 @@ import type { EntryType } from '$lib/providers';
  * - Per-week favorite team selection state
  * - Loading/error state for inline actions
  */
-export function createWeeksController(initialWeeks: Week[] = [], initialPoolType: EntryType = 'lms') {
+export function createWeeksController(initialWeeks: Week[] = [], initialPoolType: EntryType = 'lms', shStartWeek = 6) {
 	// ── Scope ─────────────────────────────────────────────────────────────────
 	let poolType  = $state<EntryType>(initialPoolType);
 	let seasonId  = $state('');
@@ -23,10 +23,10 @@ export function createWeeksController(initialWeeks: Week[] = [], initialPoolType
 	let favoriteTeam = $state<Record<string, string>>({});
 
 	// ── Derived filtered weeks ────────────────────────────────────────────────
-	// Second Half pool only plays from week 10 onward
+	// Second Half pool only plays from secondHalfStartWeek onward
 	const filtered = $derived(() =>
 		poolType === 'second_half'
-			? weeks.filter(w => w.week >= 10)
+			? weeks.filter(w => w.week >= shStartWeek)
 			: weeks
 	);
 
