@@ -44,8 +44,12 @@
 		}
 	}
 
-	// Which season is currently selected in the overview — no default, must be chosen explicitly
-	let selectedSeasonId = $state('');
+	// Default to the first active LMS (non-second-half) season
+	const defaultSeasonId = (data.seasons as any[]).find(
+		s => !s.name?.toLowerCase().includes('second half') && (s.status === 'active' || s.status === 'open')
+	)?.id ?? (data.seasons as any[])[0]?.id ?? '';
+
+	let selectedSeasonId = $state(defaultSeasonId);
 
 	const selectedSeason = $derived(
 		(data.seasons as any[]).find(s => s.id === selectedSeasonId) ?? null
@@ -97,10 +101,14 @@
 		allSeasons.filter(s => getSeasonGroup(s) === seasonGroup)
 	);
 
-	// Clear selection when switching season groups — force explicit choice
+	// Clear selection when switching season groups
+	let prevGroup = seasonGroup;
 	$effect(() => {
 		void visibleSeasons;
-		selectedSeasonId = '';
+		if (seasonGroup !== prevGroup) {
+			prevGroup = seasonGroup;
+			selectedSeasonId = '';
+		}
 	});
 </script>
 
@@ -130,68 +138,17 @@
 							First pick: {new Date(s.firstPickDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 						</span>
 					{/if}
-					{#if currentWeek}
-						<span class="rounded border border-[rgba(201,168,76,0.3)] bg-black/40 px-3 py-1.5 text-gray-300">
-							Week {(currentWeek as any).week} — {(currentWeek as any).status}
-						</span>
+
+					{#if isSuperAdmin}
+						<a href="/admin/seasons/{s.id}/edit"
+							class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-3 py-1.5 text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">
+							Edit season →
+						</a>
 					{/if}
-					<a href="/admin/seasons/{s.id}/edit"
-						class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-3 py-1.5 text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">
-						Edit season →
-					</a>
 				</div>
 			</div>
 
-			<!-- Pool toggles -->
-			<div class="mt-4 border-t border-[rgba(201,168,76,0.15)] pt-4">
-				<div class="mb-3 flex items-center gap-2">
-					<p class="text-xs font-semibold uppercase tracking-wider text-[rgba(201,168,76,0.5)]">Pool Toggles</p>
-					<InfoTip text="Enable or disable each pool type. Disabling a pool hides it from players but keeps all data intact. Use this to open registration for one pool at a time." />
-				</div>
-				<div class="flex flex-wrap gap-4">
 
-					<!-- LMS toggle -->
-					<form method="POST" action="/admin/seasons?/togglePool" use:enhance={() => () => invalidateAll()}>
-						<input type="hidden" name="id"   value={s.id} />
-						<input type="hidden" name="pool" value="lms" />
-						<input type="hidden" name="enabled" value={s.lmsEnabled === false ? 'true' : 'false'} />
-						<button type="submit"
-							class="flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition
-								{s.lmsEnabled !== false
-									? 'border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.12)] text-[#c9a84c] hover:bg-[rgba(201,168,76,0.2)]'
-									: 'border-gray-700 bg-gray-900 text-gray-500 hover:bg-gray-800'}">
-							<span class="h-2 w-2 rounded-full {s.lmsEnabled !== false ? 'bg-[#c9a84c]' : 'bg-gray-600'}"></span>
-							LMS Pool
-							<span class="text-xs opacity-70">{s.lmsEnabled !== false ? 'ON' : 'OFF'}</span>
-						</button>
-					</form>
-
-					<!-- 2nd Half toggle -->
-					<form method="POST" action="/admin/seasons?/togglePool" use:enhance={() => () => invalidateAll()}>
-						<input type="hidden" name="id"   value={s.id} />
-						<input type="hidden" name="pool" value="second_half" />
-						<input type="hidden" name="enabled" value={s.secondHalfEnabled === false ? 'true' : 'false'} />
-						<button type="submit"
-							class="flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition
-								{s.secondHalfEnabled !== false
-									? 'border-blue-700 bg-blue-950/50 text-blue-400 hover:bg-blue-950/80'
-									: 'border-gray-700 bg-gray-900 text-gray-500 hover:bg-gray-800'}">
-							<span class="h-2 w-2 rounded-full {s.secondHalfEnabled !== false ? 'bg-blue-400' : 'bg-gray-600'}"></span>
-							2nd Half Pool
-							<span class="text-xs opacity-70">{s.secondHalfEnabled !== false ? 'ON' : 'OFF'}</span>
-						</button>
-					</form>
-
-					<!-- 2nd Half config summary — edit in Season Settings -->
-					{#if s.secondHalfEnabled !== false}
-						<p class="self-center text-xs text-gray-600">
-							opens wk {s.secondHalfStartWeek ?? 6}
-							· {s.secondHalfPicksPerWeek ?? 2} pick{(s.secondHalfPicksPerWeek ?? 2) > 1 ? 's' : ''}/wk
-						</p>
-					{/if}
-
-				</div>
-			</div>
 		</div>
 	</div>
 {:else}
@@ -206,20 +163,22 @@
 	<div class="mb-3 flex items-center justify-between gap-3">
 		<h2 class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c] shrink-0">All Seasons</h2>
 		<div class="flex items-center gap-3">
-			<select
-				bind:value={seasonGroup}
-				class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-1.5 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
-			>
-				{#if hasGroup.real}
-					<option value="real">2026 – 2027 Season</option>
-				{/if}
-				{#if hasGroup['1h']}
-					<option value="1h">18 Hour Testing</option>
-				{/if}
-				{#if hasGroup['1d']}
-					<option value="1d">24 Hour Testing</option>
-				{/if}
-			</select>
+			{#if hasGroup['1h'] || hasGroup['1d']}
+				<select
+					bind:value={seasonGroup}
+					class="rounded border border-[rgba(201,168,76,0.4)] bg-black px-3 py-1.5 text-sm text-[#c9a84c] focus:border-[#c9a84c] focus:outline-none"
+				>
+					{#if hasGroup.real}
+						<option value="real">2026 – 2027 Season</option>
+					{/if}
+					{#if hasGroup['1h']}
+						<option value="1h">18 Hour Testing</option>
+					{/if}
+					{#if hasGroup['1d']}
+						<option value="1d">24 Hour Testing</option>
+					{/if}
+				</select>
+			{/if}
 			{#if isSuperAdmin}
 				<a href="/admin/seasons/new" class="text-xs text-[#c9a84c] hover:underline shrink-0">+ New season</a>
 			{/if}
@@ -235,7 +194,7 @@
 			{@const testInterval = isTest ? (season.name?.match(/\(([^)]+)\/week\)/)?.[1] ?? null) : null}
 			<button
 				type="button"
-				onclick={() => { if (isActive) selectedSeasonId = season.id; }}
+				onclick={() => { if (isActive) selectedSeasonId = isSelected ? '' : season.id; }}
 				disabled={!isActive}
 				class="relative overflow-hidden rounded-xl border text-left transition
 					{isActive ? 'cursor-pointer hover:brightness-110' : 'cursor-default opacity-50'}
@@ -364,13 +323,7 @@
 			class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
 			<div>
 				<p class="text-sm font-medium text-white">Season Settings</p>
-				<p class="text-xs text-gray-500">
-					{#if currentWeek}
-						Week {(currentWeek as any).week} is {(currentWeek as any).status}
-					{:else}
-						Set up weeks & deadlines
-					{/if}
-				</p>
+				<p class="text-xs text-gray-500">Set up weeks & deadlines</p>
 			</div>
 			<span class="text-gray-600">→</span>
 		</a>

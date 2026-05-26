@@ -127,11 +127,12 @@
 		}
 		updateParam('season', id);
 	}
-	function switchPoolType(type: EntryType) {
-		ctrl.poolType = type;
-		updateParam('poolType', type);
-	}
 
+	function clearSeason() {
+		const params = new URLSearchParams($page.url.searchParams);
+		params.delete('season');
+		goto(`?${params.toString()}`, { replaceState: true });
+	}
 	// Group seasons for the rich picker — server already deduplicates by year
 	const seasonGroups = $derived(() => {
 		const all  = data.seasons as any[];
@@ -169,6 +170,16 @@
 			<div>
 				<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">Seasons</p>
 				<div class="flex flex-wrap gap-2">
+					<!-- All Seasons (default) -->
+					<button type="button" onclick={clearSeason}
+						class="flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition
+							{!data.activeSeason ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-gray-500 hover:text-white'}">
+						<span class="font-medium">All Seasons</span>
+						{#if !data.activeSeason}
+							<span class="text-xs text-[#c9a84c]">● viewing</span>
+						{/if}
+					</button>
+
 					{#each seasonGroups().real as s}
 						{@const active = data.activeSeason?.id === s.id}
 						<button type="button" onclick={() => switchSeason(s.id)}
@@ -222,34 +233,6 @@
 			</div>
 		{/if}
 
-		<!-- Pool type toggle + active season summary -->
-		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-800 pt-3">
-			<div class="flex flex-col gap-1">
-				<span class="text-xs text-gray-500">Pool type</span>
-				<div class="flex overflow-hidden rounded border border-gray-700">
-					<button type="button" onclick={() => switchPoolType('lms')}
-						class="px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}"
-					>LMS</button>
-					<button type="button" onclick={() => switchPoolType('second_half')}
-						class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition {ctrl.poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}"
-					>2nd Half</button>
-				</div>
-			</div>
-			{#if data.activeSeason}
-				<div class="text-right text-xs text-gray-500">
-					<span class="text-gray-300 font-medium">{data.activeSeason.name}</span>
-					{#if entryDeadline}
-						<span class="ml-2">· deadline {new Date(entryDeadline).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-					{/if}
-					{#if (data.activeSeason as any).lmsEntryFee}
-						<span class="ml-2">· LMS ${(data.activeSeason as any).lmsEntryFee}</span>
-					{/if}
-					{#if (data.activeSeason as any).secondHalfEntryFee}
-						<span class="ml-2">· 2H ${(data.activeSeason as any).secondHalfEntryFee}</span>
-					{/if}
-				</div>
-			{/if}
-		</div>
 	</div>
 
 	<!-- Test season controls -->
@@ -533,8 +516,8 @@
 {/if}
 
 {#if !data.activeSeason}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
-		<p class="text-gray-400">No seasons found. <a href="/admin/seasons/new" class="text-[#c9a84c] hover:underline">Create one first.</a></p>
+	<div class="rounded-xl border border-gray-800 bg-black/75 p-12 text-center backdrop-blur-sm">
+		<p class="text-gray-500">Select a season above to view and manage its weeks.</p>
 	</div>
 {:else}
 
@@ -784,8 +767,9 @@
 								</form>
 							{/if}
 
-							<!-- Advance status -->
-							{#if week.status !== 'complete'}
+							<!-- Advance status — Lock Week restricted to super_admin -->
+
+							{#if week.status !== 'complete' && (week.status !== 'open' || isSuperAdmin)}
 								<form method="POST" action="?/setStatus" use:enhance>
 									<input type="hidden" name="id" value={week.id} />
 									<input type="hidden" name="status" value={ctrl.nextStatus(week.status) ?? week.status} />

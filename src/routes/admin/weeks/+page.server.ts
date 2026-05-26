@@ -41,14 +41,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	}
 	const seasons = [...seasonsByYear.values()];
 
-	// Resolve activeSeason — if URL points to an orphaned/secondary season record,
-	// redirect to the year-group anchor (the deduplicated LMS season for that year)
+	// Resolve activeSeason — null when no season is explicitly selected (default/all view).
+	// If URL points to an orphaned/secondary season record, resolve to the year-group anchor.
 	const rawActive = seasonId
-		? (allFiltered as any[]).find((s: any) => s.id === seasonId) ?? seasons[0]
-		: seasons[0];
+		? (allFiltered as any[]).find((s: any) => s.id === seasonId) ?? null
+		: null;
 	const activeSeason = rawActive
 		? (seasons as any[]).find((s: any) => s.year && s.year === rawActive.year) ?? rawActive
-		: seasons[0];
+		: null;
 
 	const shStartWeek = (activeSeason as any)?.secondHalfStartWeek ?? 6;
 	const weeks = activeSeason
@@ -245,11 +245,17 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	setStatus: async ({ request }) => {
+	setStatus: async ({ request, locals }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
 		const status = data.get('status') as string;
+
+		// Only super_admin may lock a week (open → locked)
+		if (status === 'locked' && locals.role !== 'super_admin') {
+			return fail(403, { error: 'Only super admins can lock a week.' });
+		}
+
 		try {
 			await pb.collection('weekly_settings').update(id, { status });
 		} catch (e: unknown) {

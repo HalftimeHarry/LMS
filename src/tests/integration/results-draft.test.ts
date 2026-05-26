@@ -308,6 +308,200 @@ describe('recordResults — pick_result upsert', () => {
 	});
 });
 
+// ── Tie result — both teams eliminated ───────────────────────────────────────
+
+describe('recordResults — tie result eliminates pickers of both teams', () => {
+
+	function tieFields(extra: Record<string, string> = {}) {
+		return {
+			lmsWeekId:   LMS_WEEK,
+			lmsSeasonId: SEASON_ID,
+			weekNum:     '1',
+			draft:       '1',
+			[`gameId_${GAME_ID}`]: 'tie',
+			...extra,
+		};
+	}
+
+	it('LMS: eliminates entry that picked the home team in a tie', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id: PICK_ID, entryType: 'lms', pickedTeams: [HOME_TEAM],
+			expand: { entry: { id: ENTRY_ID, status: 'active' } },
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(tieFields()) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledWith(ENTRY_ID, expect.objectContaining({
+			status: 'eliminated', eliminatedWeek: 1, eliminatedReason: 'Picked a team that tied',
+		}));
+		expect((result as any).eliminated).toBe(1);
+	});
+
+	it('LMS: eliminates entry that picked the away team in a tie', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id: PICK_ID, entryType: 'lms', pickedTeams: [AWAY_TEAM],
+			expand: { entry: { id: ENTRY_ID, status: 'active' } },
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(tieFields()) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledWith(ENTRY_ID, expect.objectContaining({
+			status: 'eliminated', eliminatedWeek: 1, eliminatedReason: 'Picked a team that tied',
+		}));
+		expect((result as any).eliminated).toBe(1);
+	});
+
+	it('LMS: eliminates entries that picked both teams in a tie', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([
+			{
+				id: 'pick_home', entryType: 'lms', pickedTeams: [HOME_TEAM],
+				expand: { entry: { id: 'entry_home', status: 'active' } },
+			},
+			{
+				id: 'pick_away', entryType: 'lms', pickedTeams: [AWAY_TEAM],
+				expand: { entry: { id: 'entry_away', status: 'active' } },
+			},
+		]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(tieFields()) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledTimes(2);
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_home', expect.objectContaining({ status: 'eliminated' }));
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_away', expect.objectContaining({ status: 'eliminated' }));
+		expect((result as any).eliminated).toBe(2);
+	});
+
+	it('2H: eliminates entry that picked the home team in a tie', async () => {
+		const SH_WEEK = 'shWeek6';
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6 });
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id: 'pick_sh', entryType: 'second_half', pickedTeams: [HOME_TEAM],
+			expand: { entry: { id: 'entry_sh', status: 'active' } },
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData({
+				shWeekId: SH_WEEK, shSeasonId: SEASON_ID, weekNum: '6',
+				draft: '1', [`gameId_${GAME_ID}`]: 'tie',
+			}) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_sh', expect.objectContaining({
+			status: 'eliminated', eliminatedWeek: 6, eliminatedReason: 'Picked a team that tied',
+		}));
+		expect((result as any).eliminated).toBe(1);
+	});
+
+	it('2H: eliminates entries that picked both teams in a tie', async () => {
+		const SH_WEEK = 'shWeek6';
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6 });
+		collections.picks.getFullList = vi.fn().mockResolvedValue([
+			{
+				id: 'pick_sh_home', entryType: 'second_half', pickedTeams: [HOME_TEAM],
+				expand: { entry: { id: 'entry_sh_home', status: 'active' } },
+			},
+			{
+				id: 'pick_sh_away', entryType: 'second_half', pickedTeams: [AWAY_TEAM],
+				expand: { entry: { id: 'entry_sh_away', status: 'active' } },
+			},
+		]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData({
+				shWeekId: SH_WEEK, shSeasonId: SEASON_ID, weekNum: '6',
+				draft: '1', [`gameId_${GAME_ID}`]: 'tie',
+			}) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledTimes(2);
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_sh_home', expect.objectContaining({ status: 'eliminated' }));
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_sh_away', expect.objectContaining({ status: 'eliminated' }));
+		expect((result as any).eliminated).toBe(2);
+	});
+
+	it('does not eliminate already-eliminated entries on tie', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id: PICK_ID, entryType: 'lms', pickedTeams: [HOME_TEAM],
+			expand: { entry: { id: ENTRY_ID, status: 'eliminated' } }, // already out
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(tieFields()) }
+		} as any);
+
+		expect(collections.entries.update).not.toHaveBeenCalled();
+		expect((result as any).eliminated).toBe(0);
+	});
+
+	it('writes pick_result with result="tie" for both teams', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id: PICK_ID, entryType: 'lms', pickedTeams: [HOME_TEAM],
+			expand: { entry: { id: ENTRY_ID, status: 'active' } },
+		}]);
+
+		await actions.recordResults({
+			request: { formData: async () => makeFormData(tieFields()) }
+		} as any);
+
+		expect(collections.pick_results.create).toHaveBeenCalledWith(
+			expect.objectContaining({ pick: PICK_ID, team: HOME_TEAM, result: 'tie' })
+		);
+	});
+
+	it('only eliminates pickers of the tied game — other game pickers unaffected', async () => {
+		const GAME2_ID   = 'game2';
+		const TEAM_C     = 'teamC';
+		const TEAM_D     = 'teamD';
+
+		// Two games this week: game1 ties, game2 home wins
+		collections.game_odds.getFullList = vi.fn().mockResolvedValue([
+			{
+				id: GAME_ID, week: 1, homeTeam: HOME_TEAM, awayTeam: AWAY_TEAM,
+				expand: { homeTeam: { id: HOME_TEAM }, awayTeam: { id: AWAY_TEAM } },
+			},
+			{
+				id: GAME2_ID, week: 1, homeTeam: TEAM_C, awayTeam: TEAM_D,
+				expand: { homeTeam: { id: TEAM_C }, awayTeam: { id: TEAM_D } },
+			},
+		]);
+
+		collections.picks.getFullList = vi.fn().mockResolvedValue([
+			// Picked tied team → eliminated
+			{
+				id: 'pick_tied', entryType: 'lms', pickedTeams: [HOME_TEAM],
+				expand: { entry: { id: 'entry_tied', status: 'active' } },
+			},
+			// Picked loser of game2 → safe (LMS: picked loser = safe)
+			{
+				id: 'pick_safe', entryType: 'lms', pickedTeams: [TEAM_D],
+				expand: { entry: { id: 'entry_safe', status: 'active' } },
+			},
+		]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData({
+				lmsWeekId: LMS_WEEK, lmsSeasonId: SEASON_ID, weekNum: '1',
+				draft: '1',
+				[`gameId_${GAME_ID}`]:  'tie',
+				[`gameId_${GAME2_ID}`]: 'home', // TEAM_C wins, TEAM_D loses
+			}) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledTimes(1);
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_tied', expect.objectContaining({ status: 'eliminated' }));
+		expect((result as any).eliminated).toBe(1);
+
+		// restore default mock for other tests
+		collections.game_odds.getFullList = vi.fn().mockResolvedValue([GAME]);
+	});
+});
+
 // ── Edge cases ────────────────────────────────────────────────────────────────
 
 describe('recordResults — edge cases', () => {
@@ -344,7 +538,7 @@ describe('recordResults — edge cases', () => {
 		expect((result as any).eliminated).toBe(0);
 	});
 
-	it('handles tie — neither team is eliminated', async () => {
+	it('tie — eliminates LMS entries that picked either team', async () => {
 		collections.picks.getFullList = vi.fn().mockResolvedValue([
 			{
 				id: 'pick_home', entryType: 'lms', pickedTeams: [HOME_TEAM],
@@ -364,7 +558,13 @@ describe('recordResults — edge cases', () => {
 			}) }
 		} as any);
 
-		expect(collections.entries.update).not.toHaveBeenCalled();
-		expect((result as any).eliminated).toBe(0);
+		expect(collections.entries.update).toHaveBeenCalledTimes(2);
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_home', expect.objectContaining({
+			status: 'eliminated', eliminatedWeek: 1, eliminatedReason: 'Picked a team that tied',
+		}));
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_away', expect.objectContaining({
+			status: 'eliminated', eliminatedWeek: 1, eliminatedReason: 'Picked a team that tied',
+		}));
+		expect((result as any).eliminated).toBe(2);
 	});
 });

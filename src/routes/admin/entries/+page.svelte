@@ -130,10 +130,6 @@
 		return !s || s.secondHalfEnabled !== false;
 	})());
 
-	// LMS is only available before the Week 1 pick deadline; Second Half only after
-	const canSelectLms = $derived(!activeDeadlinePast);
-	const canSelectSh  = $derived(activeDeadlinePast);
-
 	$effect(() => {
 		if (modalHasLms && !modalHasSh) entryType = 'lms';
 		if (!modalHasLms && modalHasSh) entryType = 'second_half';
@@ -171,6 +167,9 @@
 	// LMS deadline — 20 min before week 1 first kickoff
 	const activeDeadline     = $derived((data.lmsEntryDeadline as string | null) ?? null);
 	const activeDeadlinePast = $derived(activeDeadline ? now > new Date(activeDeadline).getTime() : false);
+	// LMS is only available before the Week 1 pick deadline; Second Half only after
+	const canSelectLms = $derived(!activeDeadlinePast);
+	const canSelectSh  = $derived(activeDeadlinePast);
 	const activeDeadlineDiff = $derived(activeDeadline ? deadlineDiff(activeDeadline) : 0);
 	const activeDeadlineDays = $derived(activeDeadlineDiff > 0 ? Math.floor(activeDeadlineDiff / 86_400_000) : 0);
 	const activeDeadlineH    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 86_400_000) / 3_600_000) : 0);
@@ -203,6 +202,28 @@
 		const d = new Date(dl);
 		return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 	}
+
+	// ── Stats (all entries, unfiltered — separate from the filtered list) ───
+	const activeSeason    = $derived(data.activeSeason as any);
+	const allEntries      = $derived(data.statsAll as any[]);
+	const lmsFee          = $derived((activeSeason?.lmsEntryFee        ?? 0) as number);
+	const shFee           = $derived((activeSeason?.secondHalfEntryFee ?? 0) as number);
+	const lmsEntries      = $derived(allEntries.filter((e: any) => e.pool_type === 'lms'));
+	const shEntries       = $derived(allEntries.filter((e: any) => e.pool_type === 'second_half'));
+	const lmsCount        = $derived(lmsEntries.length);
+	const shCount         = $derived(shEntries.length);
+	const totalCount      = $derived(lmsCount + shCount);
+	const lmsRevenue      = $derived(lmsFee * lmsEntries.filter((e: any) => e.paid).length);
+	const shRevenue       = $derived(shFee  * shEntries.filter((e: any) => e.paid).length);
+	const totalPot        = $derived(lmsRevenue + shRevenue);
+	const paidCount       = $derived(allEntries.filter((e: any) => e.paid).length);
+	const freeCount       = $derived(allEntries.filter((e: any) => e.paymentMethod === 'free').length);
+	const pendingCount    = $derived(allEntries.filter((e: any) => e.status === 'pending_payment').length);
+	const activeCount     = $derived(allEntries.filter((e: any) => e.status === 'active').length);
+	const eliminatedCount = $derived(allEntries.filter((e: any) => e.status === 'eliminated').length);
+	const registeredCount = $derived(new Set(allEntries.map((e: any) => e.user)).size);
+
+	let statsOpen = $state(true);
 
 	// Local filter state — kept in sync with URL params so selects reflect current state
 	let filterStatus   = $state(data.statusFilter ?? 'all');
@@ -277,7 +298,7 @@
 		<!-- Title + deadlines -->
 		<div>
 			<h1 class="text-2xl font-bold text-white">Entries & Payments</h1>
-			{#if data.activeSeason}
+			{#if activeSeason}
 				<div class="mt-1.5 flex flex-wrap gap-x-5 gap-y-0.5">
 					{#if activeDeadline}
 						<p class="text-sm {activeDeadlinePast ? 'text-red-400' : 'text-yellow-400'}">
@@ -346,20 +367,67 @@
 	</div><!-- /flex row -->
 </div><!-- /card -->
 
-<!-- Description card -->
-<div class="mb-6 grid gap-3 sm:grid-cols-3">
-	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Manage Entries</p>
-		Add, edit, and delete player entries. Each entry is one shot at the pool — a player can hold multiple.
-	</div>
-	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Collect Payments</p>
-		Mark entries as paid once you've received the fee. Unpaid entries stay in <span class="text-yellow-400">pending_payment</span> and won't receive picks until activated.
-	</div>
-	<div class="rounded-lg border border-gray-800 bg-gray-950 px-4 py-3 text-sm text-gray-400">
-		<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Use the Filters</p>
-		Filter by <span class="text-yellow-400">Pending Payment</span> to process outstanding fees, or pick a season to scope bulk actions before week 1 locks.
-	</div>
+<!-- Stats + description (collapsible) -->
+<div class="mb-6 rounded-xl border border-gray-800 bg-black/75 backdrop-blur-sm">
+	<!-- Toggle header -->
+	<button
+		type="button"
+		onclick={() => statsOpen = !statsOpen}
+		class="flex w-full items-center justify-between px-5 py-3 text-left"
+	>
+		<span class="text-sm font-semibold text-gray-300">
+			{#if activeSeason}{activeSeason.name} Stats{:else}Season Stats{/if}
+		</span>
+		<span class="text-xs text-gray-600">{statsOpen ? '▲ collapse' : '▼ expand'}</span>
+	</button>
+
+	{#if statsOpen}
+		<!-- Stat tiles -->
+		{#if activeSeason}
+		<div class="grid grid-cols-2 gap-px border-t border-gray-800 sm:grid-cols-4">
+			<!-- Total Pot -->
+			<div class="bg-black/60 px-5 py-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Pot</p>
+				<p class="mt-1 text-2xl font-bold text-white">${totalPot.toLocaleString()}</p>
+				<p class="mt-0.5 text-xs text-gray-600">LMS ${lmsRevenue.toLocaleString()} · 2H ${shRevenue.toLocaleString()}</p>
+			</div>
+			<!-- Total Entries -->
+			<div class="bg-black/60 px-5 py-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Entries</p>
+				<p class="mt-1 text-2xl font-bold text-white">{totalCount}</p>
+				<p class="mt-0.5 text-xs text-gray-600">LMS {lmsCount} · 2H {shCount}</p>
+			</div>
+			<!-- Paid -->
+			<div class="bg-black/60 px-5 py-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Paid</p>
+				<p class="mt-1 text-2xl font-bold text-white">{paidCount}</p>
+				<p class="mt-0.5 text-xs text-gray-600">{freeCount} free · {pendingCount} pending</p>
+			</div>
+			<!-- Active / Eliminated -->
+			<div class="bg-black/60 px-5 py-4">
+				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Active / Eliminated</p>
+				<p class="mt-1 text-2xl font-bold text-white">{activeCount} / {eliminatedCount}</p>
+				<p class="mt-0.5 text-xs text-gray-600">{registeredCount} registered users</p>
+			</div>
+		</div>
+		{/if}
+
+		<!-- Description cards -->
+		<div class="grid gap-px border-t border-gray-800 sm:grid-cols-3">
+			<div class="bg-black/40 px-4 py-3 text-sm text-gray-400">
+				<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Manage Entries</p>
+				Add, edit, and delete player entries. Each entry is one shot at the pool — a player can hold multiple.
+			</div>
+			<div class="bg-black/40 px-4 py-3 text-sm text-gray-400">
+				<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Collect Payments</p>
+				Mark entries as paid once you've received the fee. Unpaid entries stay in <span class="text-yellow-400">pending_payment</span> and won't receive picks until activated.
+			</div>
+			<div class="bg-black/40 px-4 py-3 text-sm text-gray-400 sm:rounded-br-xl">
+				<p class="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-600">Use the Filters</p>
+				Filter by <span class="text-yellow-400">Pending Payment</span> to process outstanding fees, or pick a season to scope bulk actions before week 1 locks.
+			</div>
+		</div>
+	{/if}
 </div>
 
 <!-- Success toast -->

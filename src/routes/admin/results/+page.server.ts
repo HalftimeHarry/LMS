@@ -150,8 +150,8 @@ export const actions: Actions = {
 	 *   draft        = '1' → keep weeks at locked (partial save); omit → advance to results_pending
 	 *
 	 * Elimination logic:
-	 *   LMS:      picked team WINS  → eliminated
-	 *   2H:       picked team LOSES → eliminated
+	 *   LMS:      picked team WINS or TIES  → eliminated
+	 *   2H:       picked team LOSES or TIES → eliminated
 	 *
 	 * Draft mode: saves pick_results and fires eliminations immediately so
 	 * standings update live, but leaves week status as 'locked'.
@@ -199,7 +199,7 @@ export const actions: Actions = {
 				teamResult[awayId] = 'correct';
 				teamResult[homeId] = 'incorrect';
 			} else {
-				// tie — both teams survive (no eliminations for either pool)
+				// tie — both teams eliminate pickers in both pool types
 				teamResult[homeId] = 'tie';
 				teamResult[awayId] = 'tie';
 			}
@@ -224,8 +224,10 @@ export const actions: Actions = {
 					const result = teamResult[teamId];
 					if (!result) continue; // game not yet entered — skip
 
-					// Tie = no elimination for either pool type
-					if (result !== 'tie' && (isLms ? result === 'correct' : result === 'incorrect')) {
+						// Tie eliminates pickers of both teams in both pool types.
+					// LMS: eliminated when picked team wins OR tied.
+					// 2H:  eliminated when picked team loses OR tied.
+					if (result === 'tie' || (isLms ? result === 'correct' : result === 'incorrect')) {
 						shouldEliminate = true;
 					}
 
@@ -246,10 +248,17 @@ export const actions: Actions = {
 				if (shouldEliminate) {
 					const entry = pick.expand?.entry ?? null;
 					if (entry?.status === 'active') {
-						await pb.collection('entries').update(entry.id, {
+						// Determine reason — check if any picked team tied
+					const pickedTeams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
+					const hasTie = pickedTeams.some((t: string) => teamResult[t] === 'tie');
+					const reason = hasTie
+						? 'Picked a team that tied'
+						: isLms ? 'Picked a winning team' : 'Picked a losing team';
+
+					await pb.collection('entries').update(entry.id, {
 							status:           'eliminated',
 							eliminatedWeek:   weekNum,
-							eliminatedReason: isLms ? 'Picked a winning team' : 'Picked a losing team'
+							eliminatedReason: reason,
 						}).catch(() => {});
 						eliminated++;
 					}
