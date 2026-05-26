@@ -127,12 +127,17 @@ export const actions: Actions = {
 	},
 
 	/** Toggle isActive for all games in a week */
-	activateWeek: async ({ request }) => {
+	activateWeek: async ({ request, locals }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const seasonId = data.get('seasonId') as string;
 		const weekNum  = Number(data.get('week'));
 		const activate = data.get('activate') === 'true';
+
+		// Only super_admin can deactivate; any admin can activate
+		if (!activate && locals.role !== 'super_admin') {
+			return fail(403, { error: 'Only super admins can deactivate a week.' });
+		}
 
 		const games = await pb.collection('game_odds').getFullList({
 			filter: `season = "${seasonId}" && week = ${weekNum}`,

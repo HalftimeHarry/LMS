@@ -258,6 +258,50 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
+	updateDeadline: async ({ request }) => {
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+		const id       = data.get('id')       as string;
+		const deadline = data.get('deadline') as string;
+
+		if (!id)       return fail(400, { error: 'Week ID required.' });
+		if (!deadline) return fail(400, { error: 'Deadline required.' });
+
+		// Accept either a datetime-local value (YYYY-MM-DDTHH:mm) or a full ISO string.
+		// Treat the input as local time in America/Los_Angeles and convert to UTC.
+		let iso: string;
+		try {
+			// datetime-local gives "YYYY-MM-DDTHH:mm" with no timezone — interpret as PT
+			const raw = deadline.length === 16 ? deadline + ':00' : deadline;
+			// Use Intl to get the UTC offset for PT at that moment
+			const localDate = new Date(raw);
+			if (isNaN(localDate.getTime())) throw new Error('Invalid date');
+			// Re-parse as PT by formatting with the timezone and computing the offset
+			const ptFormatter = new Intl.DateTimeFormat('en-US', {
+				timeZone: 'America/Los_Angeles',
+				year: 'numeric', month: '2-digit', day: '2-digit',
+				hour: '2-digit', minute: '2-digit', second: '2-digit',
+				hour12: false,
+			});
+			// Build a UTC date by treating the input as PT
+			const parts = ptFormatter.formatToParts(localDate);
+			const get = (t: string) => parts.find(p => p.type === t)?.value ?? '00';
+			const ptString = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}`;
+			const ptAsUtc  = new Date(ptString + 'Z');
+			const offset   = localDate.getTime() - ptAsUtc.getTime();
+			iso = new Date(localDate.getTime() - offset).toISOString();
+		} catch {
+			return fail(400, { error: 'Invalid deadline format.' });
+		}
+
+		try {
+			await pb.collection('weekly_settings').update(id, { deadline: iso });
+		} catch (e: unknown) {
+			return fail(400, { error: (e as { message?: string })?.message ?? 'Update failed.' });
+		}
+		return { success: true, deadline: iso };
+	},
+
 	setFavorite: async ({ request }) => {
 		const pb   = await pbAdmin();
 		const data = await request.formData();
