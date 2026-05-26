@@ -9,16 +9,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const pb           = await pbAdmin();
 	const isSuperAdmin = locals.role === 'super_admin';
 
-	const seasonFilter = url.searchParams.get('season') ?? '';
-	const statusFilter = (url.searchParams.get('status') ?? 'all') as EntryStatus | 'all';
-	const poolType     = (url.searchParams.get('poolType') ?? 'all') as 'lms' | 'second_half' | 'all';
+	const statusFilter = (url.searchParams.get('status')   ?? 'all') as EntryStatus | 'all';
+	const poolType     = (url.searchParams.get('poolType') ?? 'lms') as 'lms' | 'second_half' | 'all';
 
 	const entryProvider  = new EntryProvider(pb);
 	const seasonProvider = new SeasonProvider(pb);
 
 	const [allEntries, allSeasons, participants] = await Promise.all([
 		entryProvider.getAll({
-			seasonId:  seasonFilter || undefined,
 			status:    statusFilter,
 			entryType: poolType !== 'all' ? poolType : undefined
 		}),
@@ -33,7 +31,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// pool_admin sees no [TEST] seasons or their entries
 	const seasons = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
 	const testSeasonIds = new Set(allSeasons.filter(s => s.name?.includes('[TEST]')).map(s => s.id));
-	const entries = isSuperAdmin ? allEntries : allEntries.filter(e => !testSeasonIds.has(e.season));
+	const entries = isSuperAdmin ? allEntries : allEntries.filter((e: any) => !testSeasonIds.has(e.season));
 
 	// Map seasonId → firstPickDeadline. [TEST] seasons are excluded — always deletable.
 	const deadlineMap: Record<string, string> = {};
@@ -41,7 +39,41 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		if (s.firstPickDeadline && !s.name.startsWith('[TEST]')) deadlineMap[s.id] = s.firstPickDeadline;
 	}
 
-	return { entries, seasons, participants, seasonFilter, statusFilter, poolType, deadlineMap };
+	// Active season for the deadline notice in the header
+	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
+
+	// Derive entry deadlines from first game kickoff (20 min before) in game_odds
+	// LMS = week 1 first game, 2H = secondHalfStartWeek (default 6) first game
+	let lmsEntryDeadline: string | null = null;
+	let shEntryDeadline:  string | null = null;
+
+	if (activeSeason) {
+		const shStartWeek = (activeSeason as any).secondHalfStartWeek ?? 6;
+
+		const [week1Odds, week6Odds] = await Promise.all([
+			pb.collection('game_odds').getFirstListItem(
+				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
+				{ sort: 'gameTime', fields: 'gameTime' }
+			).catch(() => null),
+			pb.collection('game_odds').getFirstListItem(
+				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
+				{ sort: 'gameTime', fields: 'gameTime' }
+			).catch(() => null),
+		]);
+
+		if (week1Odds?.gameTime) {
+			const t = new Date(week1Odds.gameTime);
+			t.setMinutes(t.getMinutes() - 20);
+			lmsEntryDeadline = t.toISOString();
+		}
+		if (week6Odds?.gameTime) {
+			const t = new Date(week6Odds.gameTime);
+			t.setMinutes(t.getMinutes() - 20);
+			shEntryDeadline = t.toISOString();
+		}
+	}
+
+	return { entries, seasons, participants, statusFilter, poolType, deadlineMap, activeSeason, lmsEntryDeadline, shEntryDeadline };
 };
 
 export const actions: Actions = {
@@ -63,17 +95,27 @@ export const actions: Actions = {
 		}
 		const { seasonId, userId, entryType, count, baseName, referredBy = '', complimentary } = parsed.data;
 
-		// Block entry creation after the first pick deadline has passed
+		// Block entry creation after the game-derived deadline (20 min before first kickoff)
 		const season = await pb.collection('seasons').getOne(seasonId).catch(() => null) as any;
-		if (season?.firstPickDeadline && new Date() > new Date(season.firstPickDeadline)) {
-			return fail(400, {
-				error: 'The first pick deadline has passed — new entries cannot be added after the season has started.',
-				action: 'create'
-			});
+		const pickWeek = entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
+		const firstOdds = await pb.collection('game_odds').getFirstListItem(
+			`season = "${seasonId}" && week = ${pickWeek} && isActive = true`,
+			{ sort: 'gameTime', fields: 'gameTime' }
+		).catch(() => null) as any;
+		if (firstOdds?.gameTime) {
+			const deadline = new Date(firstOdds.gameTime);
+			deadline.setMinutes(deadline.getMinutes() - 20);
+			if (new Date() > deadline) {
+				return fail(400, {
+					error: `The entry deadline has passed — entries closed 20 minutes before the first Week ${pickWeek} kickoff.`,
+					action: 'create'
+				});
+			}
 		}
 		const entryProvider = new EntryProvider(pb);
 		const existing      = await entryProvider.getAll({ seasonId, userId });
-		const offset        = existing.length;
+		// Offset by same-type entries only so LMS and 2H number independently
+		const offset        = existing.filter((e: any) => e.entryType === entryType).length;
 
 		const created: string[] = [];
 		try {
@@ -99,6 +141,21 @@ export const actions: Actions = {
 			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to create entries.', action: 'create' });
 		}
 		return { success: true, created, action: 'create' };
+	},
+
+	renameEntry: async ({ request }) => {
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+		const id   = data.get('id')        as string;
+		const name = (data.get('name') as string)?.trim();
+		if (!id)               return fail(400, { error: 'Entry ID required.' });
+		if (!name || name.length < 2) return fail(400, { error: 'Name must be at least 2 characters.' });
+		try {
+			await pb.collection('entries').update(id, { entryName: name });
+		} catch (e: unknown) {
+			return fail(400, { error: (e as { message?: string })?.message ?? 'Rename failed.' });
+		}
+		return { success: true };
 	},
 
 	markPaid: async ({ request }) => {
