@@ -113,7 +113,7 @@ migrate((app) => {
         name: "result",
         type: "select",
         required: true,
-        values: ["pending", "correct", "incorrect"],
+        values: ["pending", "correct", "incorrect", "tie"],
         maxSelect: 1
       },
       {

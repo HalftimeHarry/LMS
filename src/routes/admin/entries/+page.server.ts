@@ -15,11 +15,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entryProvider  = new EntryProvider(pb);
 	const seasonProvider = new SeasonProvider(pb);
 
-	const [allEntries, allSeasons, participants] = await Promise.all([
+	const [allEntries, statsEntries, allSeasons, participants] = await Promise.all([
 		entryProvider.getAll({
 			status:    statusFilter,
 			entryType: poolType !== 'all' ? poolType : undefined
 		}),
+		// Unfiltered stats — only the fields needed for the stats panel
+		entryProvider.getAll({}),
 		seasonProvider.getAll(),
 		pb.collection('users').getFullList({
 			filter: 'role = "participant"',
@@ -31,7 +33,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// pool_admin sees no [TEST] seasons or their entries
 	const seasons = isSuperAdmin ? allSeasons : allSeasons.filter(s => !s.name?.includes('[TEST]'));
 	const testSeasonIds = new Set(allSeasons.filter(s => s.name?.includes('[TEST]')).map(s => s.id));
-	const entries = isSuperAdmin ? allEntries : allEntries.filter((e: any) => !testSeasonIds.has(e.season));
+	const entries      = isSuperAdmin ? allEntries    : allEntries.filter((e: any)    => !testSeasonIds.has(e.season));
+	const statsAll     = isSuperAdmin ? statsEntries  : statsEntries.filter((e: any)  => !testSeasonIds.has(e.season));
 
 	// Map seasonId → firstPickDeadline. [TEST] seasons are excluded — always deletable.
 	const deadlineMap: Record<string, string> = {};
@@ -73,7 +76,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		}
 	}
 
-	return { entries, seasons, participants, statusFilter, poolType, deadlineMap, activeSeason, lmsEntryDeadline, shEntryDeadline };
+	return { entries, statsAll, seasons, participants, statusFilter, poolType, deadlineMap, activeSeason, lmsEntryDeadline, shEntryDeadline };
 };
 
 export const actions: Actions = {
