@@ -176,21 +176,38 @@
 		</div>
 		<div class="flex items-center gap-3">
 			{#if games.length > 0}
-				<form method="POST" action="?/activateWeek" use:enhance={() => {
-					activating = true;
-					return async ({ update }) => { await update({ reset: false }); activating = false; };
-				}}>
-					<input type="hidden" name="seasonId" value={activeSeason.id} />
-					<input type="hidden" name="week"     value={weekNum} />
-					<input type="hidden" name="activate" value={isWeekActive ? 'false' : 'true'} />
-					<button type="submit" disabled={activating}
-						class="rounded border px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50
-							{isWeekActive
-								? 'border-red-800 text-red-400 hover:bg-red-950/40'
-								: 'border-green-700 text-green-400 hover:bg-green-950/40'}">
-						{activating ? '…' : isWeekActive ? 'Deactivate Week' : 'Activate Week'}
-					</button>
-				</form>
+				{#if !isWeekActive}
+					<!-- Any admin can activate -->
+					<form method="POST" action="?/activateWeek" use:enhance={() => {
+						activating = true;
+						return async ({ update }) => { await update({ reset: false }); activating = false; };
+					}}>
+						<input type="hidden" name="seasonId" value={activeSeason.id} />
+						<input type="hidden" name="week"     value={weekNum} />
+						<input type="hidden" name="activate" value="true" />
+						<button type="submit" disabled={activating}
+							class="rounded border border-green-700 px-4 py-1.5 text-sm font-semibold text-green-400 transition hover:bg-green-950/40 disabled:opacity-50">
+							{activating ? '…' : 'Activate Week'}
+						</button>
+					</form>
+				{:else if isSuperAdmin}
+					<!-- Only super_admin can deactivate -->
+					<form method="POST" action="?/activateWeek" use:enhance={() => {
+						activating = true;
+						return async ({ update }) => { await update({ reset: false }); activating = false; };
+					}}>
+						<input type="hidden" name="seasonId" value={activeSeason.id} />
+						<input type="hidden" name="week"     value={weekNum} />
+						<input type="hidden" name="activate" value="false" />
+						<button type="submit" disabled={activating}
+							class="rounded border border-red-800 px-4 py-1.5 text-sm font-semibold text-red-400 transition hover:bg-red-950/40 disabled:opacity-50">
+							{activating ? '…' : 'Deactivate Week'}
+						</button>
+					</form>
+				{:else}
+					<!-- Pool admin sees a read-only Live badge when week is active -->
+					<span class="rounded border border-green-800 bg-green-950/40 px-4 py-1.5 text-sm font-semibold text-green-400">● Live</span>
+				{/if}
 			{/if}
 		</div>
 	</div>
