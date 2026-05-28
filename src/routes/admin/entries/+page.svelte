@@ -216,6 +216,8 @@
 	const lmsRevenue      = $derived(lmsFee * lmsEntries.filter((e: any) => e.paid && e.paymentMethod !== 'free').length);
 	const shRevenue       = $derived(shFee  * shEntries.filter((e: any)  => e.paid && e.paymentMethod !== 'free').length);
 	const totalPot        = $derived(lmsRevenue + shRevenue);
+	const maintFee        = $derived((activeSeason?.maintenanceFee ?? 0) as number);
+	const lmsNetPayout    = $derived(Math.max(0, lmsRevenue - maintFee));
 	const paidCount       = $derived(allEntries.filter((e: any) => e.paid).length);
 	const freeCount       = $derived(allEntries.filter((e: any) => e.paymentMethod === 'free').length);
 	const pendingCount    = $derived(allEntries.filter((e: any) => e.status === 'pending_payment').length);
@@ -384,12 +386,42 @@
 	{#if statsOpen}
 		<!-- Stat tiles -->
 		{#if activeSeason}
+
+		<!-- Maintenance fee input -->
+		<div class="flex items-center gap-4 border-t border-gray-800 px-5 py-3">
+			<label for="maintFeeInput" class="text-xs font-medium text-gray-500 shrink-0">Maintenance fee ($)</label>
+			<form method="POST" action="/admin/weeks?/saveMaintenance" use:enhance={async () => {
+				return async ({ update }) => { await update(); await invalidateAll(); };
+			}} class="flex items-center gap-2">
+				<input type="hidden" name="seasonId" value={activeSeason.id} />
+				<input
+					id="maintFeeInput"
+					type="number"
+					name="maintenanceFee"
+					min="0"
+					step="1"
+					value={maintFee}
+					class="w-28 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+				/>
+				<button type="submit"
+					class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1 text-xs text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]">
+					Save
+				</button>
+			</form>
+			{#if maintFee > 0}
+				<p class="text-xs text-gray-600">LMS net payout: <span class="text-white font-medium">${lmsNetPayout.toLocaleString()}</span></p>
+			{/if}
+		</div>
+
 		<div class="grid grid-cols-2 gap-px border-t border-gray-800 sm:grid-cols-4">
 			<!-- Total Pot -->
 			<div class="bg-black/60 px-5 py-4">
 				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Pot</p>
 				<p class="mt-1 text-2xl font-bold text-white">${totalPot.toLocaleString()}</p>
 				<p class="mt-0.5 text-xs text-gray-600">LMS ${lmsRevenue.toLocaleString()} · 2H ${shRevenue.toLocaleString()}</p>
+				{#if maintFee > 0}
+					<p class="mt-0.5 text-xs text-red-500/70">− ${maintFee.toLocaleString()} fee → <span class="text-green-400/80">${lmsNetPayout.toLocaleString()} net</span></p>
+				{/if}
 			</div>
 			<!-- Total Entries -->
 			<div class="bg-black/60 px-5 py-4">
