@@ -183,9 +183,9 @@
 							<!-- Entries -->
 							<td class="px-4 py-3 text-center">
 								{#if userEntries.length > 0}
-									<span class="font-mono text-sm text-[#c9a84c]">{userEntries.length}</span>
+									<span class="font-mono text-sm font-semibold text-red-400">{userEntries.length}</span>
 								{:else}
-									<span class="text-gray-600">0</span>
+									<span class="font-mono text-sm text-green-500">0</span>
 								{/if}
 							</td>
 
