@@ -10,11 +10,10 @@
 	const activeSeason = $derived(data.activeSeason as any);
 	const weeks        = $derived(data.weeks        as any[]);
 	const entries      = $derived(data.entries      as any[]);
-	const pickGrid            = $derived(data.pickGrid            as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
-	const currentWeek         = $derived(data.currentWeek         as any);
-	const poolType            = $derived(data.poolType            as 'lms' | 'second_half');
-	const userId              = $derived(data.userId              as string | null);
-	const openWeekTeamCounts  = $derived(data.openWeekTeamCounts  as Record<string, { abbr: string; count: number }[]>);
+	const pickGrid    = $derived(data.pickGrid    as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
+	const currentWeek = $derived(data.currentWeek as any);
+	const poolType    = $derived(data.poolType    as 'lms' | 'second_half');
+	const userId      = $derived(data.userId      as string | null);
 	const isLoggedIn   = $derived(!!userId);
 
 	const isLms = $derived(poolType === 'lms');
@@ -106,34 +105,56 @@
 		open:            'bg-blue-500',
 	};
 
-	// ── Current-week team pick breakdown ─────────────────────────────────────
-	// Uses server-aggregated counts (openWeekTeamCounts) so individual picks
-	// remain hidden while the overall distribution is visible.
-	const currentWeekBreakdown = $derived(
-		currentWeek ? (openWeekTeamCounts[currentWeek.id] ?? []) : []
+	// ── Current-week pick breakdown ───────────────────────────────────────────
+	// Pre-deadline: pickGrid only contains the current user's own picks for open
+	// weeks, so all counts/names derived here are safe to display.
+	// Post-deadline: the week moves to visibleWeeks and pickGrid contains
+	// everyone's picks — the same derived logic then shows the full breakdown.
+
+	const activeEntries = $derived(
+		(entries as any[]).filter((e: any) => e.status === 'active')
 	);
+
+	// Team breakdown for the current week — works for both open and locked weeks.
+	// For open weeks this will only reflect the user's own picks (privacy safe).
+	// For locked/complete weeks it reflects all picks.
+	const currentWeekBreakdown = $derived((() => {
+		if (!currentWeek) return [] as { abbr: string; count: number }[];
+		const map: Record<string, number> = {};
+		for (const weekMap of Object.values(pickGrid)) {
+			const cell = weekMap[currentWeek.id];
+			if (!cell) continue;
+			for (const abbr of cell.teams) {
+				map[abbr] = (map[abbr] ?? 0) + 1;
+			}
+		}
+		return Object.entries(map)
+			.map(([abbr, count]) => ({ abbr, count }))
+			.sort((a, b) => b.count - a.count);
+	})());
+
+	// Whether the current week is still open (picks hidden from others)
+	const currentWeekIsOpen = $derived(
+		openWeeks.some(ow => ow.id === currentWeek?.id)
+	);
+
+	// How many active entries have picked — for open weeks this is unknowable
+	// without leaking info, so we only show it post-deadline.
 	const totalPicksThisWeek = $derived(
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
-	// Active entries that haven't submitted a pick for the current open week.
-	// Count is always shown; names only shown for the current user's own entries.
-	const activeEntries = $derived(
-		(entries as any[]).filter(e => e.status === 'active')
-	);
-	const stillToPickEntries = $derived((() => {
-		if (!currentWeek) return [] as any[];
-		return activeEntries.filter(e =>
+	// My own entries that still need a pick for the current open week
+	const myStillToPick = $derived((() => {
+		if (!currentWeek || !currentWeekIsOpen) return [] as any[];
+		return activeEntries.filter((e: any) =>
+			e.user === userId &&
 			!openWeeks.some(ow => ow.id === currentWeek.id && pickGrid[e.id]?.[ow.id])
 		);
 	})());
-	const myStillToPick = $derived(
-		stillToPickEntries.filter((e: any) => e.user === userId)
-	);
 
 	let breakdownOpen = $state(false);
-	// Track which team row is expanded to show entry names
-	let expandedTeam = $state<string | null>(null);
+	let expandedTeam  = $state<string | null>(null);
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
@@ -317,17 +338,23 @@
 			</div>
 
 			<!-- Collapsible breakdown toggle -->
-			{#if currentWeekBreakdown.length > 0 || stillToPickEntries.length > 0}
+			{#if currentWeekBreakdown.length > 0 || myStillToPick.length > 0}
 				<button
 					type="button"
 					onclick={() => { breakdownOpen = !breakdownOpen; expandedTeam = null; }}
 					class="flex w-full items-center justify-between border-t border-gray-800/60 px-4 py-2.5 text-left transition hover:bg-white/[0.02]"
 				>
 					<span class="flex items-center gap-2 text-xs font-medium text-gray-400">
-						<span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-						{totalPicksThisWeek} of {activeEntries.length} picked
-						{#if stillToPickEntries.length > 0}
-							· <span class="text-yellow-600">{stillToPickEntries.length} still to pick</span>
+						<span class="h-1.5 w-1.5 rounded-full bg-blue-500 {currentWeekIsOpen ? 'animate-pulse' : ''}"></span>
+						{#if currentWeekIsOpen}
+							Week {currentWeek.week} picks
+							{#if myStillToPick.length > 0}
+								· <span class="text-yellow-600">you still need to pick</span>
+							{:else if currentWeekBreakdown.length > 0}
+								· <span class="text-green-600">your pick is in</span>
+							{/if}
+						{:else}
+							Week {currentWeek.week} picks — {totalPicksThisWeek} of {activeEntries.length} submitted
 						{/if}
 					</span>
 					<svg
@@ -340,106 +367,92 @@
 
 				{#if breakdownOpen}
 					<div class="border-t border-gray-800/60 px-4 pb-4 pt-3">
-						<div class="space-y-1">
-							{#each currentWeekBreakdown as { abbr, count }}
-								{@const pct = totalPicksThisWeek > 0 ? Math.round((count / totalPicksThisWeek) * 100) : 0}
-								{@const isMyPick = openWeeks.some(ow =>
-									ow.id === currentWeek.id &&
-									Object.values(pickGrid).some(wm => wm[ow.id]?.isOwn && wm[ow.id]?.teams.includes(abbr))
-								)}
-								<button
-									type="button"
-									onclick={() => expandedTeam = expandedTeam === abbr ? null : abbr}
-									class="group flex w-full items-center gap-3 rounded-lg px-3 py-2 transition
-										{isMyPick ? 'bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.12)]' : 'hover:bg-white/[0.03]'}"
-								>
-									<!-- Logo -->
-									<img
-										src={teamLogoUrl(abbr)}
-										alt={abbr}
-										class="h-7 w-7 shrink-0 rounded-full bg-white p-0.5 object-contain"
-									/>
 
-									<!-- Team abbr + progress bar -->
-									<div class="flex min-w-0 flex-1 flex-col gap-1">
-										<div class="flex items-center gap-2">
-											<span class="text-sm font-medium {isMyPick ? 'text-[#c9a84c]' : 'text-gray-200'}">{abbr}</span>
-											{#if isMyPick}
-												<span class="rounded bg-[rgba(201,168,76,0.15)] px-1.5 py-0.5 text-[10px] font-semibold text-[#c9a84c]">your pick</span>
-											{/if}
+						{#if currentWeekIsOpen}
+							<!-- ── Pre-deadline: show only own picks ─────────────────── -->
+							{#if currentWeekBreakdown.length > 0}
+								<p class="mb-2 text-[10px] font-medium uppercase tracking-wider text-gray-600">Your pick{currentWeekBreakdown.length !== 1 ? 's' : ''} this week</p>
+								<div class="space-y-1">
+									{#each currentWeekBreakdown as { abbr }}
+										<div class="flex items-center gap-3 rounded-lg bg-[rgba(201,168,76,0.08)] px-3 py-2">
+											<img src={teamLogoUrl(abbr)} alt={abbr}
+												class="h-7 w-7 shrink-0 rounded-full bg-white p-0.5 object-contain" />
+											<span class="text-sm font-medium text-[#c9a84c]">{abbr}</span>
+											<span class="ml-auto rounded bg-[rgba(201,168,76,0.15)] px-1.5 py-0.5 text-[10px] font-semibold text-[#c9a84c]">your pick</span>
 										</div>
-										<div class="h-1 w-full overflow-hidden rounded-full bg-gray-800">
-											<div
-												class="h-full rounded-full transition-all {isMyPick ? 'bg-[#c9a84c]' : 'bg-blue-600'}"
-												style="width: {pct}%"
-											></div>
-										</div>
-									</div>
+									{/each}
+								</div>
+							{/if}
 
-									<!-- Count + pct -->
-									<div class="shrink-0 text-right">
-										<span class="font-mono text-sm font-bold {isMyPick ? 'text-[#c9a84c]' : 'text-white'}">{count}</span>
-										<span class="ml-1 text-xs text-gray-600">{pct}%</span>
+							{#if myStillToPick.length > 0}
+								<div class="mt-3 rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
+									<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-yellow-700">Still to pick</p>
+									<div class="flex flex-wrap gap-1.5">
+										{#each myStillToPick as entry}
+											<a href="/dashboard/entries/{entry.id}"
+												class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
+												{entry.entryName} <span class="opacity-60">→</span>
+											</a>
+										{/each}
 									</div>
+								</div>
+							{/if}
 
-									<!-- Expand chevron -->
-									<svg
-										class="h-3 w-3 shrink-0 text-gray-700 transition-transform group-hover:text-gray-500 {expandedTeam === abbr ? 'rotate-180' : ''}"
-										fill="none" stroke="currentColor" viewBox="0 0 24 24"
+							<p class="mt-3 text-[11px] text-gray-700">Other picks are hidden until the deadline passes.</p>
+
+						{:else}
+							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
+							<div class="space-y-1">
+								{#each currentWeekBreakdown as { abbr, count }}
+									{@const pct = totalPicksThisWeek > 0 ? Math.round((count / totalPicksThisWeek) * 100) : 0}
+									{@const isMyPick = Object.values(pickGrid).some(wm => wm[currentWeek.id]?.isOwn && wm[currentWeek.id]?.teams.includes(abbr))}
+									<button
+										type="button"
+										onclick={() => expandedTeam = expandedTeam === abbr ? null : abbr}
+										class="group flex w-full items-center gap-3 rounded-lg px-3 py-2 transition
+											{isMyPick ? 'bg-[rgba(201,168,76,0.08)] hover:bg-[rgba(201,168,76,0.12)]' : 'hover:bg-white/[0.03]'}"
 									>
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-									</svg>
-								</button>
-
-								<!-- Expanded: entry list for this team -->
-								{#if expandedTeam === abbr}
-									<div class="mx-3 mb-1 rounded-b-lg border border-t-0 border-gray-800 bg-gray-950/60 px-3 py-2">
-										<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-600">Entries picking {abbr}</p>
-										<div class="flex flex-wrap gap-1.5">
-											{#each entries.filter(e =>
-												openWeeks.some(ow =>
-													ow.id === currentWeek.id &&
-													pickGrid[e.id]?.[ow.id]?.teams.includes(abbr)
-												)
-											) as entry}
-												<span class="rounded border border-gray-800 bg-gray-900 px-2 py-0.5 text-xs
-													{entry.user === userId ? 'border-[#c9a84c]/30 text-[#c9a84c]' : 'text-gray-400'}">
-													{entry.entryName}
-													{#if entry.user === userId}<span class="text-[10px] opacity-60"> you</span>{/if}
-												</span>
-											{:else}
-												<span class="text-xs text-gray-600">Picks hidden until deadline</span>
-											{/each}
+										<img src={teamLogoUrl(abbr)} alt={abbr}
+											class="h-7 w-7 shrink-0 rounded-full bg-white p-0.5 object-contain" />
+										<div class="flex min-w-0 flex-1 flex-col gap-1">
+											<div class="flex items-center gap-2">
+												<span class="text-sm font-medium {isMyPick ? 'text-[#c9a84c]' : 'text-gray-200'}">{abbr}</span>
+												{#if isMyPick}
+													<span class="rounded bg-[rgba(201,168,76,0.15)] px-1.5 py-0.5 text-[10px] font-semibold text-[#c9a84c]">your pick</span>
+												{/if}
+											</div>
+											<div class="h-1 w-full overflow-hidden rounded-full bg-gray-800">
+												<div class="h-full rounded-full transition-all {isMyPick ? 'bg-[#c9a84c]' : 'bg-blue-600'}"
+													style="width: {pct}%"></div>
+											</div>
 										</div>
-									</div>
-								{/if}
-							{/each}
-						</div>
-					<!-- Still to pick -->
-					{#if stillToPickEntries.length > 0}
-						<div class="mt-3 rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
-							<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-yellow-700">
-								Still to pick — {stillToPickEntries.length} of {activeEntries.length}
-							</p>
-							<div class="flex flex-wrap gap-1.5">
-								{#each myStillToPick as entry}
-									<a href="/dashboard/entries/{entry.id}"
-										class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
-										{entry.entryName} <span class="opacity-60">you →</span>
-									</a>
-								{/each}
-								{#if stillToPickEntries.length > myStillToPick.length}
-									<span class="rounded border border-gray-800 bg-gray-900/60 px-2 py-0.5 text-xs text-gray-600">
-										+{stillToPickEntries.length - myStillToPick.length} other{stillToPickEntries.length - myStillToPick.length !== 1 ? 's' : ''} hidden
-									</span>
-								{/if}
-							</div>
-						</div>
-					{/if}
+										<div class="shrink-0 text-right">
+											<span class="font-mono text-sm font-bold {isMyPick ? 'text-[#c9a84c]' : 'text-white'}">{count}</span>
+											<span class="ml-1 text-xs text-gray-600">{pct}%</span>
+										</div>
+										<svg class="h-3 w-3 shrink-0 text-gray-700 transition-transform group-hover:text-gray-500 {expandedTeam === abbr ? 'rotate-180' : ''}"
+											fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+										</svg>
+									</button>
 
-						<p class="mt-3 text-[11px] text-gray-700">
-							Picks are hidden until the deadline. Entry names only appear for your own picks.
-						</p>
+									{#if expandedTeam === abbr}
+										<div class="mx-3 mb-1 rounded-b-lg border border-t-0 border-gray-800 bg-gray-950/60 px-3 py-2">
+											<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-600">Entries picking {abbr}</p>
+											<div class="flex flex-wrap gap-1.5">
+												{#each (entries as any[]).filter(e => pickGrid[e.id]?.[currentWeek.id]?.teams.includes(abbr)) as entry}
+													<span class="rounded border px-2 py-0.5 text-xs
+														{entry.user === userId ? 'border-[#c9a84c]/30 text-[#c9a84c]' : 'border-gray-800 text-gray-400'}">
+														{entry.entryName}{#if entry.user === userId}<span class="opacity-60"> you</span>{/if}
+													</span>
+												{/each}
+											</div>
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+
 					</div>
 				{/if}
 			{/if}

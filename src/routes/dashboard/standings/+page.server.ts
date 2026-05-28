@@ -123,47 +123,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return [...openWeekIds].some(weekId => !pickGrid[entryId]?.[weekId]);
 	});
 
-	// Aggregate team pick counts for open weeks — counts only, no entry-level detail.
-	// Safe to expose: reveals how many picked each team, not who picked what.
-	const openWeekTeamCounts: Record<string, { abbr: string; count: number }[]> = {};
-	if (openWeekIds.size > 0) {
-		const batchSize = 20;
-		for (let i = 0; i < entryIds.length; i += batchSize) {
-			const batch  = entryIds.slice(i, i + batchSize);
-			const filter = `(${batch.map((id: string) => `entry = "${id}"`).join(' || ')})`;
-			const picks  = await pb.collection('picks').getFullList({
-				filter,
-				expand: 'pickedTeams',
-				fields: 'week,expand'
-			}).catch(() => []) as any[];
-
-			for (const pick of picks) {
-				if (!openWeekIds.has(pick.week)) continue;
-				if (!openWeekTeamCounts[pick.week]) openWeekTeamCounts[pick.week] = [];
-				for (const t of (pick.expand?.pickedTeams ?? []) as any[]) {
-					const abbr = t.abbreviation as string;
-					const existing = openWeekTeamCounts[pick.week].find(x => x.abbr === abbr);
-					if (existing) existing.count++;
-					else openWeekTeamCounts[pick.week].push({ abbr, count: 1 });
-				}
-			}
-		}
-		// Sort each week's teams by count descending
-		for (const weekId of Object.keys(openWeekTeamCounts)) {
-			openWeekTeamCounts[weekId].sort((a, b) => b.count - a.count);
-		}
-	}
-
 	return {
 		seasons,
 		activeSeason,
 		poolType,
-		weeks:               weeks    as any[],
-		entries:             entries  as any[],
+		weeks:       weeks       as any[],
+		entries:     entries     as any[],
 		pickGrid,
-		currentWeek:         currentWeek as any,
+		currentWeek: currentWeek as any,
 		userId,
 		hasMissingPick,
-		openWeekTeamCounts,
 	};
 };
