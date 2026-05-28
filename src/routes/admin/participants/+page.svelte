@@ -68,11 +68,22 @@
 			invalidateAll();
 		}
 	});
+
+	// ── Scroll-to-top ─────────────────────────────────────────────────────────
+	let scrollEl      = $state<HTMLElement | null>(null);
+	let showScrollTop = $state(false);
+
+	function onScroll() {
+		showScrollTop = (scrollEl?.scrollTop ?? 0) > 100;
+	}
+	function scrollToTop() {
+		scrollEl?.scrollTo({ top: 0, behavior: 'smooth' });
+	}
 </script>
 
 <svelte:head><title>Manage Participants — Admin</title></svelte:head>
 
-<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
 	<!-- Header -->
 	<div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
@@ -121,7 +132,11 @@
 		</div>
 
 		<!-- Table -->
-		<div class="overflow-x-auto max-h-[60vh] overflow-y-auto">
+		<div
+			bind:this={scrollEl}
+			onscroll={onScroll}
+			class="overflow-x-auto max-h-[60vh] overflow-y-auto"
+		>
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-10 border-b border-gray-800 bg-[#0a0a0a] text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -194,6 +209,20 @@
 			</table>
 		</div>
 	</div>
+	<!-- Back to top -->
+	{#if showScrollTop}
+		<button
+			type="button"
+			onclick={scrollToTop}
+			class="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full border border-[rgba(201,168,76,0.3)] bg-black/90 px-3 py-1.5 text-xs font-medium text-[#c9a84c] shadow-lg backdrop-blur-sm transition hover:bg-[rgba(201,168,76,0.1)]"
+		>
+			<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+			</svg>
+			Top
+		</button>
+	{/if}
+
 </div><!-- end single card -->
 
 <!-- ── Confirmation dialog ─────────────────────────────────────────────────── -->
