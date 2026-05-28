@@ -3,7 +3,7 @@
 	let { data }: { data: LayoutData } = $props();
 	const isSuperAdmin = $derived(data.role === 'super_admin');
 
-	type Tab = 'overview' | 'before' | 'weekly' | 'checklist';
+	type Tab = 'overview' | 'before' | 'weekly' | 'checklist' | 'spam';
 	let activeTab = $state<Tab>('overview');
 
 	const tabs: { id: Tab; label: string }[] = [
@@ -11,6 +11,7 @@
 		{ id: 'before',    label: 'Before the Season' },
 		{ id: 'weekly',    label: 'Weekly Management' },
 		{ id: 'checklist', label: 'Checklist' },
+		{ id: 'spam',      label: 'Manage Participant Spammers' },
 	];
 </script>
 
@@ -325,6 +326,79 @@
 					<span class="font-semibold text-gray-300">Monday Night / Thursday Night games</span> — if a week has a Monday Night game, wait until that game finishes before clicking Save &amp; Finalize.
 					Thursday Night games belong to the <span class="text-white">following</span> week's slate, not the current one.
 				</div>
+			</div>
+			{/if}
+
+			<!-- ── Manage Participant Spammers ──────────────────────────────── -->
+			{#if activeTab === 'spam'}
+			<div class="space-y-5 p-6">
+
+				<div>
+					<h2 class="text-lg font-bold text-white">Dealing with Spam Registrations</h2>
+					<p class="mt-1 text-sm text-gray-400">
+						If the pool gets hit with fake or spam accounts, use the
+						<a href="/admin/participants" class="text-[#c9a84c] hover:underline">Participants</a>
+						page to identify and remove them quickly.
+					</p>
+				</div>
+
+				<!-- How to spot spammers -->
+				<div class="rounded-lg border border-gray-800 bg-black/60 px-5 py-4 space-y-3">
+					<h3 class="text-sm font-semibold text-white">How to spot spam accounts</h3>
+					<ul class="space-y-2 text-sm text-gray-400">
+						<li class="flex gap-2">
+							<span class="shrink-0 text-[#c9a84c]">—</span>
+							<span><span class="text-gray-300">Unverified email</span> — the Verified column shows a dash. Legitimate players usually verify before picking.</span>
+						</li>
+						<li class="flex gap-2">
+							<span class="shrink-0 text-[#c9a84c]">—</span>
+							<span><span class="text-gray-300">0 entries</span> — registered but never joined a pool. Real players create at least one entry.</span>
+						</li>
+						<li class="flex gap-2">
+							<span class="shrink-0 text-[#c9a84c]">—</span>
+							<span><span class="text-gray-300">Suspicious display name or email</span> — random strings, disposable email domains (mailinator, guerrillamail, etc.).</span>
+						</li>
+						<li class="flex gap-2">
+							<span class="shrink-0 text-[#c9a84c]">—</span>
+							<span><span class="text-gray-300">Cluster of registrations</span> — multiple accounts created within seconds of each other on the same day.</span>
+						</li>
+					</ul>
+				</div>
+
+				<!-- Step by step -->
+				<div class="rounded-lg border border-gray-800 bg-black/60 px-5 py-4 space-y-3">
+					<h3 class="text-sm font-semibold text-white">Removing spammers — step by step</h3>
+					<ol class="space-y-3 text-sm text-gray-400 list-none">
+						<li class="flex gap-3">
+							<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-800 text-[10px] font-bold text-gray-300">1</span>
+							<span>Go to <a href="/admin/participants" class="text-[#c9a84c] hover:underline">Admin → Participants</a>. Use the search box to filter by name or email.</span>
+						</li>
+						<li class="flex gap-3">
+							<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-800 text-[10px] font-bold text-gray-300">2</span>
+							<span>For a single spammer, click the <span class="text-gray-300">Delete</span> button on their row.</span>
+						</li>
+						<li class="flex gap-3">
+							<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-800 text-[10px] font-bold text-gray-300">3</span>
+							<span>For a batch, check the boxes next to each suspect account, then click <span class="text-gray-300">Delete N selected</span> at the top.</span>
+						</li>
+						<li class="flex gap-3">
+							<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-800 text-[10px] font-bold text-gray-300">4</span>
+							<span>A confirmation dialog will list every account being deleted and warn that <span class="text-red-400">this cannot be undone</span>. Review the names carefully before confirming.</span>
+						</li>
+					</ol>
+				</div>
+
+				<!-- Warning -->
+				<div class="rounded-lg border border-yellow-900/50 bg-yellow-950/20 px-5 py-4 text-sm text-yellow-600 space-y-1">
+					<p class="font-semibold text-yellow-400">⚠️ Deleting a participant is permanent</p>
+					<p>Their account, all pool entries, and all pick history are removed immediately. Only delete accounts you are certain are spam — if in doubt, contact the player first.</p>
+				</div>
+
+				<!-- Prevention tip -->
+				<div class="rounded-lg border border-gray-800 bg-black/60 px-5 py-4 text-sm text-gray-500">
+					<span class="font-semibold text-gray-300">Prevention</span> — consider requiring email verification before a player can create entries. This stops most bots at registration without any manual cleanup.
+				</div>
+
 			</div>
 			{/if}
 

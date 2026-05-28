@@ -148,23 +148,23 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			}
 		} catch { /* odds not available */ }
 
-		// Override derived values with the stored biggestFavoriteTeam when the
-		// scheduled function has already written it — ensures the display matches
-		// exactly what was (or will be) used for auto-picks.
+		// Fall back to the stored biggestFavoriteTeam only when odds haven't
+		// produced a derived value (e.g. odds not yet available for that week).
 		const teamById = Object.fromEntries(teams.map(t => [t.id, t]));
 		for (const week of weeks) {
+			const derived = biggestFavoriteByWeek[week.week];
+			if (derived) continue; // odds-derived value wins
 			const storedId = (week as any).biggestFavoriteTeam as string | undefined;
 			if (!storedId) continue;
 			const t = teamById[storedId] as any;
 			if (!t) continue;
-			const derived = biggestFavoriteByWeek[week.week];
 			biggestFavoriteByWeek[week.week] = {
 				teamId:       t.id,
 				abbreviation: t.abbreviation,
 				city:         t.city,
 				name:         t.name,
-				spread:       derived?.spread ?? 0,
-				stored:       true,  // flag: this came from the DB, not derived
+				spread:       0,
+				stored:       true,  // flag: came from DB, no live odds
 			} as any;
 		}
 	}

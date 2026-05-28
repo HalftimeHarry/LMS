@@ -296,7 +296,11 @@
 
 <svelte:head><title>Entries — Admin</title></svelte:head>
 
-<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
+<!-- ── Single card ────────────────────────────────────────────────────────── -->
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+
+<!-- Header: title + filters + add button -->
+<div class="p-4">
 	<div class="flex flex-wrap items-center justify-between gap-4">
 
 		<!-- Title + deadlines -->
@@ -369,10 +373,10 @@
 		</div><!-- /filters + button -->
 
 	</div><!-- /flex row -->
-</div><!-- /card -->
+</div><!-- /header section -->
 
 <!-- Stats + description (collapsible) -->
-<div class="mb-6 rounded-xl border border-gray-800 bg-black/75 backdrop-blur-sm">
+<div class="border-t border-gray-800">
 	<!-- Toggle header -->
 	<button
 		type="button"
@@ -463,16 +467,16 @@
 			</div>
 		</div>
 	{/if}
-</div>
+</div><!-- /stats section -->
 
-<!-- Success toast -->
+<!-- Toasts -->
 {#if form?.action === 'create' && form?.success}
-	<div class="mb-4 rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
+	<div class="mx-4 mt-3 rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
 		Created: {(form.created as string[]).join(', ')}
 	</div>
 {/if}
 {#if form?.error}
-	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{form.error}</div>
+	<div class="mx-4 mt-3 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{form.error}</div>
 {/if}
 
 <!-- ── Add Entries Modal ──────────────────────────────────────────────────── -->
@@ -781,8 +785,8 @@
 </div>
 {/if}
 
-<!-- Search + select + bulk actions card — sticky below the stats panel -->
-<div class="sticky top-2 z-10 mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/90 p-4 backdrop-blur-sm shadow-lg shadow-black/40">
+<!-- Search + select + bulk actions — sticky inside the card -->
+<div class="sticky top-0 z-10 border-t border-gray-800 bg-black/95 p-4 backdrop-blur-sm">
 
 
 
@@ -898,14 +902,15 @@
 			{/if}
 		</div>
 	{/if}
-</div>
+</div><!-- /sticky search bar -->
 
+<!-- Entry list -->
+<div class="border-t border-gray-800 overflow-y-auto max-h-[60vh] divide-y divide-gray-800/60">
 {#if visibleEntries.length === 0}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
+	<div class="p-12 text-center">
 		<p class="text-gray-400">{ctrl.search ? 'No entries match your search.' : 'No entries match this filter.'}</p>
 	</div>
 {:else}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-y-auto max-h-[60vh] divide-y divide-[rgba(201,168,76,0.1)]">
 		{#each visibleEntries as entry, i}
 
 			<!-- Row -->
@@ -1054,5 +1059,7 @@
 				</div><!-- /entry info + checkbox -->
 			</div><!-- /row -->
 		{/each}
-	</div>
 {/if}
+</div><!-- /entry list -->
+
+</div><!-- /single card -->

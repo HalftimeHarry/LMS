@@ -127,10 +127,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		seasons,
 		activeSeason,
 		poolType,
-		weeks:          weeks    as any[],
-		entries:        entries  as any[],
+		weeks:       weeks       as any[],
+		entries:     entries     as any[],
 		pickGrid,
-		currentWeek:    currentWeek as any,
+		currentWeek: currentWeek as any,
 		userId,
 		hasMissingPick,
 	};
