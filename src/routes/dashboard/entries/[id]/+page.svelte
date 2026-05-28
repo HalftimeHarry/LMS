@@ -176,9 +176,17 @@
 		{/if}
 	</div>
 
-	<!-- Entry header -->
-	<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-		<div class="flex flex-wrap items-start justify-between gap-4">
+	{#if allDisplayWeeks.length === 0}
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
+			<p class="text-gray-400">No weeks set up yet. Check back soon.</p>
+		</div>
+	{:else}
+
+	<!-- ── Single card wrapping everything ───────────────────────────────────── -->
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+
+		<!-- Entry header -->
+		<div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
 			<div>
 				<h1 class="text-2xl font-bold text-white">{entry?.entryName}</h1>
 				<p class="mt-1 text-sm text-gray-400">{season?.name ?? '—'}</p>
@@ -200,24 +208,15 @@
 				{/if}
 			</div>
 		</div>
-	</div>
 
-	{#if allDisplayWeeks.length === 0}
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
-			<p class="text-gray-400">No weeks set up yet. Check back soon.</p>
-		</div>
-	{:else}
-
-		<!-- ── Past picks summary ─────────────────────────────────────────────── -->
-		{@const pastPicks = closedWeeks
-			.filter(w => pickByWeek[w.id])
-			.map(w => ({ week: w, pick: pickByWeek[w.id], teams: pickByWeek[w.id]?.expand?.pickedTeams ?? [] }))}
-		{#if pastPicks.length > 0}
-			<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+		<!-- Past picks / Teams Used -->
+		{#if closedWeeks.some(w => pickByWeek[w.id])}
+			<div class="border-t border-gray-800 px-6 py-4">
 				<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Teams Used</h2>
 				<div class="flex flex-wrap gap-2">
-					{#each pastPicks as { week: w, pick: p, teams }}
-						{#each teams as team}
+					{#each closedWeeks.filter(w => pickByWeek[w.id]) as w}
+						{@const p = pickByWeek[w.id]}
+						{#each (p?.expand?.pickedTeams ?? []) as team}
 							<div class="flex items-center gap-2 rounded-lg border border-gray-800 bg-black/60 px-3 py-2">
 								<img
 									src={teamLogoUrl(team.abbreviation)}
@@ -235,7 +234,8 @@
 			</div>
 		{/if}
 
-		<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+		<!-- Current week banner + pick count -->
+		<div class="border-t border-gray-800 px-6 py-4">
 			<div class="flex items-center justify-between gap-4">
 				<h2 class="text-lg font-bold text-white">
 					{isLms ? 'Pick the Loser' : 'Pick the Winner'}
@@ -355,33 +355,31 @@
 		</div>
 
 		{#if form?.error}
-			<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">
+			<div class="mx-6 mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">
 				{form.error}
 			</div>
 		{/if}
 
-		<!-- Week cards -->
-		<div class="flex flex-col gap-3">
-			{#each allDisplayWeeks as week (week.id)}
-				{@const picksRequired = picksRequiredByWeek[week.id] ?? 1}
-				{@const isOpen      = week.status === 'open'}
-				{@const pick        = pickByWeek[week.id]}
-				{@const sel         = selections[week.id] ?? []}
-				{@const hasPick     = !!pick}
-				{@const canSubmit   = sel.length === picksRequired}
-				{@const pickedTeams = pick?.expand?.pickedTeams ?? []}
-				{@const autoPick    = week.expand?.biggestFavoriteTeam}
-				{@const isAutoPick  = pick?.isAutoPick === true}
+		<!-- Week rows -->
+		{#each allDisplayWeeks as week (week.id)}
+			{@const picksRequired = picksRequiredByWeek[week.id] ?? 1}
+			{@const isOpen      = week.status === 'open'}
+			{@const pick        = pickByWeek[week.id]}
+			{@const sel         = selections[week.id] ?? []}
+			{@const hasPick     = !!pick}
+			{@const canSubmit   = sel.length === picksRequired}
+			{@const pickedTeams = pick?.expand?.pickedTeams ?? []}
+			{@const autoPick    = week.expand?.biggestFavoriteTeam}
+			{@const isAutoPick  = pick?.isAutoPick === true}
 
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden
-					{!isOpen ? 'opacity-90' : ''}">
+			<div class="border-t border-gray-800 {!isOpen ? 'opacity-90' : ''}">
 
 					<!-- Week header -->
-					<button
-						type="button"
-						onclick={() => toggleWeek(week.id)}
-						class="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-white/5"
-					>
+				<button
+					type="button"
+					onclick={() => toggleWeek(week.id)}
+					class="flex w-full flex-wrap items-center justify-between gap-3 px-6 py-4 text-left transition hover:bg-white/5"
+				>
 						<div>
 							<div class="flex items-center gap-2">
 								<p class="font-semibold text-white">Week {week.week}</p>
@@ -422,12 +420,12 @@
 								<span class="rounded border border-yellow-800 bg-yellow-950/60 px-2 py-0.5 text-xs text-yellow-400">No pick</span>
 							{/if}
 							<span class="text-gray-600">{expandedWeeks.has(week.id) ? '▲' : '▼'}</span>
-						</div>
-					</button>
+					</div>
+				</button>
 
-					<!-- Expanded body -->
-					{#if expandedWeeks.has(week.id)}
-						<div class="border-t border-gray-800 px-5 pb-5 pt-4">
+				<!-- Expanded body -->
+				{#if expandedWeeks.has(week.id)}
+					<div class="border-t border-gray-800/50 bg-black/20 px-6 pb-5 pt-4">
 
 							{#if !isOpen}
 								<!-- ── CLOSED WEEK: read-only view ── -->
@@ -777,12 +775,13 @@
 								</form>
 							{/if}
 
-						</div>
-					{/if}
+					</div>
+				{/if}
 
-				</div>
-			{/each}
-		</div>
+			</div><!-- end week row -->
+		{/each}
+
+	</div><!-- end single card -->
 
 	{/if}
 
