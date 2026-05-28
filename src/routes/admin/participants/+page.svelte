@@ -199,7 +199,7 @@
 								<button
 									type="button"
 									onclick={() => requestDelete([user.id])}
-									class="rounded border border-gray-800 px-2.5 py-1 text-xs text-gray-600 transition hover:border-red-800 hover:bg-red-950/40 hover:text-red-400"
+									class="rounded border border-red-800 bg-red-950/40 px-2.5 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
 								>
 									Delete
 								</button>
