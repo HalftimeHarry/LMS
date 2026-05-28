@@ -116,6 +116,21 @@
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
+	// Active entries that haven't submitted a pick for the current open week.
+	// Count is always shown; names only shown for the current user's own entries.
+	const activeEntries = $derived(
+		(entries as any[]).filter(e => e.status === 'active')
+	);
+	const stillToPickEntries = $derived((() => {
+		if (!currentWeek) return [] as any[];
+		return activeEntries.filter(e =>
+			!openWeeks.some(ow => ow.id === currentWeek.id && pickGrid[e.id]?.[ow.id])
+		);
+	})());
+	const myStillToPick = $derived(
+		stillToPickEntries.filter((e: any) => e.user === userId)
+	);
+
 	let breakdownOpen = $state(false);
 	// Track which team row is expanded to show entry names
 	let expandedTeam = $state<string | null>(null);
@@ -302,7 +317,7 @@
 			</div>
 
 			<!-- Collapsible breakdown toggle -->
-			{#if currentWeekBreakdown.length > 0}
+			{#if currentWeekBreakdown.length > 0 || stillToPickEntries.length > 0}
 				<button
 					type="button"
 					onclick={() => { breakdownOpen = !breakdownOpen; expandedTeam = null; }}
@@ -310,7 +325,10 @@
 				>
 					<span class="flex items-center gap-2 text-xs font-medium text-gray-400">
 						<span class="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-						Week {currentWeek.week} picks — {currentWeekBreakdown.length} team{currentWeekBreakdown.length !== 1 ? 's' : ''} · {totalPicksThisWeek} pick{totalPicksThisWeek !== 1 ? 's' : ''} in
+						{totalPicksThisWeek} of {activeEntries.length} picked
+						{#if stillToPickEntries.length > 0}
+							· <span class="text-yellow-600">{stillToPickEntries.length} still to pick</span>
+						{/if}
 					</span>
 					<svg
 						class="h-3.5 w-3.5 text-gray-600 transition-transform {breakdownOpen ? 'rotate-180' : ''}"
@@ -397,6 +415,28 @@
 								{/if}
 							{/each}
 						</div>
+					<!-- Still to pick -->
+					{#if stillToPickEntries.length > 0}
+						<div class="mt-3 rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
+							<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-yellow-700">
+								Still to pick — {stillToPickEntries.length} of {activeEntries.length}
+							</p>
+							<div class="flex flex-wrap gap-1.5">
+								{#each myStillToPick as entry}
+									<a href="/dashboard/entries/{entry.id}"
+										class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
+										{entry.entryName} <span class="opacity-60">you →</span>
+									</a>
+								{/each}
+								{#if stillToPickEntries.length > myStillToPick.length}
+									<span class="rounded border border-gray-800 bg-gray-900/60 px-2 py-0.5 text-xs text-gray-600">
+										+{stillToPickEntries.length - myStillToPick.length} other{stillToPickEntries.length - myStillToPick.length !== 1 ? 's' : ''} hidden
+									</span>
+								{/if}
+							</div>
+						</div>
+					{/if}
+
 						<p class="mt-3 text-[11px] text-gray-700">
 							Picks are hidden until the deadline. Entry names only appear for your own picks.
 						</p>
