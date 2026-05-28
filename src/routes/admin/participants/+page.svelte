@@ -207,8 +207,7 @@
 					{/each}
 				</tbody>
 			</table>
-		</div>
-	</div>
+		</div><!-- end scroll container -->
 	<!-- Back to top -->
 	{#if showScrollTop}
 		<button
