@@ -400,32 +400,42 @@
 							{/if}
 
 							<!-- Still to pick — public, these entries will receive the auto-pick -->
+							{@const autoPick = currentWeek.expand?.biggestFavoriteTeam}
 							{#if stillToPickEntries.length > 0}
-								<div class="rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
-									<p class="mb-2 text-[10px] font-medium uppercase tracking-wider text-yellow-700">
-										Still to pick ({stillToPickEntries.length}) — will receive auto-pick
-									</p>
-									<div class="flex flex-wrap gap-1.5">
-										{#each stillToPickEntries as entry}
-											{#if entry.user === userId}
-												<!-- Own entry — show as action link -->
-												<a href="/dashboard/entries/{entry.id}"
-													class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
-													{entry.entryName} <span class="opacity-60">→</span>
-												</a>
-											{:else}
-												<span class="rounded border border-gray-800 bg-gray-900/60 px-2 py-0.5 text-xs text-gray-500">
+								<div class="space-y-1">
+									{#each stillToPickEntries as entry}
+										{@const isMe = entry.user === userId}
+										<div class="flex items-center gap-3 rounded-lg border {isMe ? 'border-yellow-900/50 bg-yellow-950/20' : 'border-gray-800/60 bg-gray-900/40'} px-3 py-2.5">
+											<!-- Entry name -->
+											<div class="min-w-0 flex-1">
+												<p class="text-sm font-medium {isMe ? 'text-yellow-400' : 'text-gray-300'}">
 													{entry.entryName}
-												</span>
+													{#if isMe}<span class="ml-1 text-[10px] opacity-60">you</span>{/if}
+												</p>
+												{#if autoPick}
+													<p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+														Auto-pick:
+														<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation}
+															class="h-4 w-4 rounded-full bg-white p-px object-contain opacity-70" />
+														<span class="text-gray-400">{autoPick.city} {autoPick.name}</span>
+													</p>
+												{/if}
+											</div>
+											<!-- Action link for own entries -->
+											{#if isMe}
+												<a href="/dashboard/entries/{entry.id}"
+													class="shrink-0 rounded border border-yellow-700/50 bg-yellow-950/40 px-2.5 py-1 text-xs font-medium text-yellow-400 hover:bg-yellow-900/50 transition">
+													Pick now →
+												</a>
 											{/if}
-										{/each}
-									</div>
+										</div>
+									{/each}
 								</div>
 							{:else}
 								<p class="text-xs text-green-600">All active entries have picked this week.</p>
 							{/if}
 
-							<p class="mt-3 text-[11px] text-gray-700">Picks are hidden until the deadline. Only the auto-pick list is public.</p>
+							<p class="mt-3 text-[11px] text-gray-700">Picks are hidden until the deadline. Entries listed above will receive the auto-pick if they don't submit before then.</p>
 
 						{:else}
 							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
