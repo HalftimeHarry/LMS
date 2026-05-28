@@ -208,8 +208,8 @@
 	const allEntries      = $derived(data.statsAll as any[]);
 	const lmsFee          = $derived((activeSeason?.lmsEntryFee        ?? 0) as number);
 	const shFee           = $derived((activeSeason?.secondHalfEntryFee ?? 0) as number);
-	const lmsEntries      = $derived(allEntries.filter((e: any) => e.pool_type === 'lms'));
-	const shEntries       = $derived(allEntries.filter((e: any) => e.pool_type === 'second_half'));
+	const lmsEntries      = $derived(allEntries.filter((e: any) => e.entryType === 'lms'));
+	const shEntries       = $derived(allEntries.filter((e: any) => e.entryType === 'second_half'));
 	const lmsCount        = $derived(lmsEntries.length);
 	const shCount         = $derived(shEntries.length);
 	const totalCount      = $derived(lmsCount + shCount);
@@ -746,8 +746,8 @@
 </div>
 {/if}
 
-<!-- Search + select + bulk actions card -->
-<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
+<!-- Search + select + bulk actions card — sticky below the stats panel -->
+<div class="sticky top-2 z-10 mb-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/90 p-4 backdrop-blur-sm shadow-lg shadow-black/40">
 
 
 
@@ -870,15 +870,15 @@
 		<p class="text-gray-400">{ctrl.search ? 'No entries match your search.' : 'No entries match this filter.'}</p>
 	</div>
 {:else}
-	<div class="flex flex-col gap-3">
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-y-auto max-h-[60vh] divide-y divide-[rgba(201,168,76,0.1)]">
 		{#each visibleEntries as entry, i}
 
-			<!-- Card -->
+			<!-- Row -->
 			<div
-				class="min-w-0 rounded-xl border p-5 backdrop-blur-sm transition
+				class="min-w-0 p-5 transition
 					{ctrl.selectedIds.has(entry.id)
-						? 'border-purple-700 bg-purple-950/60'
-						: 'border-[rgba(201,168,76,0.3)] bg-black/75'}"
+						? 'bg-purple-950/40'
+						: 'hover:bg-white/[0.02]'}"
 			>
 				<div class="flex flex-wrap items-start justify-between gap-4">
 					<!-- Entry info -->
@@ -1017,7 +1017,7 @@
 					</div>
 					</div><!-- /entry text -->
 				</div><!-- /entry info + checkbox -->
-			</div><!-- /card -->
+			</div><!-- /row -->
 		{/each}
 	</div>
 {/if}

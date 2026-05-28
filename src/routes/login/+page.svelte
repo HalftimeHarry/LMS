@@ -2,14 +2,14 @@
 	import { enhance, applyAction } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
 
 	const redirectTo = $derived($page.url.searchParams.get('redirect') ?? '/dashboard');
 	const resetDone  = $derived($page.url.searchParams.get('reset') === '1');
-	const siteKey    = PUBLIC_TURNSTILE_SITE_KEY ?? '';
+	const siteKey    = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 	let loading = $state(false);
 </script>
 

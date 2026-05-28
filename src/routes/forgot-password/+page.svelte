@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData } from './$types';
-	import { PUBLIC_TURNSTILE_SITE_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
 
 	let { form }: { form: ActionData } = $props();
 
-	const siteKey = PUBLIC_TURNSTILE_SITE_KEY ?? '';
+	const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 	let loading = $state(false);
 </script>
 
