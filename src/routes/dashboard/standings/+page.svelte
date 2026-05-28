@@ -505,10 +505,10 @@
 
 	{:else}
 		<!-- ── Pick grid ─────────────────────────────────────────────────────── -->
-		<div class="overflow-x-auto rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+		<div class="overflow-x-auto overflow-y-auto max-h-[32rem] rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
 			<table class="min-w-full text-sm">
 				<thead>
-					<tr class="border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500">
+					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
 						<!-- Sticky entry column -->
 						<th class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-3 text-left w-44">Entry</th>
 						<th class="px-3 py-3 text-left whitespace-nowrap">Status</th>
