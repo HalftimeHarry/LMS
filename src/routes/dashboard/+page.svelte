@@ -176,6 +176,8 @@
 	{@const shPool  = (data.poolStatsBySeason as Record<string, any>)[sg.entries.find((e: any) => e.entryType === 'second_half')?.season ?? ''] ?? {}}
 	{@const lms     = lmsPool.lms ?? { total: 0, active: 0, eliminated: 0, pot: 0 }}
 	{@const sh      = shPool.sh   ?? { total: 0, active: 0, eliminated: 0, pot: 0 }}
+	{@const lmsSeasonRecord = (data.activeSeasons as any[]).find((s: any) => s.id === (sg.entries.find((e: any) => e.entryType === 'lms')?.season ?? sg.season.id))}
+	{@const lmsMaintFee = (lmsSeasonRecord?.maintenanceFee ?? 0) as number}
 
 	<!-- My entries summary -->
 	{@const myLmsEntries = sg.entries.filter((e: any) => e.entryType === 'lms')}
@@ -218,7 +220,11 @@
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-[#c9a84c]">${lms.pot.toLocaleString()}</div>
 					<div class="mt-1 text-xs text-gray-500">Prize Pot</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">paid entries only</div>
+					{#if lmsMaintFee > 0}
+						<div class="mt-0.5 text-[10px] text-gray-700">${(lms.pot + lmsMaintFee).toLocaleString()} gross − ${lmsMaintFee.toLocaleString()} maintenance fee</div>
+					{/if}
+					<div class="mt-0.5 text-[10px] text-gray-700">{lms.paid ?? 0} paid · {lms.free ?? 0} free</div>
+					
 				</div>
 				<!-- My entries -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.05)] p-4 text-center backdrop-blur-sm">
@@ -258,7 +264,7 @@
 				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-[#c9a84c]">${sh.pot.toLocaleString()}</div>
 					<div class="mt-1 text-xs text-gray-500">Prize Pot</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">paid entries only</div>
+					
 				</div>
 				<div class="rounded-xl border border-blue-700/40 bg-blue-950/10 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-blue-400">{myShAlive}<span class="text-sm text-gray-600">/{myShEntries.length}</span></div>

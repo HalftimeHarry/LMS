@@ -164,15 +164,16 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	// Pool-wide stats per season (all users)
 	const poolStatsBySeason: Record<string, {
 		total: number; active: number; pending: number; eliminated: number; pot: number;
-		lms: { total: number; active: number; eliminated: number; pot: number };
+		lms: { total: number; active: number; eliminated: number; pot: number; paid: number; free: number };
 		sh:  { total: number; active: number; eliminated: number; pot: number };
 	}> = {};
 
 	await Promise.all(
 		userSeasonIds.map(async (sid) => {
-			const season = allSeasons.find((s: any) => s.id === sid);
-			const lmsFee = (season?.lmsEntryFee        ?? 0) as number;
-			const shFee  = (season?.secondHalfEntryFee ?? 0) as number;
+			const season   = allSeasons.find((s: any) => s.id === sid);
+			const lmsFee   = (season?.lmsEntryFee        ?? 0) as number;
+			const shFee    = (season?.secondHalfEntryFee ?? 0) as number;
+			const maintFee = (season?.maintenanceFee     ?? 0) as number;
 
 			const all = await pb.collection('entries').getFullList({
 				filter: `season = "${sid}"`,
@@ -196,7 +197,9 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 					total:      lmsAll.length,
 					active:     lmsAll.filter((x: any) => x.status === 'active').length,
 					eliminated: lmsAll.filter((x: any) => x.status === 'eliminated').length,
-					pot:        lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * lmsFee,
+					free:       lmsAll.filter((x: any) => x.paymentMethod === 'free').length,
+					paid:       lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length,
+					pot:        Math.max(0, lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * lmsFee - maintFee),
 				},
 				sh: {
 					total:      shAll.length,
