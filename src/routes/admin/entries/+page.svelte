@@ -420,12 +420,11 @@
 			<!-- Total Pot -->
 			<div class="bg-black/60 px-5 py-4">
 				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Pot</p>
-				<p class="mt-1 text-2xl font-bold text-white">${totalPot.toLocaleString()}</p>
-				<p class="mt-0.5 text-xs text-gray-600">LMS ${lmsRevenue.toLocaleString()} · 2H ${shRevenue.toLocaleString()}</p>
+				<p class="mt-1 text-2xl font-bold text-white">${(maintFee > 0 ? lmsNetPayout + shRevenue : totalPot).toLocaleString()}</p>
 				{#if maintFee > 0}
-					<p class="mt-0.5 text-xs text-red-500/70">− ${maintFee.toLocaleString()} fee → <span class="text-green-400/80">${lmsNetPayout.toLocaleString()} net</span></p>
+					<p class="mt-0.5 text-xs text-gray-600">Gross ${totalPot.toLocaleString()} − ${maintFee.toLocaleString()} fee</p>
 				{/if}
-
+				<p class="mt-0.5 text-xs text-gray-600">{freeCount} free · {paidCount - freeCount} paid</p>
 			</div>
 			<!-- Total Entries -->
 			<div class="bg-black/60 px-5 py-4">

@@ -17,6 +17,7 @@
 					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
 					{ href: '/admin/users',     label: 'Users' },
+					{ href: '/admin/picks',     label: 'Manage Picks' },
 					{ href: '/admin/duties',    label: 'Admin Duties' },
 					{ href: '/admin/teams',     label: 'NFL Teams' },
 			  ]

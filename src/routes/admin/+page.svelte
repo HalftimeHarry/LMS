@@ -255,8 +255,11 @@
 				<p class="text-xs text-gray-500">Total Pot</p>
 				<InfoTip text="Estimated prize pool based on paid entries × entry fee. LMS and 2nd Half pools are tracked separately." />
 			</div>
-			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${stats.potEstimate.toLocaleString()}</p>
-			<p class="mt-1 text-xs text-gray-600">LMS ${stats.lmsPot.toLocaleString()} · 2H ${stats.secondHalfPot.toLocaleString()}</p>
+			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${(stats.maintenanceFee > 0 ? stats.lmsNetPayout + stats.secondHalfPot : stats.potEstimate).toLocaleString()}</p>
+			{#if stats.maintenanceFee > 0}
+				<p class="mt-1 text-xs text-gray-600">Gross ${stats.potEstimate.toLocaleString()} − ${stats.maintenanceFee.toLocaleString()} fee</p>
+			{/if}
+			<p class="mt-1 text-xs text-gray-600">{stats.freeEntries} free · {stats.paidEntries - stats.freeEntries} paid</p>
 
 		</div>
 
