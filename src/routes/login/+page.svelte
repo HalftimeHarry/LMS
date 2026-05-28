@@ -2,22 +2,20 @@
 	import { enhance, applyAction } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { env } from '$env/dynamic/public';
+
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
 
 	const redirectTo = $derived($page.url.searchParams.get('redirect') ?? '/dashboard');
 	const resetDone  = $derived($page.url.searchParams.get('reset') === '1');
-	const siteKey    = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
 	let loading = $state(false);
 </script>
 
 <svelte:head>
 	<title>Sign In — LMS Pool</title>
-	{#if siteKey}
-		<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-	{/if}
+
 </svelte:head>
 
 <div class="flex min-h-[70vh] items-center justify-center">
@@ -82,9 +80,7 @@
 			</div>
 
 			<!-- Turnstile CAPTCHA — only rendered when site key is configured -->
-			{#if siteKey}
-				<div class="cf-turnstile" data-sitekey={siteKey} data-theme="dark"></div>
-			{/if}
+
 
 			{#if form?.error}
 				<p class="rounded border border-red-800 bg-red-950/60 px-3 py-2 text-sm text-red-400">{form.error}</p>

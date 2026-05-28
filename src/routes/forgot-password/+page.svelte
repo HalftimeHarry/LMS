@@ -1,19 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { ActionData } from './$types';
-	import { env } from '$env/dynamic/public';
+
 
 	let { form }: { form: ActionData } = $props();
 
-	const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
 	let loading = $state(false);
 </script>
 
 <svelte:head>
 	<title>Forgot Password — LMS Pool</title>
-	{#if siteKey}
-		<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-	{/if}
+
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-black px-4">
@@ -66,9 +64,7 @@
 				</div>
 
 				<!-- Turnstile widget — only rendered when site key is configured -->
-				{#if siteKey}
-					<div class="cf-turnstile mt-4" data-sitekey={siteKey} data-theme="dark"></div>
-				{/if}
+
 
 				<button
 					type="submit"
