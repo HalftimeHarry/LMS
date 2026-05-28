@@ -86,10 +86,16 @@
 <div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
 	<!-- Header -->
-	<div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-		<div>
-			<h1 class="text-xl font-bold text-white">Manage Participants</h1>
-			<p class="mt-0.5 text-sm text-gray-500">{users.length} participant{users.length !== 1 ? 's' : ''} registered</p>
+	<div class="px-5 py-4">
+		<h1 class="text-xl font-bold text-white">Manage Participants</h1>
+		<p class="mt-0.5 text-sm text-gray-500">{users.length} participant{users.length !== 1 ? 's' : ''} registered</p>
+		<div class="mt-3 flex items-start gap-2.5 rounded-lg border border-yellow-900/50 bg-yellow-950/20 px-3 py-2.5">
+			<svg class="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+			</svg>
+			<p class="text-xs text-yellow-600">
+				Deleting a participant permanently removes their account and all associated entries. Existing pick history tied to those entries will lose its user link and cannot be recovered. Only delete accounts you are certain should be removed.
+			</p>
 		</div>
 	</div>
 
