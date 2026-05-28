@@ -218,6 +218,8 @@
 	const totalPot        = $derived(lmsRevenue + shRevenue);
 	const maintFee        = $derived((activeSeason?.maintenanceFee ?? 0) as number);
 	const lmsNetPayout    = $derived(Math.max(0, lmsRevenue - maintFee));
+	let maintFeeInput     = $state(String(maintFee));
+	$effect(() => { maintFeeInput = String(maintFee); });
 	const paidCount       = $derived(allEntries.filter((e: any) => e.paid).length);
 	const freeCount       = $derived(allEntries.filter((e: any) => e.paymentMethod === 'free').length);
 	const pendingCount    = $derived(allEntries.filter((e: any) => e.status === 'pending_payment').length);
@@ -390,7 +392,7 @@
 		<!-- Maintenance fee input -->
 		<div class="flex items-center gap-4 border-t border-gray-800 px-5 py-3">
 			<label for="maintFeeInput" class="text-xs font-medium text-gray-500 shrink-0">Maintenance fee ($)</label>
-			<form method="POST" action="/admin/weeks?/saveMaintenance" use:enhance={async () => {
+			<form method="POST" action="?/saveMaintenance" use:enhance={() => {
 				return async ({ update }) => { await update(); await invalidateAll(); };
 			}} class="flex items-center gap-2">
 				<input type="hidden" name="seasonId" value={activeSeason.id} />
@@ -400,7 +402,7 @@
 					name="maintenanceFee"
 					min="0"
 					step="1"
-					value={maintFee}
+					bind:value={maintFeeInput}
 					class="w-28 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
 				/>
 				<button type="submit"
@@ -408,8 +410,9 @@
 					Save
 				</button>
 			</form>
-			{#if maintFee > 0}
-				<p class="text-xs text-gray-600">LMS net payout: <span class="text-white font-medium">${lmsNetPayout.toLocaleString()}</span></p>
+			{#if Number(maintFeeInput) > 0}
+				{@const previewNet = Math.max(0, lmsRevenue - Number(maintFeeInput))}
+				<p class="text-xs text-gray-600">LMS net payout: <span class="text-white font-medium">${previewNet.toLocaleString()}</span></p>
 			{/if}
 		</div>
 
@@ -422,6 +425,7 @@
 				{#if maintFee > 0}
 					<p class="mt-0.5 text-xs text-red-500/70">− ${maintFee.toLocaleString()} fee → <span class="text-green-400/80">${lmsNetPayout.toLocaleString()} net</span></p>
 				{/if}
+
 			</div>
 			<!-- Total Entries -->
 			<div class="bg-black/60 px-5 py-4">

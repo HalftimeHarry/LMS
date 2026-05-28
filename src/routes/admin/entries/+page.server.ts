@@ -306,5 +306,21 @@ export const actions: Actions = {
 		}
 		if (errors.length) return fail(400, { error: `Some deletes failed: ${errors.join(', ')}` });
 		return { success: true, count: ids.length };
-	}
+	},
+
+	saveMaintenance: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin' && locals.role !== 'pool_admin') return fail(403, { error: 'Not authorized.' });
+		const pb   = await pbAdmin();
+		const data = await request.formData();
+		const seasonId = data.get('seasonId') as string;
+		const fee      = Number(data.get('maintenanceFee') ?? 0);
+		if (!seasonId) return fail(400, { error: 'Season is required.' });
+		if (isNaN(fee) || fee < 0) return fail(400, { error: 'Fee must be 0 or a positive number.' });
+		try {
+			await pb.collection('seasons').update(seasonId, { maintenanceFee: fee });
+		} catch (e: unknown) {
+			return fail(400, { error: (e as { message?: string })?.message ?? 'Failed to save.' });
+		}
+		return { success: true };
+	},
 };
