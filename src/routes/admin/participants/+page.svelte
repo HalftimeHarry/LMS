@@ -72,36 +72,30 @@
 
 <svelte:head><title>Manage Participants — Admin</title></svelte:head>
 
-<div class="space-y-4">
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
 	<!-- Header -->
-	<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
 		<div>
 			<h1 class="text-xl font-bold text-white">Manage Participants</h1>
 			<p class="mt-0.5 text-sm text-gray-500">{users.length} participant{users.length !== 1 ? 's' : ''} registered</p>
 		</div>
-
 	</div>
 
-	<!-- Error banner -->
+	<!-- Toasts -->
 	{#if (form as any)?.error}
-		<div class="rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">
+		<div class="mx-5 mb-3 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">
 			{(form as any).error}
 		</div>
 	{/if}
-
-	<!-- Success banner -->
 	{#if (form as any)?.success}
-		<div class="rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
+		<div class="mx-5 mb-3 rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
 			✅ {(form as any).deleted} participant{(form as any).deleted !== 1 ? 's' : ''} deleted.
 		</div>
 	{/if}
 
-	<!-- Participant table card -->
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
-
-		<!-- Search + bulk delete bar -->
-		<div class="flex flex-wrap items-center gap-3 border-b border-gray-800 px-4 py-3">
+	<!-- Search + bulk delete bar -->
+	<div class="flex flex-wrap items-center gap-3 border-t border-gray-800 px-4 py-3">
 			<input
 				type="text"
 				placeholder="Search name or email…"
@@ -200,7 +194,7 @@
 			</table>
 		</div>
 	</div>
-</div>
+</div><!-- end single card -->
 
 <!-- ── Confirmation dialog ─────────────────────────────────────────────────── -->
 {#if pending}
