@@ -2,21 +2,19 @@
 	import { enhance, applyAction } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { env } from '$env/dynamic/public';
+
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
 
 	const reason  = $derived($page.url.searchParams.get('reason'));
-	const siteKey = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
 	let loading   = $state(false);
 </script>
 
 <svelte:head>
 	<title>Register — LMS Pool</title>
-	{#if siteKey}
-		<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-	{/if}
+
 </svelte:head>
 
 <div class="flex min-h-[70vh] items-center justify-center py-10">
@@ -90,9 +88,7 @@
 				Keep me signed in on this device
 			</label>
 
-			{#if siteKey}
-				<div class="cf-turnstile" data-sitekey={siteKey} data-theme="dark"></div>
-			{/if}
+
 
 			<button type="submit" disabled={loading}
 				class="mt-1 rounded bg-[#c9a84c] py-2.5 font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">

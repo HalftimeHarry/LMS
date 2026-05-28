@@ -38,34 +38,6 @@ export const actions: Actions = {
 			return fail(400, { error: 'Password must be at least 8 characters.', fields });
 		}
 
-		// Verify Turnstile when configured — skipped in dev when keys are absent
-		const turnstileSecret = env.TURNSTILE_SECRET_KEY;
-		if (turnstileSecret) {
-			const token = data.get('cf-turnstile-response') as string | null;
-			if (!token) return fail(400, { error: 'Please complete the CAPTCHA.', fields });
-			try {
-				const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						secret:   turnstileSecret,
-						response: token,
-						remoteip: clientIp(request),
-					}),
-				});
-				if (!verifyRes.ok) throw new Error(`Turnstile HTTP ${verifyRes.status}`);
-				const verify = await verifyRes.json() as { success: boolean; 'error-codes'?: string[] };
-				if (!verify.success) {
-					const codes = verify['error-codes']?.join(', ') ?? 'unknown';
-					console.error('Turnstile failed:', codes);
-					return fail(400, { error: 'CAPTCHA verification failed. Please try again.', fields });
-				}
-			} catch (e) {
-				console.error('Turnstile error:', e);
-				return fail(500, { error: 'CAPTCHA check failed. Please try again.', fields });
-			}
-		}
-
 		const pb = new PocketBase(PUBLIC_POCKETBASE_URL);
 		try {
 			await pb.collection('users').create({

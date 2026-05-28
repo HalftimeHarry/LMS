@@ -18,21 +18,6 @@ export const actions = {
 		if (!email) return fail(400, { error: 'Email is required.' });
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(400, { error: 'Enter a valid email address.' });
 
-		// Verify Turnstile token when CAPTCHA is configured
-		const turnstileSecret = env.TURNSTILE_SECRET_KEY;
-		if (turnstileSecret) {
-			const token = data.get('cf-turnstile-response') as string | null;
-			if (!token) return fail(400, { error: 'CAPTCHA verification required.' });
-
-			const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ secret: turnstileSecret, response: token }),
-			});
-			const verify = await verifyRes.json() as { success: boolean };
-			if (!verify.success) return fail(400, { error: 'CAPTCHA verification failed. Please try again.' });
-		}
-
 		// Always return success — don't reveal whether the email exists
 		try {
 			await fetch(`${PB_URL}/api/collections/users/request-password-reset`, {
