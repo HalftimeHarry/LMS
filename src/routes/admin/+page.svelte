@@ -257,6 +257,7 @@
 			</div>
 			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${stats.potEstimate.toLocaleString()}</p>
 			<p class="mt-1 text-xs text-gray-600">LMS ${stats.lmsPot.toLocaleString()} · 2H ${stats.secondHalfPot.toLocaleString()}</p>
+
 		</div>
 
 		<!-- Entry counts -->

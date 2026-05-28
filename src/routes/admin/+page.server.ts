@@ -22,7 +22,11 @@ function buildStats(entries: any[], season: any, totalUsers: number) {
 		secondHalfPot:     paidSecondHalf.length * (season?.secondHalfEntryFee ?? 0),
 		potEstimate:
 			paidLms.length        * (season?.lmsEntryFee        ?? 0) +
-			paidSecondHalf.length * (season?.secondHalfEntryFee ?? 0)
+			paidSecondHalf.length * (season?.secondHalfEntryFee ?? 0),
+		maintenanceFee:    (season?.maintenanceFee ?? 0) as number,
+		lmsNetPayout:      Math.max(0,
+			paidLms.length * (season?.lmsEntryFee ?? 0) - (season?.maintenanceFee ?? 0)
+		),
 	};
 }
 
