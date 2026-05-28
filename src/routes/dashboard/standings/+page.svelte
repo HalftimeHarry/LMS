@@ -402,7 +402,7 @@
 							<!-- Still to pick — public, these entries will receive the auto-pick -->
 							{@const autoPick = currentWeek.expand?.biggestFavoriteTeam}
 							{#if stillToPickEntries.length > 0}
-								<div class="space-y-1">
+								<div class="max-h-64 overflow-y-auto space-y-1 pr-1">
 									{#each stillToPickEntries as entry}
 										{@const isMe = entry.user === userId}
 										<div class="flex items-center gap-3 rounded-lg border {isMe ? 'border-yellow-900/50 bg-yellow-950/20' : 'border-gray-800/60 bg-gray-900/40'} px-3 py-2.5">
@@ -439,7 +439,7 @@
 
 						{:else}
 							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
-							<div class="space-y-1">
+							<div class="max-h-80 overflow-y-auto space-y-1 pr-1">
 								{#each currentWeekBreakdown as { abbr, count }}
 									{@const pct = totalPicksThisWeek > 0 ? Math.round((count / totalPicksThisWeek) * 100) : 0}
 									{@const isMyPick = Object.values(pickGrid).some(wm => wm[currentWeek.id]?.isOwn && wm[currentWeek.id]?.teams.includes(abbr))}
