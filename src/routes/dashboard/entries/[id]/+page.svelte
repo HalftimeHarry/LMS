@@ -59,8 +59,18 @@
 	}
 
 	// All weeks collapsed by default
-	let expandedWeeks = $state<Set<string>>(new Set());
-	let loadingWeek   = $state<string | null>(null);
+	let expandedWeeks  = $state<Set<string>>(new Set());
+	let loadingWeek    = $state<string | null>(null);
+	let scrollEl       = $state<HTMLElement | null>(null);
+	let showScrollTop  = $state(false);
+
+	function onScroll() {
+		showScrollTop = (scrollEl?.scrollTop ?? 0) > 120;
+	}
+
+	function scrollToTop() {
+		scrollEl?.scrollTo({ top: 0, behavior: 'smooth' });
+	}
 
 	function toggleWeek(weekId: string) {
 		const next = new Set(expandedWeeks);
@@ -183,7 +193,13 @@
 	{:else}
 
 	<!-- ── Single card wrapping everything ───────────────────────────────────── -->
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+	<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+		<!-- Scroll container -->
+		<div
+			bind:this={scrollEl}
+			onscroll={onScroll}
+			class="max-h-[80vh] overflow-y-auto scroll-smooth"
+		>
 
 		<!-- Entry header -->
 		<div class="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
@@ -372,7 +388,7 @@
 			{@const autoPick    = week.expand?.biggestFavoriteTeam}
 			{@const isAutoPick  = pick?.isAutoPick === true}
 
-			<div class="border-t border-gray-800 {!isOpen ? 'opacity-90' : ''}">
+			<div class="border-t border-gray-800 {!isOpen ? 'opacity-50 hover:opacity-80 transition-opacity' : ''}">
 
 					<!-- Week header -->
 				<button
@@ -780,6 +796,22 @@
 
 			</div><!-- end week row -->
 		{/each}
+
+		</div><!-- end scroll container -->
+
+		<!-- Back to top button — appears after scrolling down -->
+		{#if showScrollTop}
+			<button
+				type="button"
+				onclick={scrollToTop}
+				class="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full border border-[rgba(201,168,76,0.3)] bg-black/90 px-3 py-1.5 text-xs font-medium text-[#c9a84c] shadow-lg backdrop-blur-sm transition hover:bg-[rgba(201,168,76,0.1)]"
+			>
+				<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+				</svg>
+				Top
+			</button>
+		{/if}
 
 	</div><!-- end single card -->
 
