@@ -213,8 +213,8 @@
 	const lmsCount        = $derived(lmsEntries.length);
 	const shCount         = $derived(shEntries.length);
 	const totalCount      = $derived(lmsCount + shCount);
-	const lmsRevenue      = $derived(lmsFee * lmsEntries.filter((e: any) => e.paid).length);
-	const shRevenue       = $derived(shFee  * shEntries.filter((e: any) => e.paid).length);
+	const lmsRevenue      = $derived(lmsFee * lmsEntries.filter((e: any) => e.paid && e.paymentMethod !== 'free').length);
+	const shRevenue       = $derived(shFee  * shEntries.filter((e: any)  => e.paid && e.paymentMethod !== 'free').length);
 	const totalPot        = $derived(lmsRevenue + shRevenue);
 	const paidCount       = $derived(allEntries.filter((e: any) => e.paid).length);
 	const freeCount       = $derived(allEntries.filter((e: any) => e.paymentMethod === 'free').length);
