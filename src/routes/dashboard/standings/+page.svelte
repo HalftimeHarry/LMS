@@ -619,22 +619,20 @@
 								{@const cell = pickGrid[entry.id]?.[week.id]}
 								<td class="px-2 py-2 text-center align-middle">
 									{#if isMe && cell}
-										<!-- Own pick — visible only to the owner -->
-										<div class="flex flex-col items-center gap-0.5">
+										<!-- Own pick — click to change -->
+										<a href="/dashboard/entries/{entry.id}"
+											title="Change pick"
+											class="group flex flex-col items-center gap-0.5 hover:opacity-80 transition">
 											{#each cell.teams as abbr}
-												<div class="relative">
-													<img
-														src={teamLogoUrl(abbr)}
-														alt={abbr}
-														title="Your pick: {abbr}"
-														class="h-6 w-6 rounded-full bg-white p-0.5 object-contain"
-													/>
-													<span class="text-[9px] leading-none text-gray-400">{abbr}</span>
-												</div>
+												<img
+													src={teamLogoUrl(abbr)}
+													alt={abbr}
+													class="h-6 w-6 rounded-full bg-white p-0.5 object-contain"
+												/>
+												<span class="text-[9px] leading-none text-gray-400">{abbr}</span>
 											{/each}
-											<!-- Small "you" indicator -->
-											<span class="text-[9px] leading-none text-[#c9a84c]/60">you</span>
-										</div>
+											<span class="text-[9px] leading-none text-[#c9a84c]/70 group-hover:text-[#c9a84c] transition">change</span>
+										</a>
 									{:else if isMe && !cell}
 										<!-- Own entry, no pick yet -->
 										<a href="/dashboard/entries/{entry.id}"
