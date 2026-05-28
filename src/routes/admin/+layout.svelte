@@ -27,7 +27,7 @@
 					{ href: '/admin/weeks',     label: 'Season Settings' },
 					{ href: '/admin/results',   label: 'Results' },
 					{ href: '/admin/odds',          label: 'Manage Odds' },
-					{ href: '/admin/participants',  label: 'Participants' },
+					{ href: '/admin/participants',  label: 'Manage Participants' },
 					{ href: '/admin/duties',        label: 'Admin Duties' },
 			  ]
 	);
