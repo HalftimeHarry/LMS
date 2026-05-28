@@ -104,6 +104,29 @@
 		complete:        'bg-gray-600',
 		open:            'bg-blue-500',
 	};
+
+	// ── Team pick breakdown (visible weeks only — open picks are hidden) ───────
+	// Counts how many entries picked each team per week, using only public data.
+	const teamPickCountsByWeek = $derived((() => {
+		const map: Record<string, { abbr: string; count: number }[]> = {};
+		for (const [entryId, weekMap] of Object.entries(pickGrid)) {
+			for (const [weekId, cell] of Object.entries(weekMap)) {
+				if (!map[weekId]) map[weekId] = [];
+				for (const abbr of cell.teams) {
+					const existing = map[weekId].find(t => t.abbr === abbr);
+					if (existing) existing.count++;
+					else map[weekId].push({ abbr, count: 1 });
+				}
+			}
+		}
+		// Sort each week's teams by count descending
+		for (const weekId of Object.keys(map)) {
+			map[weekId].sort((a, b) => b.count - a.count);
+		}
+		return map;
+	})());
+
+	let teamBreakdownOpen = $state(false);
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
@@ -282,6 +305,53 @@
 				<span class="ml-auto text-xs text-gray-600">Deadline passed</span>
 			{/if}
 		</div>
+	{/if}
+
+	<!-- ── Team pick breakdown (past-deadline weeks only) ───────────────────── -->
+	{#if visibleWeeks.length > 0}
+		{@const lastVisible = visibleWeeks[visibleWeeks.length - 1]}
+		{@const breakdown   = teamPickCountsByWeek[lastVisible.id] ?? []}
+		{#if breakdown.length > 0}
+			<div class="mb-4 rounded-xl border border-[rgba(201,168,76,0.2)] bg-black/75 backdrop-blur-sm overflow-hidden">
+				<button
+					type="button"
+					onclick={() => teamBreakdownOpen = !teamBreakdownOpen}
+					class="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition"
+				>
+					<span class="text-sm font-medium text-gray-300">
+						Week {lastVisible.week} — Team Pick Breakdown
+						<span class="ml-2 text-xs text-gray-600">({breakdown.length} teams picked)</span>
+					</span>
+					<svg
+						class="h-4 w-4 text-gray-500 transition-transform {teamBreakdownOpen ? 'rotate-180' : ''}"
+						fill="none" stroke="currentColor" viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+					</svg>
+				</button>
+
+				{#if teamBreakdownOpen}
+					<div class="border-t border-gray-800 px-4 py-3">
+						<div class="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3 md:grid-cols-4">
+							{#each breakdown as { abbr, count }}
+								<div class="flex items-center gap-2">
+									<img
+										src={teamLogoUrl(abbr)}
+										alt={abbr}
+										class="h-6 w-6 shrink-0 rounded-full bg-white p-0.5 object-contain"
+									/>
+									<span class="text-sm text-gray-300">{abbr}</span>
+									<span class="ml-auto font-mono text-sm font-bold text-[#c9a84c]">{count}</span>
+								</div>
+							{/each}
+						</div>
+						<p class="mt-3 text-xs text-gray-600">
+							Entries that picked the same team are eliminated together if that team loses.
+						</p>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 
 	{#if visibleWeeks.length === 0 && openWeeks.length === 0}
