@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { teamLogoUrl } from '$lib/teamLogos';
 	import type { PageData } from './$types';
@@ -64,6 +64,14 @@
 	let now = $state(Date.now());
 	$effect(() => {
 		const t = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(t);
+	});
+
+	// ── Live refresh — re-runs server load every 30s while a week is open ────
+	// Keeps the "still to pick" list current as participants submit picks.
+	$effect(() => {
+		if (!currentWeekIsOpen) return;
+		const t = setInterval(() => invalidateAll(), 30_000);
 		return () => clearInterval(t);
 	});
 
@@ -144,14 +152,19 @@
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
-	// My own entries that still need a pick for the current open week
-	const myStillToPick = $derived((() => {
+	// All active entries without a pick for the current open week.
+	// Safe to show publicly — these participants will receive the auto-pick.
+	const stillToPickEntries = $derived((() => {
 		if (!currentWeek || !currentWeekIsOpen) return [] as any[];
 		return activeEntries.filter((e: any) =>
-			e.user === userId &&
 			!openWeeks.some(ow => ow.id === currentWeek.id && pickGrid[e.id]?.[ow.id])
 		);
 	})());
+
+	// Subset of the above that belong to the current user (shown as action links)
+	const myStillToPick = $derived(
+		stillToPickEntries.filter((e: any) => e.user === userId)
+	);
 
 	let breakdownOpen = $state(false);
 	let expandedTeam  = $state<string | null>(null);
@@ -348,10 +361,10 @@
 						<span class="h-1.5 w-1.5 rounded-full bg-blue-500 {currentWeekIsOpen ? 'animate-pulse' : ''}"></span>
 						{#if currentWeekIsOpen}
 							Week {currentWeek.week} picks
-							{#if myStillToPick.length > 0}
-								· <span class="text-yellow-600">you still need to pick</span>
-							{:else if currentWeekBreakdown.length > 0}
-								· <span class="text-green-600">your pick is in</span>
+							{#if stillToPickEntries.length > 0}
+								· <span class="text-yellow-600">{stillToPickEntries.length} still to pick</span>
+							{:else}
+								· <span class="text-green-600">all picks in</span>
 							{/if}
 						{:else}
 							Week {currentWeek.week} picks — {totalPicksThisWeek} of {activeEntries.length} submitted
@@ -369,10 +382,12 @@
 					<div class="border-t border-gray-800/60 px-4 pb-4 pt-3">
 
 						{#if currentWeekIsOpen}
-							<!-- ── Pre-deadline: show only own picks ─────────────────── -->
+							<!-- ── Pre-deadline ───────────────────────────────────────── -->
+
+							<!-- Own pick (if submitted) -->
 							{#if currentWeekBreakdown.length > 0}
 								<p class="mb-2 text-[10px] font-medium uppercase tracking-wider text-gray-600">Your pick{currentWeekBreakdown.length !== 1 ? 's' : ''} this week</p>
-								<div class="space-y-1">
+								<div class="mb-4 space-y-1">
 									{#each currentWeekBreakdown as { abbr }}
 										<div class="flex items-center gap-3 rounded-lg bg-[rgba(201,168,76,0.08)] px-3 py-2">
 											<img src={teamLogoUrl(abbr)} alt={abbr}
@@ -384,21 +399,33 @@
 								</div>
 							{/if}
 
-							{#if myStillToPick.length > 0}
-								<div class="mt-3 rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
-									<p class="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-yellow-700">Still to pick</p>
+							<!-- Still to pick — public, these entries will receive the auto-pick -->
+							{#if stillToPickEntries.length > 0}
+								<div class="rounded-lg border border-yellow-900/40 bg-yellow-950/20 px-3 py-2.5">
+									<p class="mb-2 text-[10px] font-medium uppercase tracking-wider text-yellow-700">
+										Still to pick ({stillToPickEntries.length}) — will receive auto-pick
+									</p>
 									<div class="flex flex-wrap gap-1.5">
-										{#each myStillToPick as entry}
-											<a href="/dashboard/entries/{entry.id}"
-												class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
-												{entry.entryName} <span class="opacity-60">→</span>
-											</a>
+										{#each stillToPickEntries as entry}
+											{#if entry.user === userId}
+												<!-- Own entry — show as action link -->
+												<a href="/dashboard/entries/{entry.id}"
+													class="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-0.5 text-xs text-yellow-400 hover:bg-yellow-900/50 transition">
+													{entry.entryName} <span class="opacity-60">→</span>
+												</a>
+											{:else}
+												<span class="rounded border border-gray-800 bg-gray-900/60 px-2 py-0.5 text-xs text-gray-500">
+													{entry.entryName}
+												</span>
+											{/if}
 										{/each}
 									</div>
 								</div>
+							{:else}
+								<p class="text-xs text-green-600">All active entries have picked this week.</p>
 							{/if}
 
-							<p class="mt-3 text-[11px] text-gray-700">Other picks are hidden until the deadline passes.</p>
+							<p class="mt-3 text-[11px] text-gray-700">Picks are hidden until the deadline. Only the auto-pick list is public.</p>
 
 						{:else}
 							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
