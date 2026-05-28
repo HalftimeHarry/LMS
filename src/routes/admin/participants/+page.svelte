@@ -30,17 +30,18 @@
 	}
 
 	// ── Confirmation state ────────────────────────────────────────────────────
-	// null = no dialog open
-	// { ids, names } = pending confirmation
-	type PendingDelete = { ids: string[]; names: string[] };
+	type PendingUser  = { id: string; name: string; entries: any[] };
+	type PendingDelete = { ids: string[]; users: PendingUser[]; totalEntries: number };
 	let pending = $state<PendingDelete | null>(null);
 
 	function requestDelete(ids: string[]) {
-		const names = ids.map(id => {
-			const u = users.find((u: any) => u.id === id);
-			return u?.displayName ?? u?.email ?? id;
+		const pendingUsers: PendingUser[] = ids.map(id => {
+			const u       = users.find((u: any) => u.id === id) as any;
+			const entries = entriesByUser[id] ?? [];
+			return { id, name: u?.displayName ?? u?.email ?? id, entries };
 		});
-		pending = { ids, names };
+		const totalEntries = pendingUsers.reduce((sum, u) => sum + u.entries.length, 0);
+		pending = { ids, users: pendingUsers, totalEntries };
 	}
 
 	function cancelDelete() {
@@ -259,22 +260,38 @@
 			</div>
 		</div>
 
-		<!-- Who is being deleted -->
-		<div class="mb-4 max-h-36 overflow-y-auto rounded-lg border border-gray-800 bg-black/60 px-3 py-2">
-			{#each pending.names as name}
-				<p class="py-0.5 text-sm text-gray-300">{name}</p>
+		<!-- Who is being deleted + their entries -->
+		<div class="mb-4 max-h-48 overflow-y-auto space-y-2">
+			{#each pending.users as u}
+				<div class="rounded-lg border {u.entries.length > 0 ? 'border-red-900/60 bg-red-950/20' : 'border-gray-800 bg-black/40'} px-3 py-2">
+					<p class="text-sm font-medium {u.entries.length > 0 ? 'text-red-300' : 'text-gray-300'}">{u.name}</p>
+					{#if u.entries.length > 0}
+						<p class="mt-0.5 text-xs text-red-500 font-medium">
+							⚠️ {u.entries.length} entr{u.entries.length === 1 ? 'y' : 'ies'} will be deleted:
+						</p>
+						<ul class="mt-1 space-y-0.5">
+							{#each u.entries as entry}
+								<li class="text-xs text-red-400/80">— {entry.entryName} <span class="text-red-900">({entry.entryType?.toUpperCase()} · {entry.status})</span></li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="mt-0.5 text-xs text-gray-600">No entries</p>
+					{/if}
+				</div>
 			{/each}
 		</div>
 
-		<!-- What gets deleted -->
-		<div class="mb-5 rounded-lg border border-yellow-900/50 bg-yellow-950/20 px-3 py-2.5 text-xs text-yellow-600 space-y-1">
-			<p>⚠️ Deleting a participant will also permanently delete:</p>
-			<ul class="ml-4 list-disc space-y-0.5 text-yellow-700">
-				<li>All of their pool entries</li>
-				<li>Their account and login access</li>
-			</ul>
-			<p class="mt-1 font-medium text-yellow-500">There is no way to recover this data.</p>
-		</div>
+		<!-- Stronger warning when entries are involved -->
+		{#if pending.totalEntries > 0}
+			<div class="mb-4 rounded-lg border border-red-900 bg-red-950/30 px-3 py-2.5 text-xs text-red-400 space-y-1">
+				<p class="font-semibold">❌ {pending.totalEntries} pool entr{pending.totalEntries === 1 ? 'y' : 'ies'} will be permanently deleted.</p>
+				<p class="text-red-500">Pick history linked to these entries will lose its user association and cannot be recovered.</p>
+			</div>
+		{:else}
+			<div class="mb-4 rounded-lg border border-yellow-900/50 bg-yellow-950/20 px-3 py-2.5 text-xs text-yellow-600">
+				<p>⚠️ The account and login access will be permanently removed.</p>
+			</div>
+		{/if}
 
 		<!-- Actions -->
 		<div class="flex gap-3">
