@@ -269,61 +269,7 @@
 		{/if}
 	</div>
 
-	<!-- ── Filters ──────────────────────────────────────────────────────────── -->
-	<div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-4 py-3 backdrop-blur-sm">
-		<!-- Search -->
-		<div class="relative">
-			<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-			</svg>
-			<input
-				type="text"
-				placeholder="Search entry or player…"
-				bind:value={searchText}
-				class="rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none w-52"
-			/>
-		</div>
 
-		<!-- Status filter -->
-		<div class="flex overflow-hidden rounded border border-gray-700 text-xs font-medium">
-			{#each [['all', 'All'], ['active', 'Active'], ['eliminated', 'Eliminated']] as [val, label]}
-				<button
-					type="button"
-					onclick={() => statusFilter = val as any}
-					class="px-3 py-1.5 transition
-						{statusFilter === val
-							? val === 'active' ? 'bg-green-900 text-green-300'
-							: val === 'eliminated' ? 'bg-red-950 text-red-400'
-							: 'bg-gray-700 text-white'
-							: 'bg-gray-900 text-gray-500 hover:text-gray-300'}
-						{val !== 'all' ? 'border-l border-gray-700' : ''}"
-				>
-					{label}
-					{#if val === 'active'}
-						<span class="ml-1 opacity-60">{activeCount}</span>
-					{:else if val === 'eliminated'}
-						<span class="ml-1 opacity-60">{entries.filter((e: any) => e.status === 'eliminated').length}</span>
-					{:else}
-						<span class="ml-1 opacity-60">{entries.length}</span>
-					{/if}
-				</button>
-			{/each}
-		</div>
-
-		{#if searchText || statusFilter !== 'all'}
-			<button
-				type="button"
-				onclick={() => { searchText = ''; statusFilter = 'active'; }}
-				class="text-xs text-gray-600 hover:text-gray-400"
-			>
-				Clear filters
-			</button>
-		{/if}
-
-		<span class="ml-auto text-xs text-gray-600">
-			{filteredEntries().length} of {entries.length} shown
-		</span>
-	</div>
 
 	<!-- ── Deadline countdown + current-week pick breakdown ────────────────── -->
 	{#if currentWeek?.deadline}
@@ -505,7 +451,66 @@
 
 	{:else}
 		<!-- ── Pick grid ─────────────────────────────────────────────────────── -->
-		<div class="overflow-x-auto overflow-y-auto max-h-[32rem] rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+
+			<!-- Filters -->
+			<div class="flex flex-wrap items-center gap-3 border-b border-gray-800 px-4 py-3">
+				<!-- Search -->
+				<div class="relative">
+					<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+					</svg>
+					<input
+						type="text"
+						placeholder="Search entry or player…"
+						bind:value={searchText}
+						class="rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none w-52"
+					/>
+				</div>
+
+				<!-- Status filter -->
+				<div class="flex overflow-hidden rounded border border-gray-700 text-xs font-medium">
+					{#each [['all', 'All'], ['active', 'Active'], ['eliminated', 'Eliminated']] as [val, label]}
+						<button
+							type="button"
+							onclick={() => statusFilter = val as any}
+							class="px-3 py-1.5 transition
+								{statusFilter === val
+									? val === 'active' ? 'bg-green-900 text-green-300'
+									: val === 'eliminated' ? 'bg-red-950 text-red-400'
+									: 'bg-gray-700 text-white'
+									: 'bg-gray-900 text-gray-500 hover:text-gray-300'}
+								{val !== 'all' ? 'border-l border-gray-700' : ''}"
+						>
+							{label}
+							{#if val === 'active'}
+								<span class="ml-1 opacity-60">{activeCount}</span>
+							{:else if val === 'eliminated'}
+								<span class="ml-1 opacity-60">{entries.filter((e: any) => e.status === 'eliminated').length}</span>
+							{:else}
+								<span class="ml-1 opacity-60">{entries.length}</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+
+				{#if searchText || statusFilter !== 'all'}
+					<button
+						type="button"
+						onclick={() => { searchText = ''; statusFilter = 'active'; }}
+						class="text-xs text-gray-600 hover:text-gray-400"
+					>
+						Clear filters
+					</button>
+				{/if}
+
+				<span class="ml-auto text-xs text-gray-600">
+					{filteredEntries().length} of {entries.length} shown
+				</span>
+			</div>
+
+			<!-- Scrollable table -->
+			<div class="overflow-x-auto overflow-y-auto max-h-[32rem]">
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
@@ -661,7 +666,8 @@
 					{/if}
 				</tbody>
 			</table>
-		</div>
+			</div><!-- end scrollable table -->
+		</div><!-- end grid card -->
 
 		<!-- ── Legend ────────────────────────────────────────────────────────── -->
 		<div class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/75 px-4 py-3 text-xs text-gray-600 backdrop-blur-sm">
