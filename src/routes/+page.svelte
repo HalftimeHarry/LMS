@@ -56,64 +56,71 @@
 	<title>Last Man / Last Woman Standing — NFL Pool</title>
 </svelte:head>
 
-<!-- Hero -->
-<section class="mb-12 text-center">
-	<h1 class="mb-3 text-5xl font-bold tracking-tight text-white drop-shadow-lg">
-		Last Man / Last Woman <span class="text-[#c9a84c]">Standing</span>
-	</h1>
-	<p class="mx-auto mb-8 max-w-2xl text-lg text-gray-300">
-		The NFL's most unforgiving survivor pool. Pick a loser every week.
-		One wrong call and you're out.
-	</p>
-	<div class="flex justify-center gap-4">
-		<a
-			href="/register"
-			class="rounded bg-[#c9a84c] px-8 py-3 font-semibold text-black shadow-lg transition hover:bg-[#e8c96a]"
-		>
-			Enter the Pool
-		</a>
-		<a
-			href="/dashboard/rules"
-			class="rounded border border-[#c9a84c] bg-black/80 px-8 py-3 font-semibold text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black"
-		>
-			Read the Rules
-		</a>
-	</div>
-</section>
+<!-- Hero + stats card -->
+<section class="mb-12">
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
-<!-- Stats bar -->
-<section class="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
-	<!-- Entry fee -->
-	<div class="rounded-lg border border-[rgba(201,168,76,0.3)] bg-black/70 p-5 text-center backdrop-blur-sm">
-		<div class="text-2xl font-bold text-[#c9a84c]">
-			{lmsEntryFee != null ? `$${lmsEntryFee}` : '$—'}
+		<!-- Title + tagline + buttons -->
+		<div class="px-8 py-10 text-center">
+			<h1 class="mb-3 text-5xl font-bold tracking-tight text-white drop-shadow-lg">
+				Last Man / Last Woman <span class="text-[#c9a84c]">Standing</span>
+			</h1>
+			<p class="mx-auto mb-8 max-w-2xl text-lg text-gray-300">
+				The NFL's most unforgiving survivor pool. Pick a loser every week.
+				One wrong call and you're out.
+			</p>
+			<div class="flex justify-center gap-4">
+				<a
+					href="/register"
+					class="rounded bg-[#c9a84c] px-8 py-3 font-semibold text-black shadow-lg transition hover:bg-[#e8c96a]"
+				>
+					Enter the Pool
+				</a>
+				<a
+					href="/dashboard/rules"
+					class="rounded border border-[#c9a84c] bg-black/80 px-8 py-3 font-semibold text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black"
+				>
+					Read the Rules
+				</a>
+			</div>
 		</div>
-		<div class="mt-1 text-sm text-gray-400">Entry Fee</div>
-	</div>
 
-	<!-- Season -->
-	<div class="rounded-lg border border-[rgba(201,168,76,0.3)] bg-black/70 p-5 text-center backdrop-blur-sm">
-		<div class="text-2xl font-bold text-[#c9a84c]">2025 NFL</div>
-		<div class="mt-1 text-sm text-gray-400">Season</div>
-	</div>
+		<!-- Stats row -->
+		<div class="grid grid-cols-2 border-t border-[rgba(201,168,76,0.15)] sm:grid-cols-4">
+			<!-- Entry fee -->
+			<div class="border-r border-[rgba(201,168,76,0.15)] p-5 text-center">
+				<div class="text-2xl font-bold text-[#c9a84c]">
+					{lmsEntryFee != null ? `$${lmsEntryFee}` : '$—'}
+				</div>
+				<div class="mt-1 text-sm text-gray-400">Entry Fee</div>
+			</div>
 
-	<!-- Live LMS countdown -->
-	<div class="col-span-2 rounded-lg border backdrop-blur-sm p-5 text-center
-		{countdown()?.urgent ? 'border-red-800 bg-red-950/60' : countdown()?.expired ? 'border-gray-700 bg-black/70' : deadline ? 'border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.06)]' : 'border-[rgba(201,168,76,0.3)] bg-black/70'}">
-		{#if countdown() && !countdown()?.expired}
-			<div class="font-mono text-2xl font-bold tabular-nums {countdown()?.urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
-				{countdown()?.label}
+			<!-- Season -->
+			<div class="p-5 text-center sm:border-r sm:border-[rgba(201,168,76,0.15)]">
+				<div class="text-2xl font-bold text-[#c9a84c]">2025 NFL</div>
+				<div class="mt-1 text-sm text-gray-400">Season</div>
 			</div>
-			<div class="mt-1 text-sm text-gray-400">
-				{lmsWeek ? `Week ${lmsWeek} pick deadline` : 'Pick deadline'}
+
+			<!-- Live countdown -->
+			<div class="col-span-2 border-t border-[rgba(201,168,76,0.15)] p-5 text-center sm:border-t-0
+				{countdown()?.urgent ? 'bg-red-950/30' : deadline ? 'bg-[rgba(201,168,76,0.04)]' : ''}">
+				{#if countdown() && !countdown()?.expired}
+					<div class="font-mono text-2xl font-bold tabular-nums {countdown()?.urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+						{countdown()?.label}
+					</div>
+					<div class="mt-1 text-sm text-gray-400">
+						{lmsWeek ? `Week ${lmsWeek} pick deadline` : 'Pick deadline'}
+					</div>
+				{:else if countdown()?.expired}
+					<div class="text-2xl font-bold text-gray-500">—</div>
+					<div class="mt-1 text-sm text-gray-500">Deadline passed</div>
+				{:else}
+					<div class="text-2xl font-bold text-gray-500">—</div>
+					<div class="mt-1 text-sm text-gray-500">Season not started</div>
+				{/if}
 			</div>
-		{:else if countdown()?.expired}
-			<div class="text-2xl font-bold text-gray-500">—</div>
-			<div class="mt-1 text-sm text-gray-500">Deadline passed</div>
-		{:else}
-			<div class="text-2xl font-bold text-gray-500">—</div>
-			<div class="mt-1 text-sm text-gray-500">Season not started</div>
-		{/if}
+		</div>
+
 	</div>
 </section>
 
