@@ -48,18 +48,38 @@
 		pending = null;
 	}
 
-	// ── Search ────────────────────────────────────────────────────────────────
-	let search = $state('');
-	const filtered = $derived(
-		users.filter((u: any) => {
-			const q = search.trim().toLowerCase();
-			if (!q) return true;
-			return (
-				(u.displayName ?? '').toLowerCase().includes(q) ||
-				(u.email ?? '').toLowerCase().includes(q)
-			);
-		})
-	);
+	// ── Search + sort ─────────────────────────────────────────────────────────
+	let search   = $state('');
+	type SortCol = 'name' | 'email' | 'entries';
+	type SortDir = 'asc' | 'desc';
+	let sortCol  = $state<SortCol>('name');
+	let sortDir  = $state<SortDir>('asc');
+
+	function toggleSort(col: SortCol) {
+		if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+		else { sortCol = col; sortDir = 'asc'; }
+	}
+
+	const filtered = $derived((() => {
+		const q = search.trim().toLowerCase();
+		let result = users.filter((u: any) =>
+			!q ||
+			(u.displayName ?? '').toLowerCase().includes(q) ||
+			(u.email ?? '').toLowerCase().includes(q)
+		);
+		result = result.slice().sort((a: any, b: any) => {
+			let cmp = 0;
+			if (sortCol === 'name') {
+				cmp = (a.displayName ?? '').localeCompare(b.displayName ?? '', undefined, { sensitivity: 'base' });
+			} else if (sortCol === 'email') {
+				cmp = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
+			} else {
+				cmp = (entriesByUser[a.id]?.length ?? 0) - (entriesByUser[b.id]?.length ?? 0);
+			}
+			return sortDir === 'asc' ? cmp : -cmp;
+		});
+		return result;
+	})());
 
 	// ── After successful delete ───────────────────────────────────────────────
 	$effect(() => {
@@ -148,9 +168,27 @@
 				<thead>
 					<tr class="sticky top-0 z-10 border-b border-gray-800 bg-[#0a0a0a] text-xs font-medium uppercase tracking-wider text-gray-500">
 						<th class="w-10 px-4 py-3"></th>
-						<th class="px-4 py-3 text-left">Name</th>
-						<th class="px-4 py-3 text-left">Email</th>
-						<th class="px-4 py-3 text-center">Entries</th>
+						<th class="px-4 py-3 text-left">
+							<button type="button" onclick={() => toggleSort('name')}
+								class="flex items-center gap-1 hover:text-white transition {sortCol === 'name' ? 'text-[#c9a84c]' : ''}">
+								Name
+								<span class="text-[10px]">{sortCol === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+							</button>
+						</th>
+						<th class="px-4 py-3 text-left">
+							<button type="button" onclick={() => toggleSort('email')}
+								class="flex items-center gap-1 hover:text-white transition {sortCol === 'email' ? 'text-[#c9a84c]' : ''}">
+								Email
+								<span class="text-[10px]">{sortCol === 'email' ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+							</button>
+						</th>
+						<th class="px-4 py-3 text-center">
+							<button type="button" onclick={() => toggleSort('entries')}
+								class="flex items-center justify-center gap-1 w-full hover:text-white transition {sortCol === 'entries' ? 'text-[#c9a84c]' : ''}">
+								Entries
+								<span class="text-[10px]">{sortCol === 'entries' ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+							</button>
+						</th>
 						<th class="px-4 py-3 text-left">Joined</th>
 						<th class="px-4 py-3"></th>
 					</tr>

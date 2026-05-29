@@ -115,9 +115,12 @@
 <svelte:head><title>Admin — LMS Pool</title></svelte:head>
 
 <!-- Season status banner -->
+<!-- ── Single overview card ───────────────────────────────────────────────── -->
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+
 {#if selectedSeason}
 	{@const s = selectedSeason as any}
-	<div class="relative mb-6 overflow-hidden rounded-xl border border-[rgba(201,168,76,0.4)]"
+	<div class="relative overflow-hidden"
 		style="background: radial-gradient(ellipse at 70% 50%, rgba(201,168,76,0.12) 0%, transparent 70%), linear-gradient(135deg, #0a0a0a 0%, #111008 50%, #0a0a0a 100%);"
 	>
 		<!-- subtle yard-line grid overlay -->
@@ -152,14 +155,14 @@
 		</div>
 	</div>
 {:else}
-	<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+	<div class="px-5 py-4">
 		<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Current Season</p>
 		<p class="mt-2 text-sm text-gray-500">Select a season below to view stats and quick actions.</p>
 	</div>
 {/if}
 
 <!-- All seasons list -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<div class="border-t border-gray-800 p-5">
 	<div class="mb-3 flex items-center justify-between gap-3">
 		<h2 class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c] shrink-0">All Seasons</h2>
 		<div class="flex items-center gap-3">
@@ -243,7 +246,7 @@
 
 {#if stats}
 <!-- Stats grid -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<div class="border-t border-gray-800 p-5">
 	<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
 		{selectedSeason ? `${(selectedSeason as any).name} Stats` : 'Stats'}
 	</h2>
@@ -301,7 +304,7 @@
 </div>
 
 <!-- Quick actions -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<div class="border-t border-gray-800 p-5">
 	<div class="mb-3 flex items-center gap-2">
 		<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</h2>
 		<InfoTip text="Shortcuts to the most common admin tasks for the currently selected season." />
@@ -344,6 +347,8 @@
 	</div>
 </div>
 {/if}
+
+</div><!-- end overview card -->
 
 {#if isSuperAdmin}
 <!-- Test season management panel -->

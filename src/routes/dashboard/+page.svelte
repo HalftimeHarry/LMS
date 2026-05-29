@@ -1,3 +1,13 @@
+<style>
+	@keyframes gold-pulse {
+		0%, 100% { background: rgba(201,168,76,0.06); box-shadow: 0 0 10px rgba(201,168,76,0.15); }
+		50%       { background: rgba(201,168,76,0.35); box-shadow: 0 0 24px rgba(201,168,76,0.5);  }
+	}
+	.standings-pulse {
+		animation: gold-pulse 2s ease-in-out infinite;
+	}
+</style>
+
 <script lang="ts">
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
@@ -72,6 +82,11 @@
 		) ?? null
 	);
 
+	// True when the current user has at least one active entry in the selected season
+	const hasAliveEntries = $derived(
+		(selectedGroup?.entries ?? []).some((e: any) => e.status === 'active')
+	);
+
 	// Only show test seasons in the selector when no real seasons exist
 	const hasRealSeasons      = $derived(seasonGroups.some(g => !g.season.name?.includes('[TEST]')));
 	const selectableSeasons   = $derived(
@@ -138,9 +153,12 @@
 
 <svelte:head><title>Dashboard — LMS Pool</title></svelte:head>
 
-<!-- Welcome card -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-6 py-5 backdrop-blur-sm"
-	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.06) 0%, transparent 60%), #0a0a0a;">
+<!-- ── Single dashboard card ──────────────────────────────────────────────── -->
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden"
+	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.04) 0%, transparent 60%), #0a0a0a;">
+
+<!-- Welcome -->
+<div class="px-6 py-5">
 	<div class="flex flex-wrap items-center justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Welcome back</p>
@@ -187,7 +205,7 @@
 	{@const myLmsOut     = myLmsEntries.filter((e: any) => e.status === 'eliminated').length}
 	{@const myShOut      = myShEntries.filter((e: any)  => e.status === 'eliminated').length}
 
-	<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+	<div class="border-t border-gray-800 p-5">
 		<div class="flex flex-col gap-6">
 
 		<!-- LMS stats row -->
@@ -413,7 +431,7 @@
 {/each}
 
 <!-- Entries -->
-<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<div class="border-t border-gray-800 p-5">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			<h2 class="text-xl font-bold text-white">My Entries
@@ -424,13 +442,27 @@
 			<InfoTip text="Each entry is an independent shot at the pool. You can hold multiple entries. Click an entry to view its pick history and submit your weekly pick. Tip: use 'Pick from Standings' to see every player's picks side-by-side — it's easier to spot which of your entries still needs a pick and how your choice stacks up against the field." />
 		</div>
 		<div class="flex items-center gap-2">
-			<div class="flex flex-col items-end gap-0.5">
+			{#if hasAliveEntries}
 				<a href="/dashboard/standings?season={selectedSeasonId}"
-					class="rounded border border-gray-700 bg-gray-900/60 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
-					🏆 Pick from Standings
+					class="standings-pulse relative flex items-center gap-3 overflow-hidden rounded-lg border border-[#c9a84c] px-4 py-2.5 transition hover:brightness-110"
+>
+					<span class="flex flex-col">
+						<span class="text-sm font-bold text-[#c9a84c]">🏆 Pick from Standings</span>
+						<span class="text-[10px] text-[#c9a84c]/60">See the full field — pick your entry from the grid</span>
+					</span>
+					<svg class="ml-auto h-4 w-4 shrink-0 text-[#c9a84c]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+					</svg>
 				</a>
-				<p class="text-[10px] text-gray-600 leading-tight">See the full field — pick your entry from the grid</p>
-			</div>
+			{:else}
+				<a href="/dashboard/standings?season={selectedSeasonId}"
+					class="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
+					🏆 Pick from Standings
+					<svg class="ml-auto h-3.5 w-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+					</svg>
+				</a>
+			{/if}
 			{#if data.activeSeason?.status === 'open'}
 				<a href="/dashboard/entries/new"
 					class="rounded border border-[#c9a84c] bg-black/80 px-4 py-1.5 text-sm text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black">
@@ -665,20 +697,24 @@
 </div>
 
 <!-- Quick links -->
-<div class="grid gap-4 sm:grid-cols-3">
-	<a href="/dashboard/picks"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
-		<p class="mt-1 text-sm text-gray-400">Submit or update your pick for the current week</p>
-	</a>
-	<a href="/dashboard/standings?season={selectedSeasonId}"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Standings</p>
-		<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>
-	</a>
-	<a href="/dashboard/rules"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Rules</p>
-		<p class="mt-1 text-sm text-gray-400">How the pool works, tiebreakers, and payouts</p>
-	</a>
+<div class="border-t border-gray-800">
+	<div class="grid gap-0 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-800">
+		<a href="/dashboard/picks"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
+			<p class="mt-1 text-sm text-gray-400">Submit or update your pick for the current week</p>
+		</a>
+		<a href="/dashboard/standings?season={selectedSeasonId}"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Standings</p>
+			<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>
+		</a>
+		<a href="/dashboard/rules"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Rules</p>
+			<p class="mt-1 text-sm text-gray-400">How the pool works, tiebreakers, and payouts</p>
+		</a>
+	</div>
 </div>
+
+</div><!-- end single dashboard card -->
