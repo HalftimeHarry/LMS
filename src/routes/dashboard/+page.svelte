@@ -433,25 +433,30 @@
 		</div>
 		<div class="flex items-center gap-2">
 			{#if hasAliveEntries}
-				<div class="flex flex-col items-end gap-0.5">
-					<a href="/dashboard/standings?season={selectedSeasonId}"
-						class="relative rounded border border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.08)] px-3 py-1.5 text-xs font-medium text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.18)]">
-						<span class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c9a84c] opacity-75"></span>
-							<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#c9a84c]"></span>
-						</span>
-						🏆 Pick from Standings
-					</a>
-					<p class="text-[10px] text-[#c9a84c]/50 leading-tight">See the full field — pick your entry from the grid</p>
-				</div>
+				<a href="/dashboard/standings?season={selectedSeasonId}"
+					class="relative flex items-center gap-3 overflow-hidden rounded-lg border border-[#c9a84c] px-4 py-2.5 shadow-[0_0_16px_rgba(201,168,76,0.25)] transition hover:shadow-[0_0_24px_rgba(201,168,76,0.4)] hover:brightness-110"
+					style="background: linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.06) 100%);">
+					<!-- Pulse ring -->
+					<span class="relative flex h-3 w-3 shrink-0">
+						<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c9a84c] opacity-60"></span>
+						<span class="relative inline-flex h-3 w-3 rounded-full bg-[#c9a84c]"></span>
+					</span>
+					<span class="flex flex-col">
+						<span class="text-sm font-bold text-[#c9a84c]">🏆 Pick from Standings</span>
+						<span class="text-[10px] text-[#c9a84c]/60">See the full field — pick your entry from the grid</span>
+					</span>
+					<svg class="ml-auto h-4 w-4 shrink-0 text-[#c9a84c]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+					</svg>
+				</a>
 			{:else}
-				<div class="flex flex-col items-end gap-0.5">
-					<a href="/dashboard/standings?season={selectedSeasonId}"
-						class="rounded border border-gray-700 bg-gray-900/60 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
-						🏆 Pick from Standings
-					</a>
-					<p class="text-[10px] text-gray-600 leading-tight">See the full field — pick your entry from the grid</p>
-				</div>
+				<a href="/dashboard/standings?season={selectedSeasonId}"
+					class="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
+					🏆 Pick from Standings
+					<svg class="ml-auto h-3.5 w-3.5 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+					</svg>
+				</a>
 			{/if}
 			{#if data.activeSeason?.status === 'open'}
 				<a href="/dashboard/entries/new"
