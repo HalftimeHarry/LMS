@@ -124,18 +124,18 @@
 	</div>
 </section>
 
+<!-- Logo above the card -->
+<div class="mb-6 flex justify-center">
+	<img
+		src={logo}
+		alt="Last Man / Last Woman Standing"
+		class="h-28 w-auto object-contain sm:h-36 md:h-44 lg:h-56"
+	/>
+</div>
+
 <!-- How It Works + Rules + Multiple Entries card -->
 <section class="mb-12">
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
-
-		<!-- Logo -->
-		<div class="flex justify-center pt-8 pb-2">
-			<img
-				src={logo}
-				alt="Last Man / Last Woman Standing"
-				class="h-28 w-auto object-contain sm:h-36 md:h-44 lg:h-56"
-			/>
-		</div>
 
 		<!-- How It Works -->
 		<div class="px-8 py-6">
