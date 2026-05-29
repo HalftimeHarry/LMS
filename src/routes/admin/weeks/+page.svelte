@@ -591,12 +591,13 @@
 	{/if}
 
 	<!-- Weeks list -->
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 	{#if ctrl.filtered.length === 0}
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
+		<div class="p-10 text-center">
 			<p class="text-gray-400">No weeks set up yet for {data.activeSeason.name}.</p>
 		</div>
 	{:else}
-		<div class="flex flex-col gap-3">
+		<div class="max-h-[70vh] overflow-y-auto divide-y divide-gray-800/60">
 			{#each ctrl.filtered as week}
 				{@const pickCount      = (data.pickCountsByWeek ?? {})[week.id] ?? 0}
 				{@const activeCount    = data.activeEntryCount ?? 0}
@@ -612,12 +613,12 @@
 						? `${Math.floor(deadlineDiff / 3_600_000)}h ${String(Math.floor((deadlineDiff % 3_600_000) / 60_000)).padStart(2,'0')}m`
 						: `${String(Math.floor((deadlineDiff % 3_600_000) / 60_000)).padStart(2,'0')}:${String(Math.floor((deadlineDiff % 60_000) / 1_000)).padStart(2,'0')}`)
 					: null}
-				<div class="rounded-xl border p-5 backdrop-blur-sm
-					{week.status === 'complete'         ? 'border-green-900    bg-green-950/90'
-					: week.status === 'results_pending' ? 'border-purple-900   bg-purple-950/90'
-					: week.status === 'locked'          ? 'border-gray-700     bg-gray-900/90'
-					: isNextOpen                        ? 'border-purple-700   bg-purple-950/80'
-					:                                     'border-gray-800     bg-black/80'}">
+				<div class="p-5
+					{week.status === 'complete'         ? 'bg-green-950/30'
+					: week.status === 'results_pending' ? 'bg-purple-950/30'
+					: week.status === 'locked'          ? 'bg-gray-900/40'
+					: isNextOpen                        ? 'bg-purple-950/20'
+					:                                     ''}">
 					<div class="flex flex-wrap items-start justify-between gap-4">
 						<!-- Week info -->
 						<div>
@@ -816,4 +817,5 @@
 			{/each}
 		</div>
 	{/if}
+	</div><!-- end weeks card -->
 {/if}
