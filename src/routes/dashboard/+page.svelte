@@ -427,23 +427,27 @@
 			<InfoTip text="Each entry is an independent shot at the pool. You can hold multiple entries. Click an entry to view its pick history and submit your weekly pick. Tip: use 'Pick from Standings' to see every player's picks side-by-side — it's easier to spot which of your entries still needs a pick and how your choice stacks up against the field." />
 		</div>
 		<div class="flex items-center gap-2">
-			<div class="flex flex-col items-end gap-0.5">
-				{@const hasAlive = (myLmsAlive + myShAlive) > 0}
-				<a href="/dashboard/standings?season={selectedSeasonId}"
-					class="relative rounded border px-3 py-1.5 text-xs font-medium transition
-						{hasAlive
-							? 'border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.08)] text-[#c9a84c] hover:bg-[rgba(201,168,76,0.18)]'
-							: 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-gray-500 hover:text-white'}">
-					{#if hasAlive}
+			{#if (myLmsAlive + myShAlive) > 0}
+				<div class="flex flex-col items-end gap-0.5">
+					<a href="/dashboard/standings?season={selectedSeasonId}"
+						class="relative rounded border border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.08)] px-3 py-1.5 text-xs font-medium text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.18)]">
 						<span class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
 							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c9a84c] opacity-75"></span>
 							<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#c9a84c]"></span>
 						</span>
-					{/if}
-					🏆 Pick from Standings
-				</a>
-				<p class="text-[10px] {hasAlive ? 'text-[#c9a84c]/50' : 'text-gray-600'} leading-tight">See the full field — pick your entry from the grid</p>
-			</div>
+						🏆 Pick from Standings
+					</a>
+					<p class="text-[10px] text-[#c9a84c]/50 leading-tight">See the full field — pick your entry from the grid</p>
+				</div>
+			{:else}
+				<div class="flex flex-col items-end gap-0.5">
+					<a href="/dashboard/standings?season={selectedSeasonId}"
+						class="rounded border border-gray-700 bg-gray-900/60 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
+						🏆 Pick from Standings
+					</a>
+					<p class="text-[10px] text-gray-600 leading-tight">See the full field — pick your entry from the grid</p>
+				</div>
+			{/if}
 			{#if data.activeSeason?.status === 'open'}
 				<a href="/dashboard/entries/new"
 					class="rounded border border-[#c9a84c] bg-black/80 px-4 py-1.5 text-sm text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black">
