@@ -807,6 +807,26 @@
 			{/if}
 		</div>
 
+		<!-- Sort buttons -->
+		<div class="flex items-center gap-1 shrink-0">
+			<span class="text-xs text-gray-600 mr-1">Sort:</span>
+			{#each ([['name','Name'],['player','Player'],['status','Status'],['paid','Paid']] as const) as [col, label]}
+				<button
+					type="button"
+					onclick={() => ctrl.toggleSort(col)}
+					class="flex items-center gap-0.5 rounded border px-2 py-1 text-xs transition
+						{ctrl.sortCol === col
+							? 'border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] text-[#c9a84c]'
+							: 'border-gray-700 bg-gray-900 text-gray-500 hover:text-gray-300'}"
+				>
+					{label}
+					{#if ctrl.sortCol === col}
+						<span class="text-[9px]">{ctrl.sortDir === 'asc' ? '▲' : '▼'}</span>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
 		<p class="text-sm text-gray-500 shrink-0">
 			{visibleEntries.length}{visibleEntries.length !== entries.length ? ` of ${entries.length}` : ''} entr{entries.length === 1 ? 'y' : 'ies'}
 		</p>

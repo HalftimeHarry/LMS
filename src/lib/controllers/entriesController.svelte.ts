@@ -20,6 +20,12 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 	let statusFilter = $state<EntryStatus | 'all'>('all');
 	let poolType     = $state<EntryType | 'all'>('all');
 
+	// Sort
+	type SortCol = 'name' | 'player' | 'status' | 'paid';
+	type SortDir = 'asc' | 'desc';
+	let sortCol = $state<SortCol>('name');
+	let sortDir = $state<SortDir>('asc');
+
 	// Bulk selection — set of entry ids
 	let selectedIds  = $state<Set<string>>(new Set());
 
@@ -47,9 +53,22 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 			);
 		}
 
-		return result.slice().sort((a, b) =>
-			a.entryName.localeCompare(b.entryName, undefined, { sensitivity: 'base' })
-		);
+		return result.slice().sort((a, b) => {
+			let cmp = 0;
+			if (sortCol === 'name') {
+				cmp = a.entryName.localeCompare(b.entryName, undefined, { sensitivity: 'base' });
+			} else if (sortCol === 'player') {
+				const aName = a.expand?.user?.displayName ?? a.expand?.user?.email ?? '';
+				const bName = b.expand?.user?.displayName ?? b.expand?.user?.email ?? '';
+				cmp = aName.localeCompare(bName, undefined, { sensitivity: 'base' });
+			} else if (sortCol === 'status') {
+				const order: Record<string, number> = { active: 0, pending_payment: 1, eliminated: 2, winner: 3 };
+				cmp = (order[a.status] ?? 9) - (order[b.status] ?? 9);
+			} else if (sortCol === 'paid') {
+				cmp = (b.paid ? 1 : 0) - (a.paid ? 1 : 0);
+			}
+			return sortDir === 'asc' ? cmp : -cmp;
+		});
 	});
 
 	// ── Selection helpers ─────────────────────────────────────────────────────
@@ -174,6 +193,14 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 	return {
 		// State (readable externally)
 		get entries()       { return entries; },
+		get sortCol()       { return sortCol; },
+		set sortCol(v)      { sortCol = v as SortCol; },
+		get sortDir()       { return sortDir; },
+		set sortDir(v)      { sortDir = v as SortDir; },
+		toggleSort(col: string) {
+			if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+			else { sortCol = col as SortCol; sortDir = 'asc'; }
+		},
 		get search()        { return search; },
 		set search(v)       { search = v; },
 		get seasonId()      { return seasonId; },
