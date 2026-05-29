@@ -155,8 +155,11 @@
 
 <svelte:head><title>Season Settings — Admin</title></svelte:head>
 
-<!-- Filter + context card -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<!-- ── Single card ────────────────────────────────────────────────────────── -->
+<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+
+<!-- Header + season selector + countdown + pool rules -->
+<div class="p-5">
 	<div class="mb-4 border-b border-[rgba(201,168,76,0.15)] pb-4">
 		<h1 class="text-2xl font-bold text-white">Season Settings</h1>
 		<p class="mt-1 text-sm text-gray-500">Verify week deadlines and monitor the pick schedule. In production, weeks advance automatically. Use <span class="text-gray-300">▶ Advance now</span> in dev to trigger transitions manually.</p>
@@ -363,7 +366,7 @@
 			<p class="text-sm text-gray-500">Select a season above to view and manage its weeks.</p>
 		</div>
 	{/if}
-</div>
+</div><!-- end header section -->
 
 <!-- ── Maintenance Fee + Payout Breakdown ──────────────────────────────── -->
 {#if data.activeSeason && isSuperAdmin}
@@ -591,7 +594,7 @@
 	{/if}
 
 	<!-- Weeks list -->
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+	<div class="border-t border-gray-800">
 	{#if ctrl.filtered.length === 0}
 		<div class="p-10 text-center">
 			<p class="text-gray-400">No weeks set up yet for {data.activeSeason.name}.</p>
@@ -817,5 +820,7 @@
 			{/each}
 		</div>
 	{/if}
-	</div><!-- end weeks card -->
+	</div><!-- end weeks list -->
 {/if}
+
+</div><!-- end single card -->
