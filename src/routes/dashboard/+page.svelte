@@ -72,6 +72,11 @@
 		) ?? null
 	);
 
+	// True when the current user has at least one active entry in the selected season
+	const hasAliveEntries = $derived(
+		(selectedGroup?.entries ?? []).some((e: any) => e.status === 'active')
+	);
+
 	// Only show test seasons in the selector when no real seasons exist
 	const hasRealSeasons      = $derived(seasonGroups.some(g => !g.season.name?.includes('[TEST]')));
 	const selectableSeasons   = $derived(
@@ -427,7 +432,7 @@
 			<InfoTip text="Each entry is an independent shot at the pool. You can hold multiple entries. Click an entry to view its pick history and submit your weekly pick. Tip: use 'Pick from Standings' to see every player's picks side-by-side — it's easier to spot which of your entries still needs a pick and how your choice stacks up against the field." />
 		</div>
 		<div class="flex items-center gap-2">
-			{#if (myLmsAlive + myShAlive) > 0}
+			{#if hasAliveEntries}
 				<div class="flex flex-col items-end gap-0.5">
 					<a href="/dashboard/standings?season={selectedSeasonId}"
 						class="relative rounded border border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.08)] px-3 py-1.5 text-xs font-medium text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.18)]">
