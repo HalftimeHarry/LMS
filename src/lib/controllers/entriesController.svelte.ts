@@ -47,7 +47,9 @@ export function createEntriesController(initialEntries: Entry[] = []) {
 			);
 		}
 
-		return result;
+		return result.slice().sort((a, b) =>
+			a.entryName.localeCompare(b.entryName, undefined, { sensitivity: 'base' })
+		);
 	});
 
 	// ── Selection helpers ─────────────────────────────────────────────────────
