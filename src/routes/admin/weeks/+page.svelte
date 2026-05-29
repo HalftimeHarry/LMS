@@ -321,7 +321,7 @@
 	<!-- Divider -->
 	<div class="my-4 border-t border-[rgba(201,168,76,0.15)]"></div>
 
-	<!-- Row 2: pool rules context -->
+	<!-- Pool rules context -->
 	{#if ctrl.poolType === 'lms'}
 		<div class="flex flex-wrap gap-4">
 			<div class="flex items-center gap-2">
@@ -355,6 +355,12 @@
 				<span class="text-gray-700">·</span>
 				<span class="flex items-center gap-1"><span class="text-gray-300 font-medium">Eliminated:</span> any picked team loses</span>
 			</div>
+		</div>
+	{/if}
+
+	{#if !data.activeSeason}
+		<div class="mt-4 border-t border-[rgba(201,168,76,0.15)] pt-4 text-center">
+			<p class="text-sm text-gray-500">Select a season above to view and manage its weeks.</p>
 		</div>
 	{/if}
 </div>
@@ -515,11 +521,7 @@
 </div>
 {/if}
 
-{#if !data.activeSeason}
-	<div class="rounded-xl border border-gray-800 bg-black/75 p-12 text-center backdrop-blur-sm">
-		<p class="text-gray-500">Select a season above to view and manage its weeks.</p>
-	</div>
-{:else}
+{#if data.activeSeason}
 
 	<!-- Schedule timeline card — test seasons only -->
 	{#if isTestSeason}
