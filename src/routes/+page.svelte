@@ -124,59 +124,64 @@
 	</div>
 </section>
 
-<!-- How it works -->
+<!-- How It Works + Rules + Multiple Entries card -->
 <section class="mb-12">
-	<!-- Logo row — centered, scales by breakpoint -->
-	<div class="mb-4 flex justify-center">
-		<img
-			src={logo}
-			alt="Last Man / Last Woman Standing"
-			class="h-28 w-auto object-contain sm:h-36 md:h-44 lg:h-56"
-		/>
+	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+
+		<!-- Logo -->
+		<div class="flex justify-center pt-8 pb-2">
+			<img
+				src={logo}
+				alt="Last Man / Last Woman Standing"
+				class="h-28 w-auto object-contain sm:h-36 md:h-44 lg:h-56"
+			/>
+		</div>
+
+		<!-- How It Works -->
+		<div class="px-8 py-6">
+			<h2 class="mb-6 text-2xl font-bold text-[#c9a84c]">How It Works</h2>
+			<div class="grid gap-4 sm:grid-cols-3">
+				<div class="flex flex-col gap-2 rounded-lg border border-[rgba(201,168,76,0.15)] bg-black/40 p-5">
+					<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">01</div>
+					<h3 class="font-semibold text-white">Enter & Pay</h3>
+					<p class="text-sm text-gray-400">Register, request your entry, and pay the $100 entry fee before the season deadline.</p>
+				</div>
+				<div class="flex flex-col gap-2 rounded-lg border border-[rgba(201,168,76,0.15)] bg-black/40 p-5">
+					<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">02</div>
+					<h3 class="font-semibold text-white">Pick a Loser</h3>
+					<p class="text-sm text-gray-400">Each week, pick one NFL team you think will lose. Each team can only be used once all season.</p>
+				</div>
+				<div class="flex flex-col gap-2 rounded-lg border border-[rgba(201,168,76,0.15)] bg-black/40 p-5">
+					<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">03</div>
+					<h3 class="font-semibold text-white">Last One Standing Wins</h3>
+					<p class="text-sm text-gray-400">If your team wins or ties, you're eliminated. Survive the most weeks to take the pot.</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Official Rules -->
+		<div class="border-t border-[rgba(201,168,76,0.15)] px-8 py-6">
+			<h2 class="mb-6 text-2xl font-bold text-[#c9a84c]">Official Rules</h2>
+			<ol class="space-y-3">
+				{#each rules as rule, i}
+					<li class="flex gap-4 text-sm text-gray-300">
+						<span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[rgba(201,168,76,0.4)] text-xs text-[#c9a84c]">{i + 1}</span>
+						<span>{@html rule}</span>
+					</li>
+				{/each}
+			</ol>
+		</div>
+
+		<!-- Multiple Entries -->
+		<div class="border-t border-[rgba(201,168,76,0.15)] px-8 py-6">
+			<h2 class="mb-3 text-2xl font-bold text-[#c9a84c]">Multiple Entries</h2>
+			<p class="text-sm text-gray-300">
+				Players may request more than one entry. Each entry is independent — separate picks, separate eliminations,
+				separate entry fees. Manage all your entries from your dashboard.
+			</p>
+		</div>
+
 	</div>
-
-	<h2 class="mb-6 text-2xl font-bold text-[#c9a84c]">How It Works</h2>
-
-	<!-- Cards row -->
-	<div class="grid gap-4 sm:grid-cols-3">
-		<div class="flex flex-col gap-2 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-			<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">01</div>
-			<h3 class="font-semibold text-white">Enter & Pay</h3>
-			<p class="text-sm text-gray-400">Register, request your entry, and pay the $100 entry fee before the season deadline.</p>
-		</div>
-		<div class="flex flex-col gap-2 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-			<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">02</div>
-			<h3 class="font-semibold text-white">Pick a Loser</h3>
-			<p class="text-sm text-gray-400">Each week, pick one NFL team you think will lose. Each team can only be used once all season.</p>
-		</div>
-		<div class="flex flex-col gap-2 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm">
-			<div class="text-4xl font-black text-[rgba(201,168,76,0.4)]">03</div>
-			<h3 class="font-semibold text-white">Last One Standing Wins</h3>
-			<p class="text-sm text-gray-400">If your team wins or ties, you're eliminated. Survive the most weeks to take the pot.</p>
-		</div>
-	</div>
-</section>
-
-<!-- Rules -->
-<section class="mb-12 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-8 backdrop-blur-sm">
-	<h2 class="mb-6 text-2xl font-bold text-[#c9a84c]">Official Rules</h2>
-	<ol class="space-y-3">
-		{#each rules as rule, i}
-			<li class="flex gap-4 text-sm text-gray-300">
-				<span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[rgba(201,168,76,0.4)] text-xs text-[#c9a84c]">{i + 1}</span>
-				<span>{@html rule}</span>
-			</li>
-		{/each}
-	</ol>
-</section>
-
-<!-- Multiple entries -->
-<section class="mb-12 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-8 backdrop-blur-sm">
-	<h2 class="mb-3 text-2xl font-bold text-[#c9a84c]">Multiple Entries</h2>
-	<p class="text-sm text-gray-300">
-		Players may request more than one entry. Each entry is independent — separate picks, separate eliminations,
-		separate entry fees. Manage all your entries from your dashboard.
-	</p>
 </section>
 
 <!-- PocketBase status (dev indicator) -->
