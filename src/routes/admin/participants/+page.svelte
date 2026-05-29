@@ -50,7 +50,7 @@
 
 	// ── Search + sort ─────────────────────────────────────────────────────────
 	let search   = $state('');
-	type SortCol = 'name' | 'entries';
+	type SortCol = 'name' | 'email' | 'entries';
 	type SortDir = 'asc' | 'desc';
 	let sortCol  = $state<SortCol>('name');
 	let sortDir  = $state<SortDir>('asc');
@@ -71,6 +71,8 @@
 			let cmp = 0;
 			if (sortCol === 'name') {
 				cmp = (a.displayName ?? '').localeCompare(b.displayName ?? '', undefined, { sensitivity: 'base' });
+			} else if (sortCol === 'email') {
+				cmp = (a.email ?? '').localeCompare(b.email ?? '', undefined, { sensitivity: 'base' });
 			} else {
 				cmp = (entriesByUser[a.id]?.length ?? 0) - (entriesByUser[b.id]?.length ?? 0);
 			}
@@ -173,7 +175,13 @@
 								<span class="text-[10px]">{sortCol === 'name' ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
 							</button>
 						</th>
-						<th class="px-4 py-3 text-left">Email</th>
+						<th class="px-4 py-3 text-left">
+							<button type="button" onclick={() => toggleSort('email')}
+								class="flex items-center gap-1 hover:text-white transition {sortCol === 'email' ? 'text-[#c9a84c]' : ''}">
+								Email
+								<span class="text-[10px]">{sortCol === 'email' ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+							</button>
+						</th>
 						<th class="px-4 py-3 text-center">
 							<button type="button" onclick={() => toggleSort('entries')}
 								class="flex items-center justify-center gap-1 w-full hover:text-white transition {sortCol === 'entries' ? 'text-[#c9a84c]' : ''}">
