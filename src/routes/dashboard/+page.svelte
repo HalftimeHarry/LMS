@@ -138,9 +138,12 @@
 
 <svelte:head><title>Dashboard — LMS Pool</title></svelte:head>
 
-<!-- Welcome card -->
-<div class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-6 py-5 backdrop-blur-sm"
-	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.06) 0%, transparent 60%), #0a0a0a;">
+<!-- ── Single dashboard card ──────────────────────────────────────────────── -->
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden"
+	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.04) 0%, transparent 60%), #0a0a0a;">
+
+<!-- Welcome -->
+<div class="px-6 py-5">
 	<div class="flex flex-wrap items-center justify-between gap-4">
 		<div>
 			<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Welcome back</p>
@@ -187,7 +190,7 @@
 	{@const myLmsOut     = myLmsEntries.filter((e: any) => e.status === 'eliminated').length}
 	{@const myShOut      = myShEntries.filter((e: any)  => e.status === 'eliminated').length}
 
-	<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+	<div class="border-t border-gray-800 p-5">
 		<div class="flex flex-col gap-6">
 
 		<!-- LMS stats row -->
@@ -413,7 +416,7 @@
 {/each}
 
 <!-- Entries -->
-<div class="mb-8 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+<div class="border-t border-gray-800 p-5">
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			<h2 class="text-xl font-bold text-white">My Entries
@@ -425,11 +428,21 @@
 		</div>
 		<div class="flex items-center gap-2">
 			<div class="flex flex-col items-end gap-0.5">
+				{@const hasAlive = (myLmsAlive + myShAlive) > 0}
 				<a href="/dashboard/standings?season={selectedSeasonId}"
-					class="rounded border border-gray-700 bg-gray-900/60 px-3 py-1.5 text-xs font-medium text-gray-400 transition hover:border-gray-500 hover:text-white">
+					class="relative rounded border px-3 py-1.5 text-xs font-medium transition
+						{hasAlive
+							? 'border-[rgba(201,168,76,0.6)] bg-[rgba(201,168,76,0.08)] text-[#c9a84c] hover:bg-[rgba(201,168,76,0.18)]'
+							: 'border-gray-700 bg-gray-900/60 text-gray-400 hover:border-gray-500 hover:text-white'}">
+					{#if hasAlive}
+						<span class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+							<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c9a84c] opacity-75"></span>
+							<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#c9a84c]"></span>
+						</span>
+					{/if}
 					🏆 Pick from Standings
 				</a>
-				<p class="text-[10px] text-gray-600 leading-tight">See the full field — pick your entry from the grid</p>
+				<p class="text-[10px] {hasAlive ? 'text-[#c9a84c]/50' : 'text-gray-600'} leading-tight">See the full field — pick your entry from the grid</p>
 			</div>
 			{#if data.activeSeason?.status === 'open'}
 				<a href="/dashboard/entries/new"
@@ -665,20 +678,24 @@
 </div>
 
 <!-- Quick links -->
-<div class="grid gap-4 sm:grid-cols-3">
-	<a href="/dashboard/picks"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
-		<p class="mt-1 text-sm text-gray-400">Submit or update your pick for the current week</p>
-	</a>
-	<a href="/dashboard/standings?season={selectedSeasonId}"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Standings</p>
-		<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>
-	</a>
-	<a href="/dashboard/rules"
-		class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition hover:border-[#c9a84c]">
-		<p class="font-semibold text-[#c9a84c]">Rules</p>
-		<p class="mt-1 text-sm text-gray-400">How the pool works, tiebreakers, and payouts</p>
-	</a>
+<div class="border-t border-gray-800">
+	<div class="grid gap-0 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-800">
+		<a href="/dashboard/picks"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
+			<p class="mt-1 text-sm text-gray-400">Submit or update your pick for the current week</p>
+		</a>
+		<a href="/dashboard/standings?season={selectedSeasonId}"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Standings</p>
+			<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>
+		</a>
+		<a href="/dashboard/rules"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Rules</p>
+			<p class="mt-1 text-sm text-gray-400">How the pool works, tiebreakers, and payouts</p>
+		</a>
+	</div>
 </div>
+
+</div><!-- end single dashboard card -->
