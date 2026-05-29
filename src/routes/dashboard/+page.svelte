@@ -1,3 +1,13 @@
+<style>
+	@keyframes gold-pulse {
+		0%, 100% { background: rgba(201,168,76,0.08); }
+		50%       { background: rgba(201,168,76,0.22); }
+	}
+	.standings-pulse {
+		animation: gold-pulse 2s ease-in-out infinite;
+	}
+</style>
+
 <script lang="ts">
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
@@ -434,13 +444,8 @@
 		<div class="flex items-center gap-2">
 			{#if hasAliveEntries}
 				<a href="/dashboard/standings?season={selectedSeasonId}"
-					class="relative flex items-center gap-3 overflow-hidden rounded-lg border border-[#c9a84c] px-4 py-2.5 shadow-[0_0_16px_rgba(201,168,76,0.25)] transition hover:shadow-[0_0_24px_rgba(201,168,76,0.4)] hover:brightness-110"
-					style="background: linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.06) 100%);">
-					<!-- Pulse ring -->
-					<span class="relative flex h-3 w-3 shrink-0">
-						<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#c9a84c] opacity-60"></span>
-						<span class="relative inline-flex h-3 w-3 rounded-full bg-[#c9a84c]"></span>
-					</span>
+					class="standings-pulse relative flex items-center gap-3 overflow-hidden rounded-lg border border-[#c9a84c] px-4 py-2.5 transition hover:brightness-110"
+					style="box-shadow: 0 0 16px rgba(201,168,76,0.25);">
 					<span class="flex flex-col">
 						<span class="text-sm font-bold text-[#c9a84c]">🏆 Pick from Standings</span>
 						<span class="text-[10px] text-[#c9a84c]/60">See the full field — pick your entry from the grid</span>
