@@ -1,7 +1,7 @@
 <style>
 	@keyframes gold-pulse {
-		0%, 100% { background: rgba(201,168,76,0.08); }
-		50%       { background: rgba(201,168,76,0.22); }
+		0%, 100% { background: rgba(201,168,76,0.06); box-shadow: 0 0 10px rgba(201,168,76,0.15); }
+		50%       { background: rgba(201,168,76,0.35); box-shadow: 0 0 24px rgba(201,168,76,0.5);  }
 	}
 	.standings-pulse {
 		animation: gold-pulse 2s ease-in-out infinite;
@@ -445,7 +445,7 @@
 			{#if hasAliveEntries}
 				<a href="/dashboard/standings?season={selectedSeasonId}"
 					class="standings-pulse relative flex items-center gap-3 overflow-hidden rounded-lg border border-[#c9a84c] px-4 py-2.5 transition hover:brightness-110"
-					style="box-shadow: 0 0 16px rgba(201,168,76,0.25);">
+>
 					<span class="flex flex-col">
 						<span class="text-sm font-bold text-[#c9a84c]">🏆 Pick from Standings</span>
 						<span class="text-[10px] text-[#c9a84c]/60">See the full field — pick your entry from the grid</span>
