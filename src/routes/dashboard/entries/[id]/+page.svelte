@@ -175,17 +175,6 @@
 
 <div class="mx-auto max-w-2xl">
 
-	<!-- Back -->
-	<div class="mb-6 flex items-center justify-between">
-		<a href="/dashboard" class="text-sm text-gray-500 hover:text-[#c9a84c]">← Dashboard</a>
-		{#if $page.url.searchParams.get('pickSaved') === '1'}
-			<a href="/dashboard"
-				class="flex items-center gap-2 rounded-lg border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-4 py-2 text-sm font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">
-				← Back to Dashboard
-			</a>
-		{/if}
-	</div>
-
 	{#if allDisplayWeeks.length === 0}
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
 			<p class="text-gray-400">No weeks set up yet. Check back soon.</p>
@@ -194,6 +183,19 @@
 
 	<!-- ── Single card wrapping everything ───────────────────────────────────── -->
 	<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
+
+		<!-- Back nav -->
+		<div class="border-b border-gray-800/60 px-6 py-3">
+			{#if $page.url.searchParams.get('pickSaved') === '1'}
+				<a href="/dashboard"
+					class="inline-flex items-center gap-2 rounded-lg border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-3 py-1.5 text-sm font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">
+					← Back to Dashboard
+				</a>
+			{:else}
+				<a href="/dashboard" class="text-sm text-gray-500 hover:text-[#c9a84c]">← Dashboard</a>
+			{/if}
+		</div>
+
 		<!-- Scroll container -->
 		<div
 			bind:this={scrollEl}
@@ -567,7 +569,7 @@
 										{#if recs.length > 0}
 											<div class="mb-4">
 												<p class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-													{isLms ? 'Recommended picks (biggest favorites to lose)' : 'Recommended picks (biggest favorites to win)'}
+													{isLms ? 'Recommended picks (biggest underdogs)' : 'Recommended picks (biggest favorites)'}
 												</p>
 												<div class="flex flex-col gap-1.5">
 													{#each recs as rec, i}
@@ -600,7 +602,7 @@
 																</p>
 															</div>
 															<div class="shrink-0 text-right">
-																<p class="text-sm font-semibold {rec.spread > 0 ? 'text-[#c9a84c]' : 'text-gray-400'}">
+																<p class="text-sm font-semibold {isLms ? (rec.spread < 0 ? 'text-[#c9a84c]' : 'text-gray-400') : (rec.spread > 0 ? 'text-[#c9a84c]' : 'text-gray-400')}">
 																	{spreadDisplay(rec.spread)}
 																</p>
 																{#if rec.moneyline != null}
@@ -619,7 +621,7 @@
 										<!-- Full matchup list (collapsible) -->
 										<details class="mb-4 group">
 											<summary class="cursor-pointer list-none">
-												<div class="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300">
+												<div class="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-gray-600 hover:bg-gray-800/60 hover:text-white">
 													<span class="transition group-open:hidden">▶ Show all {weekOdds.length} matchups</span>
 													<span class="hidden transition group-open:inline">▼ Hide matchups</span>
 												</div>

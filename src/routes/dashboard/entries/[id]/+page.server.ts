@@ -180,24 +180,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			});
 		}
 
-		// Sort by spread descending (biggest favorite first), then pick top 3 not already used
-		// Always include the auto-pick team if set, even if already used
-		candidates.sort((a, b) => b.spread - a.spread);
+		// Recommendations: help the participant decide what to pick.
+		// LMS: biggest underdogs (most likely to lose) → sort ascending by spread (most negative first)
+		// 2H:  biggest favorites (most likely to win)  → sort descending by spread (most positive first)
+		// Auto-pick (penalty default) is a separate concept — shown in its own UI card, not injected here.
+		candidates.sort((a, b) => isLms ? a.spread - b.spread : b.spread - a.spread);
 
 		const recs: typeof candidates = [];
-		// First pass: top 3 available (not already used)
 		for (const c of candidates) {
 			if (recs.length >= 3) break;
 			if (!c.alreadyUsed) recs.push(c);
-		}
-		// If auto-pick team isn't already in recs, prepend it (it's the default fallback)
-		if (autoPickTeamId) {
-			const autoInRecs = recs.some(r => r.teamId === autoPickTeamId);
-			if (!autoInRecs) {
-				const autoCand = candidates.find(c => c.teamId === autoPickTeamId);
-				if (autoCand) recs.unshift(autoCand);
-				if (recs.length > 3) recs.pop();
-			}
 		}
 
 		recommendationsByWeek[wid] = recs;

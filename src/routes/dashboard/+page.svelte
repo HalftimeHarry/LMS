@@ -698,7 +698,7 @@
 
 <!-- Quick links -->
 <div class="border-t border-gray-800">
-	<div class="grid gap-0 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-gray-800">
+	<div class="grid gap-0 grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-gray-800 [&>*:nth-child(odd)]:border-r [&>*:nth-child(odd)]:border-gray-800 sm:[&>*:nth-child(odd)]:border-r-0">
 		<a href="/dashboard/picks"
 			class="p-5 transition hover:bg-white/[0.02]">
 			<p class="font-semibold text-[#c9a84c]">Make a Pick</p>
@@ -708,6 +708,11 @@
 			class="p-5 transition hover:bg-white/[0.02]">
 			<p class="font-semibold text-[#c9a84c]">Standings</p>
 			<p class="mt-1 text-sm text-gray-400">See who is still alive in the pool</p>
+		</a>
+		<a href="/dashboard/odds"
+			class="p-5 transition hover:bg-white/[0.02]">
+			<p class="font-semibold text-[#c9a84c]">Latest Odds</p>
+			<p class="mt-1 text-sm text-gray-400">Spreads and moneylines for the current week</p>
 		</a>
 		<a href="/dashboard/rules"
 			class="p-5 transition hover:bg-white/[0.02]">
