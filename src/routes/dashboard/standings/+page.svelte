@@ -166,8 +166,9 @@
 		stillToPickEntries.filter((e: any) => e.user === userId)
 	);
 
-	let breakdownOpen = $state(false);
-	let expandedTeam  = $state<string | null>(null);
+	let breakdownOpen    = $state(false);
+	let expandedTeam     = $state<string | null>(null);
+	let pendingListOpen  = $state(false);
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
@@ -275,52 +276,71 @@
 
 
 
-	<!-- ── Auto-pick pending list ──────────────────────────────────────────── -->
+	<!-- ── Auto-pick pending list (collapsible) ────────────────────────────── -->
 	<!-- Only shown while the week is open. Entries here haven't picked yet     -->
 	<!-- and will receive the auto-pick if they miss the deadline.              -->
 	{#if currentWeekIsOpen && stillToPickEntries.length > 0}
 		{@const autoPick = currentWeek?.expand?.biggestFavoriteTeam}
 		<div class="border-b border-orange-900/30 bg-orange-950/10 overflow-hidden">
-			<div class="flex items-center justify-between gap-3 px-5 py-3">
-				<div class="flex items-center gap-2">
+
+			<!-- Toggle header -->
+			<button
+				type="button"
+				onclick={() => pendingListOpen = !pendingListOpen}
+				class="flex w-full items-center justify-between gap-3 px-5 py-3 text-left transition hover:bg-orange-950/20"
+			>
+				<div class="flex items-center gap-2 min-w-0">
 					<span class="h-2 w-2 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
 					<p class="text-sm font-semibold text-orange-400">
 						{stillToPickEntries.length} {stillToPickEntries.length === 1 ? 'entry' : 'entries'} still to pick — Week {currentWeek.week}
 					</p>
-					<p class="text-xs text-gray-500">If they don't pick before the deadline, they'll be assigned the auto-pick.</p>
+					<p class="hidden sm:block text-xs text-gray-500">· If they don't pick, they'll be assigned the auto-pick.</p>
 				</div>
-				{#if autoPick}
-					<div class="flex items-center gap-1.5 text-xs text-gray-500">
-						<span>Auto-pick:</span>
-						<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-5 w-5 object-contain" />
-						<span class="text-gray-400">{autoPick.city} {autoPick.name}</span>
-					</div>
-				{/if}
-			</div>
-			<div class="divide-y divide-orange-900/20">
-				{#each stillToPickEntries as entry}
-					{@const isMe = entry.user === userId}
-					<div class="flex items-center gap-3 px-5 py-2.5 {isMe ? 'bg-yellow-950/20' : ''}">
-						<div class="min-w-0 flex-1">
-							<p class="text-sm {isMe ? 'font-semibold text-yellow-400' : 'text-gray-300'}">
-								{entry.entryName}
-								{#if isMe}<span class="ml-1 text-[10px] font-normal opacity-60">you</span>{/if}
-							</p>
+				<div class="flex items-center gap-3 shrink-0">
+					{#if autoPick}
+						<div class="flex items-center gap-1.5 text-xs text-gray-500">
+							<span>Auto-pick:</span>
+							<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-5 w-5 object-contain" />
+							<span class="text-gray-400">{autoPick.abbreviation}</span>
 						</div>
-						{#if isMe}
-							<a href="/dashboard/entries/{entry.id}"
-								class="shrink-0 rounded border border-yellow-700/50 bg-yellow-950/40 px-2.5 py-1 text-xs font-medium text-yellow-400 transition hover:bg-yellow-900/50">
-								Pick now →
-							</a>
-						{:else if autoPick}
-							<div class="flex items-center gap-1 shrink-0">
-								<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-4 w-4 object-contain opacity-50" />
-								<span class="text-xs text-gray-600">{autoPick.abbreviation} auto</span>
+					{/if}
+					<svg
+						class="h-3.5 w-3.5 text-gray-600 transition-transform {pendingListOpen ? 'rotate-180' : ''}"
+						fill="none" stroke="currentColor" viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+					</svg>
+				</div>
+			</button>
+
+			<!-- Collapsible entry list -->
+			{#if pendingListOpen}
+				<div class="border-t border-orange-900/20 divide-y divide-orange-900/20">
+					{#each stillToPickEntries as entry}
+						{@const isMe = entry.user === userId}
+						<div class="flex items-center gap-3 px-5 py-2.5 {isMe ? 'bg-yellow-950/20' : ''}">
+							<div class="min-w-0 flex-1">
+								<p class="text-sm {isMe ? 'font-semibold text-yellow-400' : 'text-gray-300'}">
+									{entry.entryName}
+									{#if isMe}<span class="ml-1 text-[10px] font-normal opacity-60">you</span>{/if}
+								</p>
 							</div>
-						{/if}
-					</div>
-				{/each}
-			</div>
+							{#if isMe}
+								<a href="/dashboard/entries/{entry.id}"
+									class="shrink-0 rounded border border-yellow-700/50 bg-yellow-950/40 px-2.5 py-1 text-xs font-medium text-yellow-400 transition hover:bg-yellow-900/50">
+									Pick now →
+								</a>
+							{:else if autoPick}
+								<div class="flex items-center gap-1 shrink-0">
+									<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-4 w-4 object-contain opacity-50" />
+									<span class="text-xs text-gray-600">{autoPick.abbreviation} auto</span>
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+
 		</div>
 	{/if}
 
