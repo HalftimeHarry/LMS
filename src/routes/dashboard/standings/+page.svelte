@@ -7,14 +7,17 @@
 	let { data }: { data: PageData } = $props();
 
 
-	const activeSeason = $derived(data.activeSeason as any);
-	const weeks        = $derived(data.weeks        as any[]);
-	const entries      = $derived(data.entries      as any[]);
-	const pickGrid    = $derived(data.pickGrid    as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
-	const currentWeek = $derived(data.currentWeek as any);
-	const poolType    = $derived(data.poolType    as 'lms' | 'second_half');
-	const userId      = $derived(data.userId      as string | null);
-	const isLoggedIn   = $derived(!!userId);
+	const activeSeason    = $derived(data.activeSeason as any);
+	const weeks           = $derived(data.weeks        as any[]);
+	const entries         = $derived(data.entries      as any[]);
+	const pickGrid        = $derived(data.pickGrid    as Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>>);
+	const currentWeek     = $derived(data.currentWeek as any);
+	const poolType        = $derived(data.poolType    as 'lms' | 'second_half');
+	const userId          = $derived(data.userId      as string | null);
+	const isLoggedIn      = $derived(!!userId);
+	// Server-computed — accurate for all viewers including guests
+	const stillToPickCount = $derived((data as any).stillToPickCount as number ?? 0);
+	const stillToPickList  = $derived((data as any).stillToPickList  as { id: string; entryName: string; userId: string }[] ?? []);
 
 	const isLms = $derived(poolType === 'lms');
 
@@ -152,18 +155,9 @@
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
-	// All active entries without a pick for the current open week.
-	// Safe to show publicly — these participants will receive the auto-pick.
-	const stillToPickEntries = $derived((() => {
-		if (!currentWeek || !currentWeekIsOpen) return [] as any[];
-		return activeEntries.filter((e: any) =>
-			!openWeeks.some(ow => ow.id === currentWeek.id && pickGrid[e.id]?.[ow.id])
-		);
-	})());
-
-	// Subset of the above that belong to the current user (shown as action links)
+	// Own entries in the still-to-pick list — used for "Pick now →" links
 	const myStillToPick = $derived(
-		stillToPickEntries.filter((e: any) => e.user === userId)
+		stillToPickList.filter(e => e.userId === userId)
 	);
 
 	let breakdownOpen    = $state(false);
@@ -219,7 +213,7 @@
 
 	<!-- ── Guest banner ─────────────────────────────────────────────────────── -->
 	{#if !isLoggedIn}
-		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(201,168,76,0.15)] bg-[rgba(201,168,76,0.04)] px-5 py-3">
+		<div class="guest-pulse flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(201,168,76,0.15)] px-5 py-3">
 			<p class="text-sm text-gray-400">
 				<span class="text-[#c9a84c] font-medium">Viewing as guest.</span>
 				Sign in to see your picks, submit picks for open weeks, and track your entries.
@@ -279,7 +273,7 @@
 	<!-- ── Auto-pick pending list (collapsible) ────────────────────────────── -->
 	<!-- Only shown while the week is open. Entries here haven't picked yet     -->
 	<!-- and will receive the auto-pick if they miss the deadline.              -->
-	{#if currentWeekIsOpen && stillToPickEntries.length > 0}
+	{#if currentWeekIsOpen && stillToPickCount > 0}
 		{@const autoPick = currentWeek?.expand?.biggestFavoriteTeam}
 		<div class="border-b border-orange-900/30 bg-orange-950/10 overflow-hidden">
 
@@ -292,7 +286,7 @@
 				<div class="flex items-center gap-2 min-w-0">
 					<span class="h-2 w-2 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
 					<p class="text-sm font-semibold text-orange-400">
-						{stillToPickEntries.length} {stillToPickEntries.length === 1 ? 'entry' : 'entries'} still to pick — Week {currentWeek.week}
+						{stillToPickCount} {stillToPickCount === 1 ? 'entry' : 'entries'} still to pick — Week {currentWeek.week}
 					</p>
 					<p class="hidden sm:block text-xs text-gray-500">· If they don't pick, they'll be assigned the auto-pick.</p>
 				</div>
@@ -316,8 +310,8 @@
 			<!-- Collapsible entry list -->
 			{#if pendingListOpen}
 				<div class="border-t border-orange-900/20 divide-y divide-orange-900/20">
-					{#each stillToPickEntries as entry}
-						{@const isMe = entry.user === userId}
+					{#each stillToPickList as entry}
+						{@const isMe = entry.userId === userId}
 						<div class="flex items-center gap-3 px-5 py-2.5 {isMe ? 'bg-yellow-950/20' : ''}">
 							<div class="min-w-0 flex-1">
 								<p class="text-sm {isMe ? 'font-semibold text-yellow-400' : 'text-gray-300'}">
@@ -379,14 +373,14 @@
 					<span class="flex items-center gap-2 text-xs font-medium text-gray-400">
 						<span class="h-1.5 w-1.5 rounded-full bg-blue-500 {currentWeekIsOpen ? 'animate-pulse' : ''}"></span>
 						{#if currentWeekIsOpen}
-							Week {currentWeek.week} picks
-							{#if stillToPickEntries.length > 0}
-								· <span class="text-yellow-600">{stillToPickEntries.length} still to pick</span>
+							View my Week {currentWeek.week} picks
+							{#if stillToPickCount > 0}
+								· <span class="text-yellow-600">{stillToPickCount} still to pick</span>
 							{:else}
 								· <span class="text-green-600">all picks in</span>
 							{/if}
 						{:else}
-							Week {currentWeek.week} picks — {totalPicksThisWeek} of {activeEntries.length} submitted
+							View my Week {currentWeek.week} picks — {totalPicksThisWeek} of {activeEntries.length} submitted
 						{/if}
 					</span>
 					<svg
@@ -418,43 +412,38 @@
 								</div>
 							{/if}
 
-							<!-- Still to pick — public, these entries will receive the auto-pick -->
+							<!-- Still to pick — show own entries with action links -->
 							{@const autoPick = currentWeek.expand?.biggestFavoriteTeam}
-							{#if stillToPickEntries.length > 0}
-								<div class="max-h-64 overflow-y-auto space-y-1 pr-1">
-									{#each stillToPickEntries as entry}
-										{@const isMe = entry.user === userId}
-										<div class="flex items-center gap-3 rounded-lg border {isMe ? 'border-yellow-900/50 bg-yellow-950/20' : 'border-gray-800/60 bg-gray-900/40'} px-3 py-2.5">
-											<!-- Entry name -->
-											<div class="min-w-0 flex-1">
-												<p class="text-sm font-medium {isMe ? 'text-yellow-400' : 'text-gray-300'}">
-													{entry.entryName}
-													{#if isMe}<span class="ml-1 text-[10px] opacity-60">you</span>{/if}
-												</p>
-												{#if autoPick}
-													<p class="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
-														Auto-pick:
-														<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation}
-															class="h-4 w-4 rounded-full bg-white p-px object-contain opacity-70" />
-														<span class="text-gray-400">{autoPick.city} {autoPick.name}</span>
+							{#if stillToPickCount > 0}
+								{#if myStillToPick.length > 0}
+									<div class="mb-3 space-y-1">
+										{#each myStillToPick as entry}
+											<div class="flex items-center gap-3 rounded-lg border border-yellow-900/50 bg-yellow-950/20 px-3 py-2.5">
+												<div class="min-w-0 flex-1">
+													<p class="text-sm font-medium text-yellow-400">
+														{entry.entryName}
+														<span class="ml-1 text-[10px] opacity-60">you</span>
 													</p>
-												{/if}
-											</div>
-											<!-- Action link for own entries -->
-											{#if isMe}
+												</div>
 												<a href="/dashboard/entries/{entry.id}"
 													class="shrink-0 rounded border border-yellow-700/50 bg-yellow-950/40 px-2.5 py-1 text-xs font-medium text-yellow-400 hover:bg-yellow-900/50 transition">
 													Pick now →
 												</a>
-											{/if}
-										</div>
-									{/each}
-								</div>
+											</div>
+										{/each}
+									</div>
+								{/if}
+								<p class="text-xs text-gray-600">
+									{stillToPickCount} {stillToPickCount === 1 ? 'entry' : 'entries'} still to pick.
+									{#if autoPick}
+										Will be auto-assigned <span class="text-gray-400">{autoPick.city} {autoPick.name}</span>.
+									{/if}
+								</p>
 							{:else}
 								<p class="text-xs text-green-600">All active entries have picked this week.</p>
 							{/if}
 
-							<p class="mt-3 text-[11px] text-gray-700">Picks are hidden until the deadline. Entries listed above will receive the auto-pick if they don't submit before then.</p>
+							<p class="mt-3 text-[11px] text-gray-700">Picks are hidden until the deadline.</p>
 
 						{:else}
 							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
@@ -768,4 +757,6 @@
 {/if}
 
 </div><!-- end single standings card -->
+
+
 

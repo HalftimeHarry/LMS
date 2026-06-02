@@ -4,9 +4,10 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const season = $derived((data as any).season as any);
-	const week   = $derived((data as any).week   as any);
-	const games  = $derived((data as any).games  as any[]);
+	const season     = $derived((data as any).season     as any);
+	const week       = $derived((data as any).week       as any);
+	const games      = $derived((data as any).games      as any[]);
+	const isLoggedIn = $derived((data as any).isLoggedIn as boolean);
 
 	function fmtGameTime(iso: string | null | undefined): string {
 		if (!iso) return '\u2014';
@@ -35,10 +36,30 @@
 <div class="mx-auto max-w-2xl">
 <div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
-	<!-- Back nav -->
-	<div class="border-b border-gray-800/60 px-6 py-3">
-		<a href="/dashboard" class="text-sm text-gray-500 hover:text-[#c9a84c]">\u2190 Dashboard</a>
-	</div>
+	<!-- Back nav / guest CTA -->
+	{#if isLoggedIn}
+		<div class="border-b border-gray-800/60 px-6 py-3">
+			<a href="/dashboard" class="text-sm text-gray-500 hover:text-[#c9a84c]">← Dashboard</a>
+		</div>
+	{:else}
+		<div class="guest-pulse flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(201,168,76,0.15)] px-5 py-3">
+			<p class="text-sm text-gray-400">
+				<span class="text-[#c9a84c] font-medium">Viewing as guest.</span>
+				Sign in to see your picks, submit picks for open weeks, and track your entries.
+			</p>
+			<div class="flex gap-2">
+				<a href="/register"
+					class="rounded bg-[#c9a84c] px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-[#e8c96a]">
+					Register
+				</a>
+				<a href="/login"
+					class="rounded border border-[#c9a84c] bg-black/80 px-4 py-1.5 text-sm font-semibold text-[#c9a84c] transition hover:bg-[#c9a84c] hover:text-black">
+					Sign In
+				</a>
+			</div>
+		</div>
+	{/if}
+
 
 	<!-- Header -->
 	<div class="border-b border-gray-800 px-6 py-5">
