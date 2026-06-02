@@ -227,7 +227,7 @@
 						<div class="flex items-center gap-3">
 							<img src={teamLogoUrl(fav.team?.abbreviation)} alt={fav.team?.abbreviation} class="h-9 w-9 object-contain" />
 							<div>
-								<p class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c]">LMS Auto-pick — Biggest Favorite</p>
+								<p class="text-xs font-semibold uppercase tracking-wider text-[#c9a84c]">LMS Auto-pick — Biggest Favorite (penalty default)</p>
 								<p class="text-sm font-medium text-white">{fav.team?.city} {fav.team?.name}</p>
 								<p class="text-xs text-gray-500">Spread: {fav.spread > 0 ? '+' : ''}{fav.spread}</p>
 							</div>

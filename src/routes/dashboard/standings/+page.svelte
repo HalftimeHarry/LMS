@@ -172,8 +172,11 @@
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
 
-<!-- ── Header card ─────────────────────────────────────────────────────────── -->
-<div class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-4 backdrop-blur-sm">
+<!-- ── Single standings card ────────────────────────────────────────────────── -->
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+
+<!-- ── Header ──────────────────────────────────────────────────────────────── -->
+<div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-800 px-5 py-4">
 	<div>
 		<h1 class="text-2xl font-bold text-white">Standings</h1>
 		{#if activeSeason}
@@ -201,20 +204,21 @@
 </div>
 
 {#if !activeSeason}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
+	<div class="p-12 text-center">
 		<p class="text-gray-400">No active season yet. Check back soon.</p>
 	</div>
 
 {:else if entries.length === 0}
-	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-12 text-center backdrop-blur-sm">
+	<div class="p-12 text-center">
 		<p class="text-gray-400">No {isLms ? 'LMS' : 'Second Half'} entries yet.</p>
 	</div>
 
 {:else}
 
+
 	<!-- ── Guest banner ─────────────────────────────────────────────────────── -->
 	{#if !isLoggedIn}
-		<div class="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.04)] px-5 py-3 backdrop-blur-sm">
+		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(201,168,76,0.15)] bg-[rgba(201,168,76,0.04)] px-5 py-3">
 			<p class="text-sm text-gray-400">
 				<span class="text-[#c9a84c] font-medium">Viewing as guest.</span>
 				Sign in to see your picks, submit picks for open weeks, and track your entries.
@@ -233,7 +237,7 @@
 	{/if}
 
 	<!-- ── Summary bar ──────────────────────────────────────────────────────── -->
-	<div class="mb-5 flex flex-wrap items-center gap-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 px-5 py-3 backdrop-blur-sm">
+	<div class="flex flex-wrap items-center gap-6 border-b border-gray-800 px-5 py-3">
 		<div class="text-center">
 			<p class="text-xl font-bold text-white">{activeCount}</p>
 			<p class="text-xs text-gray-500">Still alive</p>
@@ -271,10 +275,59 @@
 
 
 
+	<!-- ── Auto-pick pending list ──────────────────────────────────────────── -->
+	<!-- Only shown while the week is open. Entries here haven't picked yet     -->
+	<!-- and will receive the auto-pick if they miss the deadline.              -->
+	{#if currentWeekIsOpen && stillToPickEntries.length > 0}
+		{@const autoPick = currentWeek?.expand?.biggestFavoriteTeam}
+		<div class="border-b border-orange-900/30 bg-orange-950/10 overflow-hidden">
+			<div class="flex items-center justify-between gap-3 px-5 py-3">
+				<div class="flex items-center gap-2">
+					<span class="h-2 w-2 rounded-full bg-orange-500 animate-pulse shrink-0"></span>
+					<p class="text-sm font-semibold text-orange-400">
+						{stillToPickEntries.length} {stillToPickEntries.length === 1 ? 'entry' : 'entries'} still to pick — Week {currentWeek.week}
+					</p>
+					<p class="text-xs text-gray-500">If they don't pick before the deadline, they'll be assigned the auto-pick.</p>
+				</div>
+				{#if autoPick}
+					<div class="flex items-center gap-1.5 text-xs text-gray-500">
+						<span>Auto-pick:</span>
+						<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-5 w-5 object-contain" />
+						<span class="text-gray-400">{autoPick.city} {autoPick.name}</span>
+					</div>
+				{/if}
+			</div>
+			<div class="divide-y divide-orange-900/20">
+				{#each stillToPickEntries as entry}
+					{@const isMe = entry.user === userId}
+					<div class="flex items-center gap-3 px-5 py-2.5 {isMe ? 'bg-yellow-950/20' : ''}">
+						<div class="min-w-0 flex-1">
+							<p class="text-sm {isMe ? 'font-semibold text-yellow-400' : 'text-gray-300'}">
+								{entry.entryName}
+								{#if isMe}<span class="ml-1 text-[10px] font-normal opacity-60">you</span>{/if}
+							</p>
+						</div>
+						{#if isMe}
+							<a href="/dashboard/entries/{entry.id}"
+								class="shrink-0 rounded border border-yellow-700/50 bg-yellow-950/40 px-2.5 py-1 text-xs font-medium text-yellow-400 transition hover:bg-yellow-900/50">
+								Pick now →
+							</a>
+						{:else if autoPick}
+							<div class="flex items-center gap-1 shrink-0">
+								<img src={teamLogoUrl(autoPick.abbreviation)} alt={autoPick.abbreviation} class="h-4 w-4 object-contain opacity-50" />
+								<span class="text-xs text-gray-600">{autoPick.abbreviation} auto</span>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	<!-- ── Deadline countdown + current-week pick breakdown ────────────────── -->
 	{#if currentWeek?.deadline}
 		{@const tl = timeLeft()}
-		<div class="mb-4 rounded-xl border {tl?.urgent ? 'border-red-900' : 'border-gray-800'} bg-black/75 backdrop-blur-sm overflow-hidden">
+		<div class="border-b {tl?.urgent ? 'border-red-900' : 'border-gray-800'} overflow-hidden">
 
 			<!-- Deadline row -->
 			<div class="flex items-center gap-3 px-4 py-2.5">
@@ -445,13 +498,12 @@
 
 	{#if visibleWeeks.length === 0 && openWeeks.length === 0}
 		<!-- Season not started -->
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-10 text-center backdrop-blur-sm">
+		<div class="p-10 text-center">
 			<p class="text-gray-400">No weeks set up yet. Check back when the season starts.</p>
 		</div>
 
 	{:else}
 		<!-- ── Pick grid ─────────────────────────────────────────────────────── -->
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
 
 			<!-- Filters -->
 			<div class="flex flex-wrap items-center gap-3 border-b border-gray-800 px-4 py-3">
@@ -665,10 +717,10 @@
 				</tbody>
 			</table>
 			</div><!-- end scrollable table -->
-		</div><!-- end grid card -->
+
 
 		<!-- ── Legend ────────────────────────────────────────────────────────── -->
-		<div class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 rounded-xl border border-[rgba(201,168,76,0.15)] bg-black/75 px-4 py-3 text-xs text-gray-600 backdrop-blur-sm">
+		<div class="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-gray-800/60 px-4 py-3 text-xs text-gray-600">
 			<span class="flex items-center gap-1.5">
 				<span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>Locked
 			</span>
@@ -695,4 +747,5 @@
 
 {/if}
 
+</div><!-- end single standings card -->
 
