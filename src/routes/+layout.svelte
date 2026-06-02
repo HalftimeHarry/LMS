@@ -41,6 +41,7 @@
 					<!-- Signed-in nav -->
 					<a href="/dashboard"           class="text-gray-300 transition hover:text-[#c9a84c]">Dashboard</a>
 					<a href="/dashboard/standings" class="text-gray-300 transition hover:text-[#c9a84c]">Standings</a>
+					<a href="/dashboard/odds"      class="text-gray-300 transition hover:text-[#c9a84c]">Latest Odds</a>
 					<a href="/dashboard/rules"     class="text-gray-300 transition hover:text-[#c9a84c]">Rules</a>
 					{#if user.role === 'super_admin' || user.role === 'pool_admin'}
 						<a href="/admin" class="text-gray-300 transition hover:text-[#c9a84c]">Admin</a>
@@ -109,6 +110,7 @@
 				{:else}
 					<!-- Signed-out nav -->
 					<a href="/dashboard/standings" class="text-gray-300 transition hover:text-[#c9a84c]">Standings</a>
+					<a href="/dashboard/odds"      class="text-gray-300 transition hover:text-[#c9a84c]">Latest Odds</a>
 					<a href="/dashboard/rules"     class="text-gray-300 transition hover:text-[#c9a84c]">Rules</a>
 					<a href="/register"
 						class="rounded bg-[#c9a84c] px-4 py-1.5 font-semibold text-black transition hover:bg-[#e8c96a]"
