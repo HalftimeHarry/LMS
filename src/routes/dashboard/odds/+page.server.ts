@@ -1,7 +1,7 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
 	const pb = await pbAdmin();
 
 	// Find the active/open season (prefer real over test)
@@ -42,5 +42,5 @@ export const load: PageServerLoad = async () => {
 		sort:   'gameTime'
 	}).catch(() => []) as any[];
 
-	return { season, week, games };
+	return { season, week, games, isLoggedIn: !!locals.user };
 };

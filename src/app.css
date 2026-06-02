@@ -7,3 +7,11 @@
   --color-pool-surface: rgba(10, 10, 10, 0.82);
   --color-pool-border: rgba(201, 168, 76, 0.3);
 }
+
+@keyframes guestPulse {
+  0%, 100% { background-color: rgba(201, 168, 76, 0.04); }
+  50%       { background-color: rgba(201, 168, 76, 0.14); }
+}
+.guest-pulse {
+  animation: guestPulse 2s ease-in-out infinite;
+}

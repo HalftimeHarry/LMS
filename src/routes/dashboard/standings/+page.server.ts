@@ -123,15 +123,45 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		return [...openWeekIds].some(weekId => !pickGrid[entryId]?.[weekId]);
 	});
 
+	// Active entries with no pick for the current open week — computed server-side so
+	// the list and count are accurate for all viewers including guests.
+	// Only exposes entryName and the entry's user id (no pick data).
+	let stillToPickCount = 0;
+	let stillToPickList: { id: string; entryName: string; userId: string }[] = [];
+	if (currentWeek && openWeekIds.has(currentWeek.id)) {
+		const activeEntries = entries.filter((e: any) => e.status === 'active') as any[];
+
+		if (activeEntries.length > 0) {
+			const activeEntryIds = activeEntries.map((e: any) => e.id) as string[];
+			const batchSize = 20;
+			const pickedEntryIds = new Set<string>();
+			for (let i = 0; i < activeEntryIds.length; i += batchSize) {
+				const batch  = activeEntryIds.slice(i, i + batchSize);
+				const filter = `week = "${currentWeek.id}" && (${batch.map((id: string) => `entry = "${id}"`).join(' || ')})`;
+				const picks  = await pb.collection('picks').getFullList({
+					filter,
+					fields: 'entry'
+				}).catch(() => []) as any[];
+				for (const p of picks) pickedEntryIds.add(p.entry);
+			}
+			stillToPickList = activeEntries
+				.filter((e: any) => !pickedEntryIds.has(e.id))
+				.map((e: any) => ({ id: e.id, entryName: e.entryName, userId: e.user }));
+			stillToPickCount = stillToPickList.length;
+		}
+	}
+
 	return {
 		seasons,
 		activeSeason,
 		poolType,
-		weeks:       weeks       as any[],
-		entries:     entries     as any[],
+		weeks:            weeks            as any[],
+		entries:          entries          as any[],
 		pickGrid,
-		currentWeek: currentWeek as any,
+		currentWeek:      currentWeek      as any,
 		userId,
 		hasMissingPick,
+		stillToPickCount,
+		stillToPickList,
 	};
 };
