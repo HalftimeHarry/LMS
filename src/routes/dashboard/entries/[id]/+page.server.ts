@@ -110,17 +110,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	}
 
 	// Build a teamId → spread map for each week (used to annotate the team picker)
-	// spread value = how favored that team is (negative = underdog, positive = favorite)
-	// For LMS: we want to highlight the biggest FAVORITE (most likely to win = safest loser pick)
-	// For 2nd Half: we want to highlight the biggest FAVORITE (most likely to win)
+	// Spread uses the standard betting convention from each team's perspective:
+	// negative = favorite, positive = underdog.
 	const teamSpreadByWeek: Record<string, Record<string, number>> = {};
 	for (const [wid, games] of Object.entries(oddsByWeek)) {
 		teamSpreadByWeek[wid] = {};
 		for (const g of games) {
 			const homeId = g.expand?.homeTeam?.id;
 			const awayId = g.expand?.awayTeam?.id;
-			if (homeId) teamSpreadByWeek[wid][homeId] = -(g.homeSpread ?? 0); // positive = favored
-			if (awayId) teamSpreadByWeek[wid][awayId] =  (g.homeSpread ?? 0); // away spread = -homeSpread
+			if (homeId) teamSpreadByWeek[wid][homeId] = g.homeSpread ?? 0;
+			if (awayId) teamSpreadByWeek[wid][awayId] = -(g.homeSpread ?? 0);
 		}
 	}
 
@@ -150,9 +149,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			const away = g.expand?.awayTeam;
 			if (!home || !away) continue;
 
-			// Effective spread from each team's perspective (positive = favored)
-			const homeEffective = -(g.homeSpread ?? 0);
-			const awayEffective =  (g.homeSpread ?? 0);
+			// Spread from each team's perspective (negative = favorite, positive = underdog)
+			const homeEffective = g.homeSpread ?? 0;
+			const awayEffective = -(g.homeSpread ?? 0);
 
 			candidates.push({
 				teamId:      home.id,
@@ -181,10 +180,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		}
 
 		// Recommendations: help the participant decide what to pick.
-		// LMS: biggest underdogs (most likely to lose) → sort ascending by spread (most negative first)
-		// 2H:  biggest favorites (most likely to win)  → sort descending by spread (most positive first)
+		// LMS: biggest underdogs (most likely to lose) → sort descending by spread (most positive first)
+		// 2H:  biggest favorites (most likely to win)  → sort ascending by spread (most negative first)
 		// Auto-pick (penalty default) is a separate concept — shown in its own UI card, not injected here.
-		candidates.sort((a, b) => isLms ? a.spread - b.spread : b.spread - a.spread);
+		candidates.sort((a, b) => isLms ? b.spread - a.spread : a.spread - b.spread);
 
 		const recs: typeof candidates = [];
 		for (const c of candidates) {

@@ -602,7 +602,7 @@
 																</p>
 															</div>
 															<div class="shrink-0 text-right">
-																<p class="text-sm font-semibold {isLms ? (rec.spread < 0 ? 'text-[#c9a84c]' : 'text-gray-400') : (rec.spread > 0 ? 'text-[#c9a84c]' : 'text-gray-400')}">
+																<p class="text-sm font-semibold {isLms ? (rec.spread > 0 ? 'text-[#c9a84c]' : 'text-gray-400') : (rec.spread < 0 ? 'text-[#c9a84c]' : 'text-gray-400')}">
 																	{spreadDisplay(rec.spread)}
 																</p>
 																{#if rec.moneyline != null}
@@ -741,7 +741,9 @@
 																		<span class="text-xs flex-1">{team.city} {team.name}</span>
 																		{#if teamSpread != null && !usedOther}
 																			<span class="text-[10px] font-semibold tabular-nums
-																				{teamSpread > 3 ? 'text-[#c9a84c]' : teamSpread < -3 ? 'text-gray-600' : 'text-gray-500'}">
+																				{isLms
+																					? teamSpread > 3 ? 'text-[#c9a84c]' : teamSpread < -3 ? 'text-gray-600' : 'text-gray-500'
+																					: teamSpread < -3 ? 'text-[#c9a84c]' : teamSpread > 3 ? 'text-gray-600' : 'text-gray-500'}">
 																				{spreadDisplay(teamSpread)}
 																			</span>
 																		{/if}
