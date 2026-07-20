@@ -97,7 +97,7 @@
 
 			<!-- Season -->
 			<div class="p-5 text-center sm:border-r sm:border-[rgba(201,168,76,0.15)]">
-				<div class="text-2xl font-bold text-[#c9a84c]">2025 NFL</div>
+				<div class="text-2xl font-bold text-[#c9a84c]">2026 NFL</div>
 				<div class="mt-1 text-sm text-gray-400">Season</div>
 			</div>
 
