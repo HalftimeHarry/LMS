@@ -141,6 +141,18 @@
 
 	const pickView = $derived((data as any).pickView as 'entries' | 'standings');
 
+	function seasonSpanLabel(season: any): string | null {
+		if (!season) return null;
+
+		const nameMatch = String(season.name ?? '').match(/(20\d{2})\s*-\s*(20\d{2})/);
+		if (nameMatch) return `${nameMatch[1]}–${nameMatch[2]}`;
+
+		const endYear = Number(season.year);
+		if (!Number.isFinite(endYear) || endYear <= 0) return null;
+
+		return `${endYear - 1}–${endYear}`;
+	}
+
 	function pickLink(entry: any): string {
 		if (pickView === 'standings') {
 			const pool = entry.entryType === 'lms' ? 'lms' : 'second_half';
@@ -435,8 +447,8 @@
 	<div class="mb-4 flex items-center justify-between">
 		<div class="flex items-center gap-2">
 			<h2 class="text-xl font-bold text-white">My Entries
-			{#if selectedGroup?.season?.year}
-				<span class="ml-1 text-base font-normal text-gray-500">{selectedGroup.season.year}–{Number(selectedGroup.season.year)+1}</span>
+			{#if seasonSpanLabel(selectedGroup?.season)}
+				<span class="ml-1 text-base font-normal text-gray-500">{seasonSpanLabel(selectedGroup?.season)}</span>
 			{/if}
 		</h2>
 			<InfoTip text="Each entry is an independent shot at the pool. You can hold multiple entries. Click an entry to view its pick history and submit your weekly pick. Tip: use 'Pick from Standings' to see every player's picks side-by-side — it's easier to spot which of your entries still needs a pick and how your choice stacks up against the field." />
@@ -506,7 +518,7 @@
 						<div class="min-w-0">
 							<div class="flex flex-wrap items-center gap-2">
 								<span class="font-semibold text-white">
-									{group.season.year ? `${group.season.year}–${Number(group.season.year)+1}` : group.season.name}
+									{seasonSpanLabel(group.season) ?? group.season.name}
 								</span>
 								{#if currentWeek}
 									<span class="rounded border border-gray-800 px-2 py-0.5 text-xs {weekStatusColors[currentWeek.status] ?? 'text-gray-500'}">
