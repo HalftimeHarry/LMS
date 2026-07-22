@@ -178,7 +178,7 @@
 <svelte:head><title>Dashboard — LMS Pool</title></svelte:head>
 
 <!-- ── Single dashboard card ──────────────────────────────────────────────── -->
-<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden"
+<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-visible"
 	style="background: radial-gradient(ellipse at 0% 50%, rgba(201,168,76,0.04) 0%, transparent 60%), #0a0a0a;">
 
 <!-- Welcome -->
@@ -350,7 +350,7 @@
 		{@const h = live ? Math.floor((diff % 86_400_000) / 3_600_000) : 0}
 		{@const m = live ? Math.floor((diff % 3_600_000)  /    60_000) : 0}
 		{@const s = live ? Math.floor((diff % 60_000)     /     1_000) : 0}
-		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm">
+		<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition-[z-index] hover:z-20 focus-within:z-20">
 			<div class="mb-3 flex items-center gap-2 border-b border-[rgba(201,168,76,0.1)] pb-3">
 				<span class="text-[10px] font-bold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Last Man Standing</span>
 				<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="text-red-400 font-medium">LOSER</span></span>
@@ -370,7 +370,7 @@
 					{/if}
 					<div class="flex items-center gap-1.5">
 						<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}</span>
-						<InfoTip text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
+						<InfoTip placement="left" text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
 					</div>
 				</div>
 			</div>
@@ -397,7 +397,7 @@
 		{@const h2 = live2 ? Math.floor((diff2 % 86_400_000) / 3_600_000) : 0}
 		{@const m2 = live2 ? Math.floor((diff2 % 3_600_000)  /    60_000) : 0}
 		{@const s2 = live2 ? Math.floor((diff2 % 60_000)     /     1_000) : 0}
-		<div class="rounded-xl border border-blue-900/40 bg-black/75 p-5 backdrop-blur-sm">
+		<div class="relative rounded-xl border border-blue-900/40 bg-black/75 p-5 backdrop-blur-sm transition-[z-index] hover:z-20 focus-within:z-20">
 			<div class="mb-3 flex items-center gap-2 border-b border-blue-900/20 pb-3">
 				<span class="text-[10px] font-bold uppercase tracking-widest text-blue-500/60">Second Half Pool</span>
 				<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="text-green-400 font-medium">WINNER</span> · {shBeforeStart ? `Picks start Wk ${shStartWeek}` : (shCw.week >= 10 ? '10+ = 2 picks' : '6–9 = 1 pick')}</span>
@@ -419,7 +419,7 @@
 						<span class="text-sm font-medium {shBeforeStart ? (live2 ? 'text-green-400' : 'text-gray-500') : (weekStatusColors[shCw.status] ?? 'text-gray-400')}">
 							{shBeforeStart ? (live2 ? 'OPEN' : 'CLOSED') : (weekStatusLabels[shCw.status] ?? shCw.status.toUpperCase())}
 						</span>
-						<InfoTip text="OPEN — registration accepted until the Week 6 deadline. Once picks start at Week 6, pick the WINNER each week. Weeks 6–9 = 1 pick, Week 10+ = 2 picks." />
+						<InfoTip placement="left" text="OPEN — registration accepted until the Week 6 deadline. Once picks start at Week 6, pick the WINNER each week. Weeks 6–9 = 1 pick, Week 10+ = 2 picks." />
 					</div>
 				</div>
 			</div>
