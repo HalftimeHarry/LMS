@@ -12,6 +12,7 @@
 	function fmtGameTime(iso: string | null | undefined): string {
 		if (!iso) return '\u2014';
 		return new Date(iso).toLocaleString('en-US', {
+			timeZone: 'America/New_York',
 			weekday: 'short', month: 'short', day: 'numeric',
 			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
 		});

@@ -91,11 +91,15 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 export const actions: Actions = {
 	/** Save spread + moneylines for one or more games */
-	saveOdds: async ({ request }) => {
+	saveOdds: async ({ request, locals }) => {
+		if (locals.role !== 'pool_admin') {
+			return fail(403, { error: 'Only pool admins can edit odds.' });
+		}
+
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
-		// Form sends: gameId_homeSpread, gameId_homeMoneyline, gameId_awayMoneyline
+		// Form sends: gameId_homeSpread, gameId_homeMoneyline, gameId_awayMoneyline, gameId_gameTime, gameId_notes
 		const gameIds = [...new Set(
 			[...data.keys()]
 				.filter(k => k.includes('_'))
@@ -109,12 +113,26 @@ export const actions: Actions = {
 			const homeSpread    = data.get(`${id}_homeSpread`);
 			const homeMoneyline = data.get(`${id}_homeMoneyline`);
 			const awayMoneyline = data.get(`${id}_awayMoneyline`);
+			const gameTimeRaw   = data.get(`${id}_gameTime`);
+			const notesRaw      = data.get(`${id}_notes`);
+
+			let gameTime: string | null = null;
+			if (gameTimeRaw != null && String(gameTimeRaw).trim() !== '') {
+				const parsed = new Date(String(gameTimeRaw));
+				if (Number.isNaN(parsed.getTime())) {
+					errors.push(`${id}: invalid game time`);
+					continue;
+				}
+				gameTime = parsed.toISOString();
+			}
 
 			try {
 				await pb.collection('game_odds').update(id, {
 					homeSpread:    homeSpread    !== '' && homeSpread    != null ? Number(homeSpread)    : null,
 					homeMoneyline: homeMoneyline !== '' && homeMoneyline != null ? Number(homeMoneyline) : null,
 					awayMoneyline: awayMoneyline !== '' && awayMoneyline != null ? Number(awayMoneyline) : null,
+					gameTime,
+					notes: notesRaw != null && String(notesRaw).trim() !== '' ? String(notesRaw).trim() : null,
 				});
 				saved++;
 			} catch (e: any) {
@@ -128,16 +146,15 @@ export const actions: Actions = {
 
 	/** Toggle isActive for all games in a week */
 	activateWeek: async ({ request, locals }) => {
+		if (locals.role !== 'pool_admin') {
+			return fail(403, { error: 'Only pool admins can edit odds.' });
+		}
+
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const seasonId = data.get('seasonId') as string;
 		const weekNum  = Number(data.get('week'));
 		const activate = data.get('activate') === 'true';
-
-		// Only super_admin can deactivate; any admin can activate
-		if (!activate && locals.role !== 'super_admin') {
-			return fail(403, { error: 'Only super admins can deactivate a week.' });
-		}
 
 		const games = await pb.collection('game_odds').getFullList({
 			filter: `season = "${seasonId}" && week = ${weekNum}`,
@@ -152,7 +169,11 @@ export const actions: Actions = {
 	},
 
 	/** Set biggestFavoriteTeam on the weekly_settings record from odds data */
-	applyAutoPickFromOdds: async ({ request }) => {
+	applyAutoPickFromOdds: async ({ request, locals }) => {
+		if (locals.role !== 'pool_admin') {
+			return fail(403, { error: 'Only pool admins can edit odds.' });
+		}
+
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const weekSettingId = data.get('weekSettingId') as string;

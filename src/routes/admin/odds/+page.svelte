@@ -91,6 +91,14 @@
 		if (ml == null) return '';
 		return ml > 0 ? `+${ml}` : String(ml);
 	}
+
+	function toDatetimeLocalValue(iso: string | null | undefined): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+		return local.toISOString().slice(0, 16);
+	}
 </script>
 
 <svelte:head><title>Manage Odds — Admin</title></svelte:head>
@@ -278,7 +286,7 @@
 			<!-- Header row -->
 			<div class="grid grid-cols-[1fr_auto_auto_auto_auto_auto_auto] items-center gap-x-2 border-b border-gray-800 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-gray-500">
 				<span>Matchup</span>
-				<span class="w-32 text-center">Time</span>
+				<span class="w-44 text-center">Kickoff</span>
 				<span class="w-20 text-center">Spread</span>
 				<span class="w-20 text-center">Home ML</span>
 				<span class="w-20 text-center">Away ML</span>
@@ -335,16 +343,21 @@
 						<p class="mt-0.5 text-xs text-gray-600">{away?.city} {away?.name} at {home?.city} {home?.name}</p>
 					</div>
 
-					<!-- Game time -->
-					<div class="w-32 text-center text-xs text-gray-500">
-						{#if game.gameTime}
-							{new Date(game.gameTime).toLocaleString('en-US', {
-								weekday: 'short', month: 'short', day: 'numeric',
-								hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-							})}
-						{:else}
-							TBD
-						{/if}
+					<!-- Game time + note editable -->
+					<div class="w-44">
+						<input
+							type="datetime-local"
+							name="{game.id}_gameTime"
+							value={toDatetimeLocalValue(game.gameTime)}
+							class="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs text-white focus:border-[#c9a84c] focus:outline-none"
+						/>
+						<input
+							type="text"
+							name="{game.id}_notes"
+							value={game.notes ?? ''}
+							placeholder="Optional note"
+							class="mt-1 w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-[10px] text-gray-300 focus:border-[#c9a84c] focus:outline-none"
+						/>
 					</div>
 
 					<!-- Spread -->

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import archer from '$lib/assets/lms_images/archer_2_1.png';
 	import type { PageData } from './$types';
 
@@ -6,6 +7,8 @@
 
 	const season       = $derived((data as any).season as any);
 	const week6Deadline = $derived((data as any).week6Deadline as string | null);
+	const week6Id = $derived((data as any).week6Id as string | null);
+	const canEditRules = $derived(!!(data as any).canEditRules);
 
 	// Format a date string for display: "Thursday, September 4, 2027 at 3:00 PM PST"
 	function fmtDeadline(iso: string | null | undefined): string {
@@ -30,6 +33,78 @@
 	const lmsFee          = $derived(season?.lmsEntryFee        ?? 100);
 	const shFee           = $derived(season?.secondHalfEntryFee ?? 50);
 	const shDeadline      = $derived(fmtDeadline(week6Deadline));
+
+	const defaultWinners = [
+		{ year: '2022', winner: 'McLovin', location: 'San Diego, CA', payout: '$20,500' },
+		{ year: '2023', winner: 'JACDAR', location: 'New Orleans, LA', payout: '$25,400' },
+		{ year: '2024', winner: 'PhoebeD, T-Bone & Guillermo', location: 'Split pot', payout: '$28,800 total' },
+		{ year: '2025', winner: 'ereiz03, PaulH, quinn3443 & themilkman805', location: 'Split pot', payout: '$7,000 each' },
+	];
+
+	function parsePastWinners(raw: string | null | undefined) {
+		if (!raw) return defaultWinners;
+		try {
+			const parsed = JSON.parse(raw);
+			if (!Array.isArray(parsed)) return defaultWinners;
+			const cleaned = parsed
+				.map((w: any) => ({
+					year: String(w?.year ?? '').trim(),
+					winner: String(w?.winner ?? '').trim(),
+					location: String(w?.location ?? '').trim(),
+					payout: String(w?.payout ?? '').trim(),
+				}))
+				.filter((w: any) => w.year && w.winner);
+			return cleaned.length ? cleaned : defaultWinners;
+		} catch {
+			return defaultWinners;
+		}
+	}
+
+	const pastWinners = $derived(parsePastWinners(season?.pastWinnersJson));
+	const rulesDeadlineNote = $derived(
+		season?.rulesDeadlineNote?.trim() || 'Picks need to be in by 9:55 AM EST.'
+	);
+	const winnersLocationNote = $derived(
+		season?.winnersLocationNote?.trim() ||
+		'Our recent winners are spread across the country, including military players serving overseas.'
+	);
+
+	function toDatetimeLocalValue(iso: string | null | undefined): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return '';
+		const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+		return local.toISOString().slice(0, 16);
+	}
+
+	let editingRules = $state(false);
+	let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
+	let saveError = $state('');
+
+	let firstPickDeadlineInput = $state(toDatetimeLocalValue(season?.firstPickDeadline));
+	let secondHalfDeadlineInput = $state(toDatetimeLocalValue(week6Deadline));
+	let rulesDeadlineNoteInput = $state(season?.rulesDeadlineNote?.trim() || '');
+	let winnersLocationNoteInput = $state(season?.winnersLocationNote?.trim() || '');
+	let winnersInput = $state(
+		pastWinners.map((w: any) => ({ ...w }))
+	);
+
+	$effect(() => {
+		if (editingRules) return;
+		firstPickDeadlineInput = toDatetimeLocalValue(season?.firstPickDeadline);
+		secondHalfDeadlineInput = toDatetimeLocalValue(week6Deadline);
+		rulesDeadlineNoteInput = season?.rulesDeadlineNote?.trim() || '';
+		winnersLocationNoteInput = season?.winnersLocationNote?.trim() || '';
+		winnersInput = pastWinners.map((w: any) => ({ ...w }));
+	});
+
+	function addWinnerRow() {
+		winnersInput = [...winnersInput, { year: '', winner: '', location: '', payout: '' }];
+	}
+
+	function removeWinnerRow(index: number) {
+		winnersInput = winnersInput.filter((_, i) => i !== index);
+	}
 </script>
 
 <svelte:head>
@@ -102,7 +177,131 @@
 
 <!-- Rules -->
 <section class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm md:p-8">
-	<h2 class="mb-5 text-xl font-bold text-[#c9a84c]">Last Man Standing Rules</h2>
+	<div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+		<h2 class="text-xl font-bold text-[#c9a84c]">Last Man Standing Rules</h2>
+		{#if canEditRules}
+			<button
+				type="button"
+				onclick={() => {
+					editingRules = !editingRules;
+					saveState = 'idle';
+					saveError = '';
+				}}
+				class="rounded border border-[rgba(201,168,76,0.45)] bg-[rgba(201,168,76,0.09)] px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.16)]"
+			>
+				{editingRules ? 'Close Edit Panel' : 'Edit Rules and Winners'}
+			</button>
+		{/if}
+	</div>
+
+	{#if canEditRules && editingRules}
+		<form
+			method="POST"
+			action="?/updateRulesContent"
+			use:enhance={() => {
+				saveState = 'saving';
+				saveError = '';
+				return async ({ result, update }) => {
+					await update({ reset: false });
+					if (result.type === 'success') {
+						saveState = 'saved';
+						editingRules = false;
+					} else {
+						saveState = 'error';
+						saveError = (result.type === 'failure' ? (result.data as any)?.error : '') || 'Save failed.';
+					}
+				};
+			}}
+			class="mb-5 rounded-lg border border-[rgba(201,168,76,0.25)] bg-black/60 p-4"
+		>
+			<input type="hidden" name="seasonId" value={season?.id ?? ''} />
+			<input type="hidden" name="shWeekId" value={week6Id ?? ''} />
+			<div class="grid gap-4 md:grid-cols-2">
+				<div>
+					<label for="firstPickDeadline" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">First Pick Deadline</label>
+					<input
+						id="firstPickDeadline"
+						type="datetime-local"
+						name="firstPickDeadline"
+						bind:value={firstPickDeadlineInput}
+						class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+					/>
+				</div>
+				<div>
+					<label for="secondHalfDeadline" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Second Half Entry Deadline</label>
+					<input
+						id="secondHalfDeadline"
+						type="datetime-local"
+						name="secondHalfDeadline"
+						bind:value={secondHalfDeadlineInput}
+						class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+					/>
+				</div>
+			</div>
+
+			<div class="mt-4">
+				<label for="rulesDeadlineNote" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Rules Deadline Note</label>
+				<textarea
+					id="rulesDeadlineNote"
+					name="rulesDeadlineNote"
+					rows="2"
+					bind:value={rulesDeadlineNoteInput}
+					placeholder="Example: Picks need to be in by 9:55 AM EST."
+					class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+				></textarea>
+			</div>
+
+			<div class="mt-4">
+				<label for="winnersLocationNote" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Winner Location Message</label>
+				<textarea
+					id="winnersLocationNote"
+					name="winnersLocationNote"
+					rows="2"
+					bind:value={winnersLocationNoteInput}
+					placeholder="Example: Winners are across the country and military overseas."
+					class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+				></textarea>
+			</div>
+
+			<div class="mt-4">
+				<div class="mb-2 flex items-center justify-between gap-2">
+					<p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Past Winners</p>
+					<button type="button" onclick={addWinnerRow}
+						class="rounded border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition hover:border-gray-500 hover:text-white">+ Add winner</button>
+				</div>
+				<div class="space-y-2">
+					{#each winnersInput as winner, i}
+						<div class="grid grid-cols-1 gap-2 rounded border border-gray-800 bg-gray-900/60 p-2 md:grid-cols-[96px_1fr_1fr_120px_auto]">
+							<input type="text" name="winnerYear" bind:value={winner.year} placeholder="Year"
+								class="rounded border border-gray-700 bg-black/60 px-2 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none" />
+							<input type="text" name="winnerName" bind:value={winner.winner} placeholder="Winner"
+								class="rounded border border-gray-700 bg-black/60 px-2 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none" />
+							<input type="text" name="winnerLocation" bind:value={winner.location} placeholder="Location"
+								class="rounded border border-gray-700 bg-black/60 px-2 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none" />
+							<input type="text" name="winnerPayout" bind:value={winner.payout} placeholder="Payout"
+								class="rounded border border-gray-700 bg-black/60 px-2 py-1.5 text-xs text-white focus:border-[#c9a84c] focus:outline-none" />
+							<button type="button" onclick={() => removeWinnerRow(i)}
+								class="rounded border border-red-900 px-2 py-1 text-xs text-red-400 transition hover:bg-red-950/40">Remove</button>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<div class="mt-4 flex items-center gap-3">
+				<button type="submit"
+					class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-4 py-2 text-sm font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.18)]">
+					{saveState === 'saving' ? 'Saving...' : 'Save Changes'}
+				</button>
+				{#if saveState === 'saved'}
+					<span class="text-xs text-green-400">Saved.</span>
+				{/if}
+				{#if saveState === 'error'}
+					<span class="text-xs text-red-400">{saveError}</span>
+				{/if}
+			</div>
+		</form>
+	{/if}
+
 	<ol class="space-y-4">
 		{#each [
 			{ rule: 'Pick one NFL team each week to <strong class="text-white">LOSE</strong> their game outright — no point spread.' },
@@ -125,7 +324,7 @@
 
 	<div class="mt-6 rounded-lg border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.05)] p-4 text-sm text-gray-300">
 		<strong class="text-[#c9a84c]">First pick deadline:</strong> {pickDeadline}.
-		It is your responsibility to get your pick in on time.
+		It is your responsibility to get your pick in on time. {rulesDeadlineNote}
 	</div>
 </section>
 
@@ -142,7 +341,7 @@
 			{ rule: 'Once you use a team you <strong class="text-white">cannot use that team again</strong> for the rest of the season.' },
 			{ rule: 'If the team you picked <strong class="text-white">LOSES</strong> its game, you are eliminated.' },
 			{ rule: '<strong class="text-white">Weeks 6–9:</strong> pick <strong class="text-white">1 team</strong> per week. From <strong class="text-white">Week 10 onward:</strong> pick <strong class="text-white">2 teams</strong> per week — both must win.' },
-			{ rule: 'All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. Missed picks receive the biggest favourite automatically.' },
+			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. Missed picks receive the biggest favourite automatically. ${rulesDeadlineNote}` },
 			{ rule: 'Pool runs through the <strong class="text-white">NFL regular season only</strong>.' },
 		] as item, i}
 			<li class="flex gap-4 text-sm text-gray-300">
@@ -174,7 +373,7 @@
 				the first week's deadline is <strong class="text-white">{pickDeadline}</strong>.
 				After the deadline passes you can log in and see everyone's picks. The site will not show
 				other players' picks until after the deadline — but you can change your own pick up until then.
-				Results and commentary are sent by email on Tuesday after each week's results.
+				Results and commentary are sent by email on Tuesday after each week's results. {rulesDeadlineNote}
 			</p>
 		</div>
 		<div>
@@ -191,12 +390,7 @@
 <section class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm md:p-8">
 	<h2 class="mb-5 text-xl font-bold text-[#c9a84c]">Past Winners</h2>
 	<div class="space-y-3">
-		{#each [
-			{ year: '2022', winner: 'McLovin',                        location: 'San Diego, CA',       payout: '$20,500' },
-			{ year: '2023', winner: 'JACDAR',                         location: 'New Orleans, LA',     payout: '$25,400' },
-			{ year: '2024', winner: 'PhoebeD, T-Bone & Guillermo',    location: 'Split pot',           payout: '$28,800 total' },
-			{ year: '2025', winner: 'ereiz03, PaulH, quinn3443 & themilkman805', location: 'Split pot', payout: '$7,000 each' },
-		] as w}
+		{#each pastWinners as w}
 			<div class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3">
 				<div>
 					<span class="mr-3 text-xs font-bold text-[#c9a84c]">{w.year}</span>
@@ -207,6 +401,7 @@
 			</div>
 		{/each}
 	</div>
+	<p class="mt-4 text-sm text-gray-300">{winnersLocationNote}</p>
 	<p class="mt-4 text-center text-sm text-gray-400">
 		Last season we had <strong class="text-white">288 entries</strong>. Let's do more this year!
 	</p>

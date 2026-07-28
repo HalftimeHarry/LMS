@@ -577,7 +577,6 @@
 					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
 						<!-- Sticky entry column -->
 						<th class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-3 text-left w-44">Entry</th>
-						<th class="px-3 py-3 text-left whitespace-nowrap">Status</th>
 
 						<!-- Past-deadline weeks — picks visible to all -->
 						{#each visibleWeeks as week}
@@ -618,7 +617,16 @@
 											{entry.entryName}
 											{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
 										</p>
-										<p class="text-xs text-gray-500">{entry.expand?.user?.displayName ?? ''}</p>
+										<p class="text-xs text-gray-500">
+											{entry.expand?.user?.displayName ?? ''}
+											<span class="ml-2 {statusColors[entry.status] ?? 'text-gray-400'}">
+												{entry.status === 'active'
+													? 'Active'
+													: entry.status === 'winner'
+														? 'Winner'
+														: `Out Wk ${entry.eliminatedWeek ?? '?'}`}
+											</span>
+										</p>
 									</div>
 									{#if needsPick}
 										<a href="/dashboard/entries/{entry.id}"
@@ -627,17 +635,6 @@
 										</a>
 									{/if}
 								</div>
-							</td>
-
-							<!-- Status -->
-							<td class="px-3 py-2.5 whitespace-nowrap">
-								<span class="text-xs font-medium {statusColors[entry.status] ?? 'text-gray-400'}">
-									{entry.status === 'active'
-										? '● Active'
-										: entry.status === 'winner'
-											? '🏆'
-											: `Out Wk ${entry.eliminatedWeek ?? '?'}`}
-								</span>
 							</td>
 
 							<!-- Past-deadline pick cells (visible to everyone) -->
@@ -717,7 +714,7 @@
 
 					{#if filteredEntries().length === 0}
 						<tr>
-							<td colspan={2 + visibleWeeks.length + openWeeks.length}
+							<td colspan={1 + visibleWeeks.length + openWeeks.length}
 								class="px-4 py-8 text-center text-sm text-gray-600">
 								No entries match your filters.
 							</td>
