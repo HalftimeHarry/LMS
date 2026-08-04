@@ -55,6 +55,49 @@
 					</p>
 				</div>
 
+				<div class="rounded-lg border border-[rgba(201,168,76,0.25)] bg-[rgba(201,168,76,0.05)] px-5 py-4">
+					<h3 class="text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Deadline Truth Source and Troubleshooting</h3>
+					<p class="mt-2 text-sm leading-relaxed text-gray-300">
+						If a countdown clock, lock time, or registration cutoff looks wrong, treat this section as the source of truth.
+					</p>
+					<div class="mt-4 space-y-3 text-sm text-gray-400">
+						<p>
+							<span class="font-semibold text-white">1) What controls cutoffs:</span>
+							The <span class="text-gray-300">first active kickoff in game odds</span> for that week,
+							then <span class="text-gray-300">minus 20 minutes</span>.
+						</p>
+						<p>
+							<span class="font-semibold text-white">2) LMS cutoff:</span>
+							Week 1 first kickoff minus 20 minutes.
+							<span class="text-gray-300">Example:</span> 5:20 PM PT kickoff => 5:00 PM PT cutoff.
+						</p>
+						<p>
+							<span class="font-semibold text-white">3) 2nd Half cutoff:</span>
+							Second-half start week first kickoff (normally Week 6) minus 20 minutes.
+						</p>
+						<p>
+							<span class="font-semibold text-white">4) Why mismatches happen:</span>
+							When a kickoff timestamp in odds is wrong (timezone or UTC conversion), every downstream clock and cutoff will be wrong by the same amount.
+						</p>
+						<p>
+							<span class="font-semibold text-white">5) What to verify first:</span>
+							In <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>, confirm the week is active and the earliest game time is correct.
+							Then check <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> to confirm the displayed deadline lines up with kickoff minus 20 minutes.
+						</p>
+						<p>
+							<span class="font-semibold text-white">6) Lock behavior:</span>
+							At deadline, the scheduler marks the week <span class="text-yellow-400">locked</span> and auto-picks missing entries.
+							If odds are missing or inactive, auto-picks do not fire.
+						</p>
+						<p>
+							<span class="font-semibold text-white">7) Emergency fix path:</span>
+							If kickoff data is wrong, correct odds first, then adjust the week deadline in
+							<a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> before kickoff.
+							If already locked and a correction is needed, follow the override process in the Weekly Management tab and document the exception.
+						</p>
+					</div>
+				</div>
+
 				<div>
 					<h3 class="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">Week status progression</h3>
 					<div class="flex flex-col gap-2">
@@ -168,6 +211,46 @@
 			</div>
 			{:else if activeTab === 'weekly'}
 			<div class="flex flex-col gap-10">
+
+				<div class="rounded-lg border border-[rgba(201,168,76,0.25)] bg-[rgba(201,168,76,0.05)] px-5 py-4">
+					<h3 class="text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Deadline Truth Source and Troubleshooting</h3>
+					<p class="mt-2 text-sm leading-relaxed text-gray-300">
+						Use this before each lock if a countdown, deadline, or status looks off.
+					</p>
+					<div class="mt-4 space-y-3 text-sm text-gray-400">
+						<p>
+							<span class="font-semibold text-white">1) Cutoff source:</span>
+							Earliest active kickoff in odds for that week, then minus 20 minutes.
+						</p>
+						<p>
+							<span class="font-semibold text-white">2) LMS rule:</span>
+							Week 1 first kickoff minus 20 minutes.
+						</p>
+						<p>
+							<span class="font-semibold text-white">3) 2nd Half rule:</span>
+							Start-week first kickoff (normally Week 6) minus 20 minutes.
+						</p>
+						<p>
+							<span class="font-semibold text-white">4) Common mismatch cause:</span>
+							Wrong kickoff timestamp or timezone conversion in odds data.
+						</p>
+						<p>
+							<span class="font-semibold text-white">5) Verify order:</span>
+							Check earliest kickoff in <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>,
+							then confirm the week deadline in <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a>.
+						</p>
+						<p>
+							<span class="font-semibold text-white">6) Lock behavior:</span>
+							At deadline the scheduler locks the week and auto-picks missing entries.
+							No active odds means no auto-picks.
+						</p>
+						<p>
+							<span class="font-semibold text-white">7) Emergency fix:</span>
+							Correct odds first, then adjust deadline in Season Settings before kickoff.
+							If locked already, follow override steps and document the exception.
+						</p>
+					</div>
+				</div>
 
 				<!-- Task 1: Odds -->
 				<div>

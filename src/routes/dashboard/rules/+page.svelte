@@ -33,6 +33,29 @@
 	const lmsFee          = $derived(season?.lmsEntryFee        ?? 100);
 	const shFee           = $derived(season?.secondHalfEntryFee ?? 50);
 	const shDeadline      = $derived(fmtDeadline(week6Deadline));
+	const shStartWeek     = $derived(season?.secondHalfStartWeek ?? 6);
+	const lmsStartWeek    = 1;
+	const shDiff          = $derived(week6Deadline ? (new Date(week6Deadline).getTime() - now) : 0);
+	const shLive          = $derived(!!week6Deadline && shDiff > 0);
+	const shUrgent        = $derived(shLive && shDiff < 3_600_000);
+	const shDays          = $derived(shLive ? Math.floor(shDiff / 86_400_000) : 0);
+	const shHours         = $derived(shLive ? Math.floor((shDiff % 86_400_000) / 3_600_000) : 0);
+	const shMinutes       = $derived(shLive ? Math.floor((shDiff % 3_600_000) / 60_000) : 0);
+	const shSeconds       = $derived(shLive ? Math.floor((shDiff % 60_000) / 1_000) : 0);
+	const lmsDiff         = $derived(season?.firstPickDeadline ? (new Date(season.firstPickDeadline).getTime() - now) : 0);
+	const lmsLive         = $derived(!!season?.firstPickDeadline && lmsDiff > 0);
+	const lmsUrgent       = $derived(lmsLive && lmsDiff < 3_600_000);
+	const lmsDays         = $derived(lmsLive ? Math.floor(lmsDiff / 86_400_000) : 0);
+	const lmsHours        = $derived(lmsLive ? Math.floor((lmsDiff % 86_400_000) / 3_600_000) : 0);
+	const lmsMinutes      = $derived(lmsLive ? Math.floor((lmsDiff % 3_600_000) / 60_000) : 0);
+	const lmsSeconds      = $derived(lmsLive ? Math.floor((lmsDiff % 60_000) / 1_000) : 0);
+
+	// Live countdown tick for deadline cards
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => { now = Date.now(); }, 1000);
+		return () => clearInterval(id);
+	});
 
 	const defaultWinners = [
 		{ year: '2022', winner: 'McLovin', location: 'San Diego, CA', payout: '$20,500' },
@@ -302,6 +325,43 @@
 		</form>
 	{/if}
 
+	<div class="mb-5 rounded-xl border border-[rgba(201,168,76,0.35)] bg-black/70 p-5 backdrop-blur-sm">
+		<div class="mb-3 flex items-center gap-2 border-b border-[rgba(201,168,76,0.15)] pb-3">
+			<span class="text-[10px] font-bold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Last Man Standing</span>
+			<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="font-medium text-red-400">LOSER</span></span>
+		</div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<p class="text-xl font-bold text-white">Week {lmsStartWeek} start</p>
+				<p class="mt-1 text-xs text-gray-400">
+					Pick deadline:
+					<span class="text-white">{season?.firstPickDeadline
+						? new Date(season.firstPickDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+						: 'TBD'}</span>
+				</p>
+			</div>
+			<div class="flex items-center gap-3">
+				{#if season?.firstPickDeadline && lmsLive}
+					<span class="font-mono text-xl font-bold tabular-nums {lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+						{#if lmsDays > 0}{lmsDays}d {/if}{String(lmsHours).padStart(2, '0')}:{String(lmsMinutes).padStart(2, '0')}:{String(lmsSeconds).padStart(2, '0')}
+					</span>
+				{/if}
+				<span class="text-sm font-medium {season?.firstPickDeadline ? (lmsLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
+					{season?.firstPickDeadline ? (lmsLive ? 'OPEN' : 'CLOSED') : 'TBD'}
+				</span>
+			</div>
+		</div>
+		{#if season?.firstPickDeadline && lmsLive}
+			<p class="mt-3 text-xs {lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
+				Picks are open. Submit or update your pick from each active entry below before the deadline.
+			</p>
+		{:else if season?.firstPickDeadline && !lmsLive}
+			<p class="mt-3 text-xs text-gray-500">Picks are closed for Week {lmsStartWeek}.</p>
+		{:else}
+			<p class="mt-3 text-xs text-gray-500">Week {lmsStartWeek} deadline will appear when it is published.</p>
+		{/if}
+	</div>
+
 	<ol class="space-y-4">
 		{#each [
 			{ rule: 'Pick one NFL team each week to <strong class="text-white">LOSE</strong> their game outright — no point spread.' },
@@ -321,18 +381,50 @@
 			</li>
 		{/each}
 	</ol>
-
-	<div class="mt-6 rounded-lg border border-[rgba(201,168,76,0.2)] bg-[rgba(201,168,76,0.05)] p-4 text-sm text-gray-300">
-		<strong class="text-[#c9a84c]">First pick deadline:</strong> {pickDeadline}.
-		It is your responsibility to get your pick in on time. {rulesDeadlineNote}
-	</div>
 </section>
 
 <!-- Second Half rules -->
 <section class="mb-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-6 backdrop-blur-sm md:p-8">
 	<h2 class="mb-2 text-xl font-bold text-[#c9a84c]">Second Half Pool Rules</h2>
+	<div class="mb-5 rounded-xl border border-blue-900/40 bg-black/70 p-5 backdrop-blur-sm">
+		<div class="mb-3 flex items-center gap-2 border-b border-blue-900/20 pb-3">
+			<span class="text-[10px] font-bold uppercase tracking-widest text-blue-500/60">Second Half Pool</span>
+			<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="font-medium text-green-400">WINNER</span> · Picks start Wk {shStartWeek}</span>
+		</div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div>
+				<p class="text-xl font-bold text-white">Week {shStartWeek} start</p>
+				<p class="mt-1 text-xs text-gray-400">
+					Registration closes:
+					<span class="text-white">{week6Deadline
+						? new Date(week6Deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+						: 'TBD'}</span>
+				</p>
+			</div>
+			<div class="flex items-center gap-3">
+				{#if week6Deadline && shLive}
+					<span class="font-mono text-xl font-bold tabular-nums {shUrgent ? 'text-red-400' : 'text-blue-400'}">
+						{#if shDays > 0}{shDays}d {/if}{String(shHours).padStart(2, '0')}:{String(shMinutes).padStart(2, '0')}:{String(shSeconds).padStart(2, '0')}
+					</span>
+				{/if}
+				<span class="text-sm font-medium {week6Deadline ? (shLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
+					{week6Deadline ? (shLive ? 'OPEN' : 'CLOSED') : 'TBD'}
+				</span>
+			</div>
+		</div>
+		{#if week6Deadline && shLive}
+			<p class="mt-3 text-xs {shUrgent ? 'text-red-400' : 'text-blue-400'}">
+				{shUrgent ? 'Registration closing soon.' : 'Registration is open.'}
+				<a href="/dashboard/entries/new" class="underline hover:opacity-80">Register now →</a>
+			</p>
+		{:else if week6Deadline && !shLive}
+			<p class="mt-3 text-xs text-gray-500">Registration is closed.</p>
+		{:else}
+			<p class="mt-3 text-xs text-gray-500">Registration opens when the Week {shStartWeek} deadline is published.</p>
+		{/if}
+	</div>
 	<p class="mb-4 text-sm text-gray-400">
-		A separate pool that starts at Week 6. Entry deadline: <strong class="text-white">{shDeadline}</strong>.
+		A separate pool that starts at Week {shStartWeek}. Entry deadline: <strong class="text-white">{shDeadline}</strong>.
 		Entry fee: <strong class="text-white">${shFee}</strong>.
 	</p>
 	<ol class="space-y-4">
@@ -370,12 +462,9 @@
 			<p class="mb-1 font-semibold text-white">When do picks need to be submitted?</p>
 			<p class="text-sm text-gray-300">
 				All picks are due by the <strong class="text-white">weekly deadline</strong> with no exceptions —
-				the first week's deadline is
-				<strong class="text-white">Tuesday, September 8, 2026 at 2:55 AM PDT</strong>.
 				After the deadline passes you can log in and see everyone's picks. The site will not show other
 				players' picks until after the deadline — but you can change your own pick up until then.
 				Results and commentary are sent by email on Tuesday after each week's results.
-				Picks need to be in by 9:55 AM EST.
 			</p>
 		</div>
 		<div>
