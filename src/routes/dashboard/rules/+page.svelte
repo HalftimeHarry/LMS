@@ -370,10 +370,12 @@
 			<p class="mb-1 font-semibold text-white">When do picks need to be submitted?</p>
 			<p class="text-sm text-gray-300">
 				All picks are due by the <strong class="text-white">weekly deadline</strong> with no exceptions —
-				the first week's deadline is <strong class="text-white">{pickDeadline}</strong>.
-				After the deadline passes you can log in and see everyone's picks. The site will not show
-				other players' picks until after the deadline — but you can change your own pick up until then.
-				Results and commentary are sent by email on Tuesday after each week's results. {rulesDeadlineNote}
+				the first week's deadline is
+				<strong class="text-white">Tuesday, September 8, 2026 at 2:55 AM PDT</strong>.
+				After the deadline passes you can log in and see everyone's picks. The site will not show other
+				players' picks until after the deadline — but you can change your own pick up until then.
+				Results and commentary are sent by email on Tuesday after each week's results.
+				Picks need to be in by 9:55 AM EST.
 			</p>
 		</div>
 		<div>

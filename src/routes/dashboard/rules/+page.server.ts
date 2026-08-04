@@ -5,7 +5,7 @@ import type { Actions } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const pb = await pbAdmin();
-	const canEditRules = locals.role === 'pool_admin';
+	const canEditRules = locals.role === 'pool_admin' || locals.role === 'super_admin';
 
 	// Fetch the active season for dynamic deadline display
 	const seasons = await pb.collection('seasons')
@@ -31,8 +31,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	updateRulesContent: async ({ request, locals }) => {
-		if (locals.role !== 'pool_admin') {
-			return fail(403, { error: 'Only pool admins can edit rules content.' });
+		if (locals.role !== 'pool_admin' && locals.role !== 'super_admin') {
+			return fail(403, { error: 'Only pool admins or super admins can edit rules content.' });
 		}
 
 		const pb = await pbAdmin();
