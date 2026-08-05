@@ -71,14 +71,6 @@
 				<input id="paymentDeadline" name="paymentDeadline" type="datetime-local"
 					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
 			</div>
-			<div class="flex flex-col gap-1">
-				<div class="flex items-center gap-1.5">
-					<label for="firstPickDeadline" class="text-xs font-medium text-gray-400">First pick deadline</label>
-					<InfoTip text="Kickoff time of the first game in week 1. Entries cannot be deleted after this point. This is also used to gate the delete window on the Entries page." />
-				</div>
-				<input id="firstPickDeadline" name="firstPickDeadline" type="datetime-local"
-					class="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
-			</div>
 		</div>
 
 		<label class="flex cursor-pointer items-center gap-3 text-sm text-gray-300">

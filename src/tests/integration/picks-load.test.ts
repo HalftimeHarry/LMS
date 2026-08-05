@@ -46,6 +46,8 @@ const TEAMS = [
 	{ id: 'teamNE', abbreviation: 'NE', name: 'Patriots', city: 'New England', conference: 'AFC', division: 'East' }
 ];
 
+const FUTURE_KICKOFF = '2099-01-01T12:00:00.000Z';
+
 // ── mock factory ──────────────────────────────────────────────────────────────
 
 function makePb(overrides: {
@@ -67,6 +69,9 @@ function makePb(overrides: {
 			getFirstListItem: week
 				? vi.fn().mockResolvedValue(week)
 				: vi.fn().mockRejectedValue(new Error('no open week'))
+		},
+		game_odds: {
+			getFirstListItem: vi.fn().mockResolvedValue({ game_time_stamp: FUTURE_KICKOFF })
 		},
 		nfl_teams: {
 			getFullList: vi.fn().mockResolvedValue(teams)

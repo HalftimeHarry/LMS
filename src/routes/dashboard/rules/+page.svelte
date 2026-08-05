@@ -6,6 +6,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const season       = $derived((data as any).season as any);
+	const lmsDeadline  = $derived((data as any).lmsDeadline as string | null);
 	const week6Deadline = $derived((data as any).week6Deadline as string | null);
 	const week6Id = $derived((data as any).week6Id as string | null);
 	const canEditRules = $derived(!!(data as any).canEditRules);
@@ -27,7 +28,6 @@
 		});
 	}
 
-	const pickDeadline    = $derived(fmtDeadline(season?.firstPickDeadline));
 	const paymentDeadline = $derived(fmtDate(season?.paymentDeadline));
 	const seasonYear      = $derived(season?.year ? `${season.year}–${Number(season.year)+1}` : '2026–2027');
 	const lmsFee          = $derived(season?.lmsEntryFee        ?? 100);
@@ -42,8 +42,8 @@
 	const shHours         = $derived(shLive ? Math.floor((shDiff % 86_400_000) / 3_600_000) : 0);
 	const shMinutes       = $derived(shLive ? Math.floor((shDiff % 3_600_000) / 60_000) : 0);
 	const shSeconds       = $derived(shLive ? Math.floor((shDiff % 60_000) / 1_000) : 0);
-	const lmsDiff         = $derived(season?.firstPickDeadline ? (new Date(season.firstPickDeadline).getTime() - now) : 0);
-	const lmsLive         = $derived(!!season?.firstPickDeadline && lmsDiff > 0);
+	const lmsDiff         = $derived(lmsDeadline ? (new Date(lmsDeadline).getTime() - now) : 0);
+	const lmsLive         = $derived(!!lmsDeadline && lmsDiff > 0);
 	const lmsUrgent       = $derived(lmsLive && lmsDiff < 3_600_000);
 	const lmsDays         = $derived(lmsLive ? Math.floor(lmsDiff / 86_400_000) : 0);
 	const lmsHours        = $derived(lmsLive ? Math.floor((lmsDiff % 86_400_000) / 3_600_000) : 0);
@@ -104,7 +104,6 @@
 	let saveState = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
 	let saveError = $state('');
 
-	let firstPickDeadlineInput = $state(toDatetimeLocalValue(season?.firstPickDeadline));
 	let secondHalfDeadlineInput = $state(toDatetimeLocalValue(week6Deadline));
 	let rulesDeadlineNoteInput = $state(season?.rulesDeadlineNote?.trim() || '');
 	let winnersLocationNoteInput = $state(season?.winnersLocationNote?.trim() || '');
@@ -114,7 +113,6 @@
 
 	$effect(() => {
 		if (editingRules) return;
-		firstPickDeadlineInput = toDatetimeLocalValue(season?.firstPickDeadline);
 		secondHalfDeadlineInput = toDatetimeLocalValue(week6Deadline);
 		rulesDeadlineNoteInput = season?.rulesDeadlineNote?.trim() || '';
 		winnersLocationNoteInput = season?.winnersLocationNote?.trim() || '';
@@ -239,17 +237,7 @@
 		>
 			<input type="hidden" name="seasonId" value={season?.id ?? ''} />
 			<input type="hidden" name="shWeekId" value={week6Id ?? ''} />
-			<div class="grid gap-4 md:grid-cols-2">
-				<div>
-					<label for="firstPickDeadline" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">First Pick Deadline</label>
-					<input
-						id="firstPickDeadline"
-						type="datetime-local"
-						name="firstPickDeadline"
-						bind:value={firstPickDeadlineInput}
-						class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
-					/>
-				</div>
+			<div class="grid gap-4 md:grid-cols-1">
 				<div>
 					<label for="secondHalfDeadline" class="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Second Half Entry Deadline</label>
 					<input
@@ -335,27 +323,27 @@
 				<p class="text-xl font-bold text-white">Week {lmsStartWeek} start</p>
 				<p class="mt-1 text-xs text-gray-400">
 					Pick deadline:
-					<span class="text-white">{season?.firstPickDeadline
-						? new Date(season.firstPickDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+					<span class="text-white">{lmsDeadline
+						? new Date(lmsDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
 						: 'TBD'}</span>
 				</p>
 			</div>
 			<div class="flex items-center gap-3">
-				{#if season?.firstPickDeadline && lmsLive}
+				{#if lmsDeadline && lmsLive}
 					<span class="font-mono text-xl font-bold tabular-nums {lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
 						{#if lmsDays > 0}{lmsDays}d {/if}{String(lmsHours).padStart(2, '0')}:{String(lmsMinutes).padStart(2, '0')}:{String(lmsSeconds).padStart(2, '0')}
 					</span>
 				{/if}
-				<span class="text-sm font-medium {season?.firstPickDeadline ? (lmsLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
-					{season?.firstPickDeadline ? (lmsLive ? 'OPEN' : 'CLOSED') : 'TBD'}
+				<span class="text-sm font-medium {lmsDeadline ? (lmsLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
+					{lmsDeadline ? (lmsLive ? 'OPEN' : 'CLOSED') : 'TBD'}
 				</span>
 			</div>
 		</div>
-		{#if season?.firstPickDeadline && lmsLive}
+		{#if lmsDeadline && lmsLive}
 			<p class="mt-3 text-xs {lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
 				Picks are open. Submit or update your pick from each active entry below before the deadline.
 			</p>
-		{:else if season?.firstPickDeadline && !lmsLive}
+		{:else if lmsDeadline && !lmsLive}
 			<p class="mt-3 text-xs text-gray-500">Picks are closed for Week {lmsStartWeek}.</p>
 		{:else}
 			<p class="mt-3 text-xs text-gray-500">Week {lmsStartWeek} deadline will appear when it is published.</p>

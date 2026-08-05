@@ -3,6 +3,20 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import { submitPickSchema } from '$lib/schemas';
 import type { Actions, PageServerLoad } from './$types';
 
+async function fetchWeekCutoff(pb: any, seasonId: string, weekNum: number): Promise<Date | null> {
+	const odds = await pb.collection('game_odds').getFirstListItem(
+		`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
+		{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+	).catch(() => null) as any;
+
+	const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+	if (!kickoff) return null;
+
+	const cutoff = new Date(kickoff);
+	cutoff.setMinutes(cutoff.getMinutes() - 30);
+	return cutoff;
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/picks');
 
@@ -33,6 +47,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	} catch { /* no open week */ }
 
 	if (!week) {
+		return {
+			entry,
+			season,
+			week:          null,
+			teams:         [],
+			existingPick:  null,
+			picksRequired: 0
+		};
+	}
+
+	// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+	const cutoff = await fetchWeekCutoff(pb, season.id, week.week);
+	if (cutoff && new Date() >= cutoff) {
 		return {
 			entry,
 			season,
@@ -109,6 +136,11 @@ export const actions: Actions = {
 			return fail(404, { error: 'Week not found.' });
 		}
 		if (week.status !== 'open') {
+			return fail(400, { error: 'The deadline for this week has passed.' });
+		}
+
+		const cutoff = await fetchWeekCutoff(pb, entry.season, week.week);
+		if (cutoff && new Date() >= cutoff) {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 

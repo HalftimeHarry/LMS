@@ -14,19 +14,51 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const season = seasons[0] ?? null;
 
+	// Fetch week 1 kickoff-derived LMS entry cutoff (30 min before first active game)
+	let lmsDeadline: string | null = null;
+	if (season) {
+		const week1Odds = await pb.collection('game_odds')
+			.getFirstListItem(
+				`season = "${season.id}" && week = 1 && isActive = true`,
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			)
+			.catch(() => null) as any;
+
+		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
+		if (kickoff) {
+			const cutoff = new Date(kickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 30);
+			lmsDeadline = cutoff.toISOString();
+		}
+	}
+
 	// Fetch week 6 deadline for 2H entry cutoff
 	let week6Deadline: string | null = null;
 	let week6Id: string | null = null;
 	if (season) {
 		const shStartWeek = season.secondHalfStartWeek ?? 6;
+		const week6Odds = await pb.collection('game_odds')
+			.getFirstListItem(
+				`season = "${season.id}" && week = ${shStartWeek} && isActive = true`,
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			)
+			.catch(() => null) as any;
+
+		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
+		if (week6Kickoff) {
+			const cutoff = new Date(week6Kickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 30);
+			week6Deadline = cutoff.toISOString();
+		}
+
 		const week6 = await pb.collection('weekly_settings')
 			.getFirstListItem(`season = "${season.id}" && week = ${shStartWeek}`, { fields: 'id,deadline' })
 			.catch(() => null) as any;
-		week6Deadline = week6?.deadline ?? null;
+		if (!week6Deadline) week6Deadline = week6?.deadline ?? null;
 		week6Id = week6?.id ?? null;
 	}
 
-	return { season, week6Deadline, week6Id, canEditRules };
+	return { season, lmsDeadline, week6Deadline, week6Id, canEditRules };
 };
 
 export const actions: Actions = {
@@ -42,7 +74,6 @@ export const actions: Actions = {
 		const shWeekId = (data.get('shWeekId') as string | null) ?? '';
 		if (!seasonId) return fail(400, { error: 'Missing season id.' });
 
-		const firstPickDeadlineRaw = (data.get('firstPickDeadline') as string | null) ?? '';
 		const secondHalfDeadlineRaw = (data.get('secondHalfDeadline') as string | null) ?? '';
 		const rulesDeadlineNote = ((data.get('rulesDeadlineNote') as string | null) ?? '').trim();
 		const winnersLocationNote = ((data.get('winnersLocationNote') as string | null) ?? '').trim();
@@ -69,11 +100,6 @@ export const actions: Actions = {
 			return dt.toISOString();
 		};
 
-		const firstPickDeadline = parseLocalDateTime(firstPickDeadlineRaw);
-		if (firstPickDeadlineRaw && !firstPickDeadline) {
-			return fail(400, { error: 'Invalid first pick deadline value.' });
-		}
-
 		const secondHalfDeadline = parseLocalDateTime(secondHalfDeadlineRaw);
 		if (secondHalfDeadlineRaw && !secondHalfDeadline) {
 			return fail(400, { error: 'Invalid second half deadline value.' });
@@ -81,7 +107,6 @@ export const actions: Actions = {
 
 		try {
 			await pb.collection('seasons').update(seasonId, {
-				firstPickDeadline: firstPickDeadline ?? null,
 				rulesDeadlineNote: rulesDeadlineNote || null,
 				winnersLocationNote: winnersLocationNote || null,
 				pastWinnersJson: pastWinners.length ? JSON.stringify(pastWinners) : null,

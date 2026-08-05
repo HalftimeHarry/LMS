@@ -17,7 +17,7 @@
 		'Pick one NFL team each week to <strong>lose</strong> its game outright. No point spread.',
 		'If your team loses — you survive. If your team wins or ties — you are eliminated.',
 		'Each team can only be used <strong>once per entry</strong> per season.',
-		'Picks are due <strong>20 minutes before the first kickoff of the week</strong>. No exceptions.',
+		'Picks are due <strong>30 minutes before the first kickoff of the week</strong>. No exceptions.',
 		'Miss the deadline? You automatically receive the biggest favourite on the board.',
 		'Pool covers the <strong>NFL regular season only</strong>.',
 		'If 5 or fewer entries remain, players may propose a split — all active entries must agree.',

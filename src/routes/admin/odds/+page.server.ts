@@ -51,7 +51,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const games = await pb.collection('game_odds').getFullList({
 		filter: `season = "${activeSeason.id}" && week = ${weekNum}`,
 		expand: 'homeTeam,awayTeam',
-		sort:   'gameTime'
+		sort:   'game_time_stamp'
 	}).catch(() => []) as any[];
 
 	// Week summary — how many games exist and are active per week (for the week nav)
@@ -116,14 +116,14 @@ export const actions: Actions = {
 			const gameTimeRaw   = data.get(`${id}_gameTime`);
 			const notesRaw      = data.get(`${id}_notes`);
 
-			let gameTime: string | null = null;
+			let gameTimeStamp: string | null = null;
 			if (gameTimeRaw != null && String(gameTimeRaw).trim() !== '') {
 				const parsed = new Date(String(gameTimeRaw));
 				if (Number.isNaN(parsed.getTime())) {
 					errors.push(`${id}: invalid game time`);
 					continue;
 				}
-				gameTime = parsed.toISOString();
+				gameTimeStamp = parsed.toISOString();
 			}
 
 			try {
@@ -131,7 +131,7 @@ export const actions: Actions = {
 					homeSpread:    homeSpread    !== '' && homeSpread    != null ? Number(homeSpread)    : null,
 					homeMoneyline: homeMoneyline !== '' && homeMoneyline != null ? Number(homeMoneyline) : null,
 					awayMoneyline: awayMoneyline !== '' && awayMoneyline != null ? Number(awayMoneyline) : null,
-					gameTime,
+					game_time_stamp: gameTimeStamp,
 					notes: notesRaw != null && String(notesRaw).trim() !== '' ? String(notesRaw).trim() : null,
 				});
 				saved++;

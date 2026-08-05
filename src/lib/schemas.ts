@@ -11,7 +11,6 @@ export const seasonSchema = z.object({
 	// LMS always 1 pick/week (pick the loser). Second Half picks winners; default 1, can be 2 or 3.
 	secondHalfPicksPerWeek:  z.coerce.number().int().min(1).max(3).default(1),
 	paymentDeadline:         z.string().optional(),
-	firstPickDeadline:       z.string().optional(),
 	regularSeasonOnly:       z.boolean().default(true),
 	notes:                   z.string().optional(),
 	// Pool toggles — admin can independently open/close each pool

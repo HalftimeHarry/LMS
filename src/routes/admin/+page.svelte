@@ -136,12 +136,6 @@
 					<p class="mt-1 text-sm text-[#c9a84c]">{seasonStatusLabel[s.status] ?? s.status}</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-xs">
-					{#if s.firstPickDeadline}
-						<span class="rounded border border-[rgba(201,168,76,0.3)] bg-black/40 px-3 py-1.5 text-gray-300">
-							First pick: {new Date(s.firstPickDeadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-						</span>
-					{/if}
-
 					{#if isSuperAdmin}
 						<a href="/admin/seasons/{s.id}/edit"
 							class="rounded border border-[rgba(201,168,76,0.5)] bg-[rgba(201,168,76,0.1)] px-3 py-1.5 text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.2)]">

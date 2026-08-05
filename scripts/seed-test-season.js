@@ -9,7 +9,7 @@
  * What it creates:
  *   - A new season record tagged as a test season (name includes "[TEST]")
  *   - 18 weekly_settings records with deadlines spaced by the interval
- *     Deadline = first game kickoff of that week MINUS 20 minutes (compressed)
+ *     Deadline = first game kickoff of that week MINUS 30 minutes (compressed)
  *   - game_odds records cloned from the real 2026 schedule with randomized
  *     spreads/moneylines and game times mapped into the compressed timeline
  *
@@ -147,7 +147,7 @@ const SCHEDULE = [
 // Helpers — create one season record + its weeks + game_odds
 // ---------------------------------------------------------------------------
 async function createSeasonRecord(token, name, isSecondHalf, seasonStart) {
-  const firstPickDeadline = new Date(seasonStart.getTime() + INTERVAL_MS - 20 * 60 * 1000);
+  const firstPaymentDeadline = new Date(seasonStart.getTime() + INTERVAL_MS - 30 * 60 * 1000);
   return post(token, 'seasons', {
     name,
     year:                    2026,
@@ -160,8 +160,7 @@ async function createSeasonRecord(token, name, isSecondHalf, seasonStart) {
     secondHalfEnabled:       isSecondHalf,
     secondHalfStartWeek:     6,
     secondHalfPicksStartWeek: 10,
-    firstPickDeadline:       pbDate(firstPickDeadline),
-    paymentDeadline:         pbDate(firstPickDeadline),
+    paymentDeadline:         pbDate(firstPaymentDeadline),
   });
 }
 
@@ -169,7 +168,7 @@ async function createWeeks(token, seasonId, seasonStart) {
   const recs = [];
   for (let w = 1; w <= 18; w++) {
     const slotStart = new Date(seasonStart.getTime() + (w - 1) * INTERVAL_MS);
-    const deadline  = new Date(slotStart.getTime() + INTERVAL_MS - 20 * 60 * 1000);
+    const deadline  = new Date(slotStart.getTime() + INTERVAL_MS - 30 * 60 * 1000);
     const rec = await post(token, 'weekly_settings', {
       season: seasonId, week: w, status: 'open', deadline: pbDate(deadline),
     });
@@ -197,7 +196,7 @@ async function createOdds(token, seasonId, teamByAbbr, seasonStart) {
         await post(token, 'game_odds', {
           season: seasonId, week: weekData.week,
           homeTeam: homeTeam.id, awayTeam: awayTeam.id,
-          gameTime: pbDate(gameTime),
+          game_time_stamp: pbDate(gameTime),
           homeSpread: spread, homeMoneyline: homeML, awayMoneyline: awayML,
           isActive: true,
         });

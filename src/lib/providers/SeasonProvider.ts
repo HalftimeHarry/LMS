@@ -11,7 +11,6 @@ export interface Season {
 	secondHalfPicksPerWeek:  number;
 	regularSeasonOnly:       boolean;
 	paymentDeadline:         string | null;
-	firstPickDeadline:       string | null;
 	notes:                   string | null;
 	// Pool toggles — may be absent on older records (treat undefined as true/default)
 	lmsEnabled?:              boolean;
@@ -52,16 +51,14 @@ export class SeasonProvider extends BaseProvider {
 	 * LMS entries are open when:
 	 * - lmsEnabled is true (admin toggle)
 	 * - Season status is 'open' (pre-season registration)
-	 * - AND the firstPickDeadline has not yet passed (or is not set)
 	 *
-	 * Once the season goes 'active' the firstPickDeadline has passed,
-	 * so LMS registration closes automatically.
+	 * Deadline enforcement now happens from game_odds kickoff cutoffs
+	 * (30 minutes before first active game for the relevant week).
 	 */
-	static isLmsOpen(season: Season, now = new Date()): boolean {
+	static isLmsOpen(season: Season, _now = new Date()): boolean {
 		if (season.lmsEnabled === false) return false;
 		if (season.status !== 'open') return false;
-		if (!season.firstPickDeadline) return true;
-		return now < new Date(season.firstPickDeadline);
+		return true;
 	}
 
 	/**

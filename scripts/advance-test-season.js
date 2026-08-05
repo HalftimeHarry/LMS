@@ -56,7 +56,7 @@ const INTERVAL_MS = (() => {
 })();
 
 // Phase offsets within each week
-const LOCK_OFFSET    = INTERVAL_MS - 20 * 60 * 1000; // -20 min: lock picks
+const LOCK_OFFSET    = INTERVAL_MS - 30 * 60 * 1000; // -30 min: lock picks
 const RESULTS_OFFSET = INTERVAL_MS - 10 * 60 * 1000; // -10 min: simulate results
 const COMPLETE_OFFSET= INTERVAL_MS -  2 * 60 * 1000; // -2 min:  complete week
 
@@ -293,7 +293,7 @@ async function main() {
   // Determine the season start time from week 1's deadline
   // deadline = slotStart + INTERVAL_MS - 20min  →  slotStart = deadline - INTERVAL_MS + 20min
   const week1Deadline = new Date(allWeeks[0].deadline);
-  const seasonStart   = new Date(week1Deadline.getTime() - INTERVAL_MS + 20 * 60 * 1000);
+  const seasonStart   = new Date(week1Deadline.getTime() - INTERVAL_MS + 30 * 60 * 1000);
 
   log(`Season started at: ${seasonStart.toISOString()}`);
 

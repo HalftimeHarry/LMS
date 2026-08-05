@@ -120,7 +120,7 @@ async function main() {
       name: '2026 - 2027 Second Half', year: 2026, status: 'active',
       lmsEntryFee: 100, secondHalfEntryFee: 50,
       secondHalfPicksPerWeek: 1, regularSeasonOnly: true,
-      firstPickDeadline: pbDate(week1Deadline)
+      paymentDeadline: pbDate(week1Deadline)
     });
     console.log(`Created: ${shSeason.id}`);
   }

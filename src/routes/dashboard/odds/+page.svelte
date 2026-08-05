@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { formatGameTimeForDisplay } from '$lib/utils';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -8,15 +9,6 @@
 	const week       = $derived((data as any).week       as any);
 	const games      = $derived((data as any).games      as any[]);
 	const isLoggedIn = $derived((data as any).isLoggedIn as boolean);
-
-	function fmtGameTime(iso: string | null | undefined): string {
-		if (!iso) return '\u2014';
-		return new Date(iso).toLocaleString('en-US', {
-			timeZone: 'America/New_York',
-			weekday: 'short', month: 'short', day: 'numeric',
-			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-		});
-	}
 
 	function spreadDisplay(val: number | null): string {
 		if (val == null) return '\u2014';
@@ -92,7 +84,7 @@
 				<div class="px-5 py-4">
 					<!-- Game time + notes -->
 					<div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-						<span class="text-xs font-medium text-gray-400">{fmtGameTime(game.gameTime)}</span>
+						<span class="text-xs font-medium text-gray-400">{formatGameTimeForDisplay(game.game_time_stamp ?? game.gameTime)}</span>
 						{#if game.notes}
 							<span class="text-xs text-gray-600 italic">{game.notes}</span>
 						{/if}

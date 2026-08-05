@@ -117,7 +117,7 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval,
 	const paymentMethods = ['check', 'venmo', 'paypal', 'zelle', 'cash'];
 
 	async function createSeason(name: string, isSecondHalf: boolean) {
-		const firstPickDeadline = new Date(seasonStart.getTime() + intervalMs - 20 * 60 * 1000);
+		const firstPaymentDeadline = new Date(seasonStart.getTime() + intervalMs - 30 * 60 * 1000);
 		return pb.collection('seasons').create({
 			name,
 			year:                    2026,
@@ -130,8 +130,7 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval,
 			secondHalfEnabled:       isSecondHalf,
 			secondHalfStartWeek:     6,
 			secondHalfPicksStartWeek: 10,
-			firstPickDeadline:       pbDate(firstPickDeadline),
-			paymentDeadline:         pbDate(firstPickDeadline),
+			paymentDeadline:         pbDate(firstPaymentDeadline),
 		});
 	}
 
@@ -139,7 +138,7 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval,
 		const recs = [];
 		for (let w = 1; w <= 18; w++) {
 			const slotStart = new Date(seasonStart.getTime() + (w - 1) * intervalMs);
-			const deadline  = new Date(slotStart.getTime() + intervalMs - 20 * 60 * 1000);
+			const deadline  = new Date(slotStart.getTime() + intervalMs - 30 * 60 * 1000);
 			const rec = await pb.collection('weekly_settings').create({
 				season: seasonId, week: w, status: 'open', deadline: pbDate(deadline),
 			});
@@ -161,10 +160,11 @@ export async function seedTestSeasonPair(pb: PocketBase, interval: TestInterval,
 				const spread = randomSpread();
 				const { homeML, awayML } = spreadToMoneyline(spread);
 				try {
+					const kickoffIso = pbDate(gameTime);
 					await pb.collection('game_odds').create({
 						season: seasonId, week: weekData.week,
 						homeTeam: homeTeam.id, awayTeam: awayTeam.id,
-						gameTime: pbDate(gameTime),
+						game_time_stamp: kickoffIso,
 						homeSpread: spread, homeMoneyline: homeML, awayMoneyline: awayML,
 						isActive: true,
 					});

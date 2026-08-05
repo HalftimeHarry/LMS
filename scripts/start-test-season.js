@@ -137,7 +137,7 @@ async function main() {
 
   console.log('Timeline per NFL week:');
   console.log(`  T+0                  Week opens — picks accepted, admin can manage entries`);
-  console.log(`  T+${fmt(INTERVAL_MS - 20*60*1000).padEnd(18)} Participant picks LOCKED (20 min before kickoff)`);
+  console.log(`  T+${fmt(INTERVAL_MS - 30*60*1000).padEnd(18)} Participant picks LOCKED (30 min before kickoff)`);
   console.log(`  T+${fmt(INTERVAL_MS -  2*60*1000).padEnd(18)} Admin window closes — results simulated`);
   console.log(`  T+${fmt(INTERVAL_MS).padEnd(18)} Next week opens`);
   console.log('');

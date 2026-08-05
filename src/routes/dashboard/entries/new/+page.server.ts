@@ -1,8 +1,25 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { fail, redirect } from '@sveltejs/kit';
 import { entryRequestSchema } from '$lib/schemas';
-import { SeasonProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
+
+function deriveCutoffFromKickoff(kickoffIso: string): string {
+	const cutoff = new Date(kickoffIso);
+	cutoff.setMinutes(cutoff.getMinutes() - 30);
+	return cutoff.toISOString();
+}
+
+/** Fetch first kickoff for a given week from game_odds (canonical source). */
+async function fetchWeekKickoff(pb: any, seasonId: string, weekNum: number): Promise<string | null> {
+	const odds = await pb.collection('game_odds')
+		.getFirstListItem(
+			`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+		)
+		.catch(() => null) as any;
+
+	return odds?.game_time_stamp ?? odds?.gameTime ?? null;
+}
 
 /** Fetch the week-6 pick deadline for a season (the canonical 2H entry cutoff). */
 async function fetchWeek6Deadline(pb: any, seasonId: string, startWeek = 6): Promise<string | null> {
@@ -15,25 +32,39 @@ async function fetchWeek6Deadline(pb: any, seasonId: string, startWeek = 6): Pro
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/entries/new');
 
-	const pb             = await pbAdmin();
-	const seasonProvider = new SeasonProvider(pb);
+	const pb = await pbAdmin();
 
 	// Fetch all active/open seasons
-	const allSeasons = await seasonProvider.getAll();
+	const allSeasons = await pb.collection('seasons').getFullList({ sort: '-year' }) as any[];
 	const activeSeason = allSeasons.find(s => s.status === 'active' || s.status === 'open') ?? null;
 
 	if (!activeSeason) redirect(302, '/dashboard/entries');
 
-	// Fetch the week-6 deadline from the LMS season (same schedule for both pools)
-	const shStartWeek    = activeSeason.secondHalfStartWeek ?? 6;
-	const week6Deadline  = await fetchWeek6Deadline(pb, activeSeason.id, shStartWeek);
+	const now = new Date();
 
-	const lmsOpen        = SeasonProvider.isLmsOpen(activeSeason);
-	const secondHalfOpen = SeasonProvider.isSecondHalfOpen(activeSeason, undefined, week6Deadline);
+	// Fetch kickoff-derived cutoffs (source of truth)
+	const shStartWeek = activeSeason.secondHalfStartWeek ?? 6;
+	const [week1Kickoff, shKickoff] = await Promise.all([
+		fetchWeekKickoff(pb, activeSeason.id, 1),
+		fetchWeekKickoff(pb, activeSeason.id, shStartWeek)
+	]);
+
+	const lmsDeadline = week1Kickoff ? deriveCutoffFromKickoff(week1Kickoff) : null;
+	const shDeadlineFromOdds = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
+	const shDeadlineFallback = await fetchWeek6Deadline(pb, activeSeason.id, shStartWeek);
+	const week6Deadline = shDeadlineFromOdds ?? shDeadlineFallback;
+
+	const lmsOpen = activeSeason.lmsEnabled !== false
+		&& activeSeason.status === 'open'
+		&& (!lmsDeadline || now < new Date(lmsDeadline));
+
+	const secondHalfOpen = activeSeason.secondHalfEnabled !== false
+		&& activeSeason.status === 'active'
+		&& (!!week6Deadline && now < new Date(week6Deadline));
+
+	const defaultEntryType = lmsOpen ? 'lms' : (secondHalfOpen ? 'second_half' : null);
 
 	if (!lmsOpen && !secondHalfOpen) redirect(302, '/dashboard/entries');
-
-	const defaultEntryType = SeasonProvider.defaultEntryType(activeSeason, new Date(), undefined, week6Deadline);
 	if (!defaultEntryType) redirect(302, '/dashboard/entries');
 
 	return {
@@ -63,18 +94,35 @@ export const actions: Actions = {
 		}
 		const { seasonId, entryType, entryName, referredBy = '' } = parsed.data;
 
-		const seasonProvider = new SeasonProvider(pb);
-		const season = await seasonProvider.getById(seasonId).catch(() => null);
+		const season = await pb.collection('seasons').getOne(seasonId).catch(() => null) as any;
 		if (!season) return fail(400, { error: 'Season not found.' });
 
+		const now = new Date();
+
 		// Enforce entry windows — participants cannot bypass these
-		if (entryType === 'lms' && !SeasonProvider.isLmsOpen(season)) {
-			return fail(400, { error: 'LMS registration is closed. The first pick deadline has passed.' });
+		if (entryType === 'lms') {
+			const week1Kickoff = await fetchWeekKickoff(pb, seasonId, 1);
+			const lmsDeadline = week1Kickoff ? deriveCutoffFromKickoff(week1Kickoff) : null;
+			const lmsOpen = season.lmsEnabled !== false
+				&& season.status === 'open'
+				&& (!lmsDeadline || now < new Date(lmsDeadline));
+			if (!lmsOpen) {
+				return fail(400, { error: 'LMS registration is closed. The first pick deadline has passed.' });
+			}
 		}
+
 		if (entryType === 'second_half') {
 			const shStartWeek   = season.secondHalfStartWeek ?? 6;
-			const week6Deadline = await fetchWeek6Deadline(pb, seasonId, shStartWeek);
-			if (!SeasonProvider.isSecondHalfOpen(season, undefined, week6Deadline)) {
+			const shKickoff = await fetchWeekKickoff(pb, seasonId, shStartWeek);
+			const shDeadlineFromOdds = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
+			const shDeadlineFallback = await fetchWeek6Deadline(pb, seasonId, shStartWeek);
+			const week6Deadline = shDeadlineFromOdds ?? shDeadlineFallback;
+
+			const secondHalfOpen = season.secondHalfEnabled !== false
+				&& season.status === 'active'
+				&& (!!week6Deadline && now < new Date(week6Deadline));
+
+			if (!secondHalfOpen) {
 				const cutoff = week6Deadline ? ` The deadline was ${new Date(week6Deadline).toLocaleDateString()}.` : '';
 				return fail(400, { error: `Second Half registration is closed.${cutoff}` });
 			}

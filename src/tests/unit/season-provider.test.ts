@@ -13,7 +13,6 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
 		secondHalfPicksPerWeek: 1,
 		regularSeasonOnly:      true,
 		paymentDeadline:        null,
-		firstPickDeadline:      null,
 		notes:                  null,
 		...overrides
 	};
@@ -21,22 +20,15 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
 
 // Fixed reference time for deterministic tests
 const NOW = new Date('2027-09-01T12:00:00Z');
-const BEFORE_DEADLINE = new Date('2027-08-15T12:00:00Z'); // before NOW
-const AFTER_DEADLINE  = new Date('2027-09-15T12:00:00Z'); // after NOW
 
 describe('SeasonProvider.isLmsOpen', () => {
 	it('returns true when season is open and no deadline set', () => {
 		expect(SeasonProvider.isLmsOpen(makeSeason({ status: 'open' }), NOW)).toBe(true);
 	});
 
-	it('returns true when season is open and deadline is in the future', () => {
-		const s = makeSeason({ status: 'open', firstPickDeadline: AFTER_DEADLINE.toISOString() });
-		expect(SeasonProvider.isLmsOpen(s, NOW)).toBe(true);
-	});
-
-	it('returns false when season is open but deadline has passed', () => {
-		const s = makeSeason({ status: 'open', firstPickDeadline: BEFORE_DEADLINE.toISOString() });
-		expect(SeasonProvider.isLmsOpen(s, NOW)).toBe(false);
+	it('week 2+ unchanged: LMS remains closed once season status is active', () => {
+		const week2LikeNow = new Date('2027-09-20T12:00:00Z');
+		expect(SeasonProvider.isLmsOpen(makeSeason({ status: 'active' }), week2LikeNow)).toBe(false);
 	});
 
 	it('returns false when season is active (deadline already passed)', () => {
@@ -71,8 +63,8 @@ describe('SeasonProvider.isSecondHalfOpen', () => {
 });
 
 describe('SeasonProvider.defaultEntryType', () => {
-	it('returns lms when season is open and deadline not passed', () => {
-		const s = makeSeason({ status: 'open', firstPickDeadline: AFTER_DEADLINE.toISOString() });
+	it('returns lms when season is open', () => {
+		const s = makeSeason({ status: 'open' });
 		expect(SeasonProvider.defaultEntryType(s, NOW)).toBe('lms');
 	});
 
@@ -82,11 +74,6 @@ describe('SeasonProvider.defaultEntryType', () => {
 
 	it('returns null when season is complete', () => {
 		expect(SeasonProvider.defaultEntryType(makeSeason({ status: 'complete' }), NOW)).toBeNull();
-	});
-
-	it('returns null when season is open but deadline has passed', () => {
-		const s = makeSeason({ status: 'open', firstPickDeadline: BEFORE_DEADLINE.toISOString() });
-		expect(SeasonProvider.defaultEntryType(s, NOW)).toBeNull();
 	});
 
 	it('returns null when season is setup', () => {

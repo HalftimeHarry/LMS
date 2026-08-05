@@ -15,7 +15,6 @@ export const actions: Actions = {
 			secondHalfEntryFee:      raw.get('secondHalfEntryFee'),
 			secondHalfPicksPerWeek:  raw.get('secondHalfPicksPerWeek') || 2,
 			paymentDeadline:         raw.get('paymentDeadline')   || undefined,
-			firstPickDeadline:       raw.get('firstPickDeadline') || undefined,
 			regularSeasonOnly:       raw.get('regularSeasonOnly') === 'on',
 			notes:                   (raw.get('notes') as string) || undefined,
 			lmsEnabled:              raw.get('lmsEnabled') === 'on',
@@ -28,7 +27,7 @@ export const actions: Actions = {
 		}
 		const {
 			name, year, lmsEntryFee, secondHalfEntryFee, secondHalfPicksPerWeek,
-			paymentDeadline, firstPickDeadline, regularSeasonOnly, notes,
+			paymentDeadline, regularSeasonOnly, notes,
 			lmsEnabled, secondHalfEnabled, secondHalfStartWeek, secondHalfPicksStartWeek
 		} = parsed.data;
 
@@ -41,7 +40,6 @@ export const actions: Actions = {
 				status: 'setup',
 				regularSeasonOnly,
 				paymentDeadline:          toIso(paymentDeadline),
-				firstPickDeadline:        toIso(firstPickDeadline),
 				notes:                    notes ?? null,
 				lmsEnabled,
 				secondHalfEnabled,

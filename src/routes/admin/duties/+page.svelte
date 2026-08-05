@@ -64,16 +64,16 @@
 						<p>
 							<span class="font-semibold text-white">1) What controls cutoffs:</span>
 							The <span class="text-gray-300">first active kickoff in game odds</span> for that week,
-							then <span class="text-gray-300">minus 20 minutes</span>.
+							then <span class="text-gray-300">minus 30 minutes</span>.
 						</p>
 						<p>
 							<span class="font-semibold text-white">2) LMS cutoff:</span>
-							Week 1 first kickoff minus 20 minutes.
-							<span class="text-gray-300">Example:</span> 5:20 PM PT kickoff => 5:00 PM PT cutoff.
+							Week 1 first kickoff minus 30 minutes.
+							<span class="text-gray-300">Example:</span> 5:20 PM PT kickoff => 4:50 PM PT cutoff.
 						</p>
 						<p>
 							<span class="font-semibold text-white">3) 2nd Half cutoff:</span>
-							Second-half start week first kickoff (normally Week 6) minus 20 minutes.
+							Second-half start week first kickoff (normally Week 6) minus 30 minutes.
 						</p>
 						<p>
 							<span class="font-semibold text-white">4) Why mismatches happen:</span>
@@ -82,7 +82,7 @@
 						<p>
 							<span class="font-semibold text-white">5) What to verify first:</span>
 							In <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>, confirm the week is active and the earliest game time is correct.
-							Then check <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> to confirm the displayed deadline lines up with kickoff minus 20 minutes.
+							Then check <a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> to confirm the displayed deadline lines up with kickoff minus 30 minutes.
 						</p>
 						<p>
 							<span class="font-semibold text-white">6) Lock behavior:</span>
@@ -91,8 +91,9 @@
 						</p>
 						<p>
 							<span class="font-semibold text-white">7) Emergency fix path:</span>
-							If kickoff data is wrong, correct odds first, then adjust the week deadline in
-							<a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> before kickoff.
+							If kickoff data is wrong, correct odds first in
+							<a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>, then confirm in
+							<a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> that the displayed deadline recalculates to kickoff minus 30 minutes.
 							If already locked and a correction is needed, follow the override process in the Weekly Management tab and document the exception.
 						</p>
 					</div>
@@ -188,7 +189,7 @@
 					<h2 class="text-lg font-bold text-white">Enter Week 1 Odds <span class="ml-2 text-sm font-normal text-red-400">required before the first deadline</span></h2>
 					<p class="mt-2 text-sm leading-relaxed text-gray-400">
 						Go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add all Week 1 matchups with spreads and moneylines.
-						The pick deadline is <span class="text-gray-300">20 minutes before the first kickoff of the week</span>.
+						The pick deadline is <span class="text-gray-300">30 minutes before the first kickoff of the week</span>.
 						The scheduler reads active odds at lock time to assign auto-picks — if no active odds exist, no auto-picks fire.
 					</p>
 					<ol class="mt-4 flex flex-col gap-3 text-sm text-gray-400">
@@ -220,15 +221,15 @@
 					<div class="mt-4 space-y-3 text-sm text-gray-400">
 						<p>
 							<span class="font-semibold text-white">1) Cutoff source:</span>
-							Earliest active kickoff in odds for that week, then minus 20 minutes.
+							Earliest active kickoff in odds for that week, then minus 30 minutes.
 						</p>
 						<p>
 							<span class="font-semibold text-white">2) LMS rule:</span>
-							Week 1 first kickoff minus 20 minutes.
+							Week 1 first kickoff minus 30 minutes.
 						</p>
 						<p>
 							<span class="font-semibold text-white">3) 2nd Half rule:</span>
-							Start-week first kickoff (normally Week 6) minus 20 minutes.
+							Start-week first kickoff (normally Week 6) minus 30 minutes.
 						</p>
 						<p>
 							<span class="font-semibold text-white">4) Common mismatch cause:</span>
@@ -246,7 +247,8 @@
 						</p>
 						<p>
 							<span class="font-semibold text-white">7) Emergency fix:</span>
-							Correct odds first, then adjust deadline in Season Settings before kickoff.
+							Correct odds first in <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a>, then verify in
+							<a href="/admin/weeks" class="text-[#c9a84c] hover:underline">Season Settings</a> that the displayed deadline recalculates to kickoff minus 30 minutes before kickoff.
 							If locked already, follow override steps and document the exception.
 						</p>
 					</div>
@@ -261,7 +263,7 @@
 					</div>
 					<p class="mt-2 text-sm leading-relaxed text-gray-400">
 						Go to <a href="/admin/odds" class="text-[#c9a84c] hover:underline">Manage Odds</a> and add or update that week's matchups, spreads, and moneylines.
-						The pick deadline fires <span class="text-gray-300">20 minutes before the first kickoff of the week</span>.
+						The pick deadline fires <span class="text-gray-300">30 minutes before the first kickoff of the week</span>.
 						For a Thursday night opener that's roughly 10:00 AM PT. For an all-Sunday slate it's roughly 10:00 AM PT Sunday.
 					</p>
 					<ol class="mt-4 flex flex-col gap-3 text-sm text-gray-400">

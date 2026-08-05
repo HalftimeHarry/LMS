@@ -348,7 +348,7 @@
 						<input
 							type="datetime-local"
 							name="{game.id}_gameTime"
-							value={toDatetimeLocalValue(game.gameTime)}
+							value={toDatetimeLocalValue(game.game_time_stamp ?? game.gameTime)}
 							class="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs text-white focus:border-[#c9a84c] focus:outline-none"
 						/>
 						<input

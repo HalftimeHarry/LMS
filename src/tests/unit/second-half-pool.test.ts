@@ -25,7 +25,6 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
 		secondHalfPicksPerWeek:  2,
 		regularSeasonOnly:       true,
 		paymentDeadline:         null,
-		firstPickDeadline:       null,
 		notes:                   null,
 		lmsEnabled:              true,
 		secondHalfEnabled:       true,
@@ -36,8 +35,6 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
 }
 
 const NOW = new Date('2027-09-01T12:00:00Z');
-const FUTURE = new Date('2027-10-01T12:00:00Z').toISOString();
-const PAST   = new Date('2027-08-01T12:00:00Z').toISOString();
 
 // ── isSecondHalfOpen ─────────────────────────────────────────────────────────
 
@@ -176,8 +173,8 @@ describe('SeasonProvider.defaultEntryType — second half priority', () => {
 		)).toBe('second_half');
 	});
 
-	it('returns lms when season is open and deadline is in the future', () => {
-		const s = makeSeason({ status: 'open', firstPickDeadline: FUTURE });
+	it('returns lms when season is open', () => {
+		const s = makeSeason({ status: 'open' });
 		expect(SeasonProvider.defaultEntryType(s, NOW)).toBe('lms');
 	});
 
@@ -206,7 +203,7 @@ describe('SeasonProvider.defaultEntryType — second half priority', () => {
 	});
 
 	it('returns lms (not second_half) when only lmsEnabled is true', () => {
-		const s = makeSeason({ status: 'open', secondHalfEnabled: false, firstPickDeadline: FUTURE });
+		const s = makeSeason({ status: 'open', secondHalfEnabled: false });
 		expect(SeasonProvider.defaultEntryType(s, NOW)).toBe('lms');
 	});
 

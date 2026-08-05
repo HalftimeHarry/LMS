@@ -1,16 +1,16 @@
 /**
  * Tests for entry deadlines and 2H picks-per-week ramp.
  *
- * Entry deadlines (20 min before first kickoff):
- *   LMS  → week 1  first kickoff − 20 min
- *   2H   → secondHalfStartWeek (default 6) first kickoff − 20 min
+ * Entry deadlines (30 min before first kickoff):
+ *   LMS  → week 1  first kickoff − 30 min
+ *   2H   → secondHalfStartWeek (default 6) first kickoff − 30 min
  *
  * 2H picks-per-week ramp:
  *   Weeks 6–9  (before secondHalfPicksStartWeek, default 10) → 1 pick
  *   Week 10+   (from secondHalfPicksStartWeek onward)        → secondHalfPicksPerWeek (default 2)
  *
  * Pick deadline per week:
- *   weekly_settings.deadline = 20 min before first kickoff of that week
+ *   weekly_settings.deadline = 30 min before first kickoff of that week
  *   Stored in PocketBase; derived from game_odds when odds are imported.
  */
 
@@ -33,7 +33,6 @@ function makeSeason(overrides: Partial<Season> = {}): Season {
 		secondHalfPicksPerWeek:   2,
 		regularSeasonOnly:        false,
 		paymentDeadline:          null,
-		firstPickDeadline:        null,
 		notes:                    null,
 		lmsEnabled:               true,
 		secondHalfEnabled:        true,
@@ -56,55 +55,55 @@ function makeWeek(week: number, overrides: Partial<Week> = {}): Week {
 	};
 }
 
-// ── Entry deadline derivation (20 min before kickoff) ─────────────────────────
+// ── Entry deadline derivation (30 min before kickoff) ─────────────────────────
 
-describe('Entry deadline — 20 min before first kickoff', () => {
+describe('Entry deadline — 30 min before first kickoff', () => {
 
-	it('LMS deadline is 20 min before week 1 kickoff', () => {
+	it('LMS deadline is 30 min before week 1 kickoff', () => {
 		const kickoff  = new Date('2026-09-09T20:20:00Z'); // 1:20 PM PDT
-		const expected = new Date('2026-09-09T20:00:00Z'); // 1:00 PM PDT
+		const expected = new Date('2026-09-09T19:50:00Z'); // 12:50 PM PDT
 
 		const deadline = new Date(kickoff);
-		deadline.setMinutes(deadline.getMinutes() - 20);
+		deadline.setMinutes(deadline.getMinutes() - 30);
 
 		expect(deadline.toISOString()).toBe(expected.toISOString());
 	});
 
-	it('2H deadline is 20 min before week 6 kickoff', () => {
+	it('2H deadline is 30 min before week 6 kickoff', () => {
 		const kickoff  = new Date('2026-10-14T00:15:00Z'); // 5:15 PM PDT
-		const expected = new Date('2026-10-13T23:55:00Z'); // 4:55 PM PDT
+		const expected = new Date('2026-10-13T23:45:00Z'); // 4:45 PM PDT
 
 		const deadline = new Date(kickoff);
-		deadline.setMinutes(deadline.getMinutes() - 20);
+		deadline.setMinutes(deadline.getMinutes() - 30);
 
 		expect(deadline.toISOString()).toBe(expected.toISOString());
 	});
 
-	it('deadline is exactly 20 minutes before kickoff — not 19, not 21', () => {
+	it('deadline is exactly 30 minutes before kickoff — not 19, not 21', () => {
 		const kickoff = new Date('2026-09-09T20:20:00Z');
 		const deadline = new Date(kickoff);
-		deadline.setMinutes(deadline.getMinutes() - 20);
+		deadline.setMinutes(deadline.getMinutes() - 30);
 
 		const diffMs = kickoff.getTime() - deadline.getTime();
-		expect(diffMs).toBe(20 * 60 * 1000);
+		expect(diffMs).toBe(30 * 60 * 1000);
 	});
 
 	it('deadline falls on the previous hour when kickoff is on the hour', () => {
 		const kickoff  = new Date('2026-09-09T20:00:00Z'); // exactly 1:00 PM PDT
-		const expected = new Date('2026-09-09T19:40:00Z'); // 12:40 PM PDT
+		const expected = new Date('2026-09-09T19:30:00Z'); // 12:30 PM PDT
 
 		const deadline = new Date(kickoff);
-		deadline.setMinutes(deadline.getMinutes() - 20);
+		deadline.setMinutes(deadline.getMinutes() - 30);
 
 		expect(deadline.toISOString()).toBe(expected.toISOString());
 	});
 
 	it('deadline falls on the previous day when kickoff is early morning', () => {
 		const kickoff  = new Date('2026-09-09T00:10:00Z');
-		const expected = new Date('2026-09-08T23:50:00Z');
+		const expected = new Date('2026-09-08T23:40:00Z');
 
 		const deadline = new Date(kickoff);
-		deadline.setMinutes(deadline.getMinutes() - 20);
+		deadline.setMinutes(deadline.getMinutes() - 30);
 
 		expect(deadline.toISOString()).toBe(expected.toISOString());
 	});
@@ -234,37 +233,37 @@ describe('2H picks ramp — full season scenario (weeks 6–18)', () => {
 
 describe('Pick deadline vs entry deadline distinction', () => {
 
-	it('entry deadline (registration close) = week 6 kickoff − 20 min', () => {
+	it('entry deadline (registration close) = week 6 kickoff − 30 min', () => {
 		// This is when new 2H entries can no longer be created
 		const week6Kickoff = new Date('2026-10-14T00:15:00Z');
 		const entryDeadline = new Date(week6Kickoff);
-		entryDeadline.setMinutes(entryDeadline.getMinutes() - 20);
+		entryDeadline.setMinutes(entryDeadline.getMinutes() - 30);
 
-		expect(entryDeadline.toISOString()).toBe('2026-10-13T23:55:00.000Z');
+		expect(entryDeadline.toISOString()).toBe('2026-10-13T23:45:00.000Z');
 	});
 
-	it('pick deadline = each week kickoff − 20 min (same formula, different week)', () => {
+	it('pick deadline = each week kickoff − 30 min (same formula, different week)', () => {
 		// Week 10 pick deadline — participants must submit 2 picks before this
 		const week10Kickoff = new Date('2026-11-11T18:20:00Z'); // example
 		const pickDeadline = new Date(week10Kickoff);
-		pickDeadline.setMinutes(pickDeadline.getMinutes() - 20);
+		pickDeadline.setMinutes(pickDeadline.getMinutes() - 30);
 
 		const diffMs = week10Kickoff.getTime() - pickDeadline.getTime();
-		expect(diffMs).toBe(20 * 60 * 1000);
+		expect(diffMs).toBe(30 * 60 * 1000);
 	});
 
 	it('entry deadline is before the first pick deadline (week 6 deadline = both)', () => {
 		// For week 6: entry deadline === pick deadline (same kickoff)
 		const week6Kickoff   = new Date('2026-10-14T00:15:00Z');
-		const entryDeadline  = new Date(week6Kickoff.getTime() - 20 * 60_000);
-		const pickDeadline   = new Date(week6Kickoff.getTime() - 20 * 60_000);
+		const entryDeadline  = new Date(week6Kickoff.getTime() - 30 * 60_000);
+		const pickDeadline   = new Date(week6Kickoff.getTime() - 30 * 60_000);
 
 		expect(entryDeadline.toISOString()).toBe(pickDeadline.toISOString());
 	});
 
 	it('LMS entry deadline (week 1) is earlier than 2H entry deadline (week 6)', () => {
-		const lmsDeadline = new Date('2026-09-09T20:00:00Z');  // week 1 kickoff − 20 min
-		const shDeadline  = new Date('2026-10-13T23:55:00Z');  // week 6 kickoff − 20 min
+		const lmsDeadline = new Date('2026-09-09T19:50:00Z');  // week 1 kickoff − 30 min
+		const shDeadline  = new Date('2026-10-13T23:45:00Z');  // week 6 kickoff − 30 min
 
 		expect(lmsDeadline.getTime()).toBeLessThan(shDeadline.getTime());
 	});
