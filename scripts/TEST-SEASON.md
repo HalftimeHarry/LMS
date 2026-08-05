@@ -9,7 +9,7 @@ Each NFL week maps to a configurable real-time interval (`1h` or `1d`). Within e
 | Offset | Event |
 |---|---|
 | T+0 | Week opens — picks accepted |
-| T+(interval − 20 min) | Picks locked — deadline passes |
+| T+(interval − 30 min) | Picks locked — deadline passes |
 | T+(interval − 10 min) | Results simulated — picks marked correct/incorrect (55% win rate) |
 | T+(interval − 2 min) | Week complete — losing entries eliminated |
 | T+(interval) | Next week opens |
@@ -102,7 +102,7 @@ node scripts/clear-test-season.js --season=def456
 ## What gets tested
 
 - Pick submission window (open/locked state)
-- 20-minute pre-game lock trigger
+- 30-minute pre-game lock trigger
 - Auto-elimination of entries with wrong picks
 - Standings grid updates across multiple weeks
 - Second-half entry registration window

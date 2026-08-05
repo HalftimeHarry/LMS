@@ -4,6 +4,20 @@ import { submitPickSchema } from '$lib/schemas';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import type { Actions, PageServerLoad } from './$types';
 
+async function fetchWeekCutoffFromOdds(pb: any, seasonId: string, weekNum: number): Promise<Date | null> {
+	const odds = await pb.collection('game_odds').getFirstListItem(
+		`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
+		{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+	).catch(() => null) as any;
+
+	const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+	if (!kickoff) return null;
+
+	const cutoff = new Date(kickoff);
+	cutoff.setMinutes(cutoff.getMinutes() - 30);
+	return cutoff;
+}
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
 
@@ -37,9 +51,25 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		? (season?.secondHalfStartWeek ?? 6)
 		: 0;
 	const visibleWeeks = allWeeks.filter(w => w.week >= secondHalfStartWeek);
+	const openWeeksRaw = visibleWeeks.filter(w => w.status === 'open');
 
-	const openWeeks   = visibleWeeks.filter(w => w.status === 'open');
-	const closedWeeks = visibleWeeks.filter(w => w.status !== 'open');
+	// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+	const now = new Date();
+	const deadlinePassedWeekIds = new Set<string>();
+	const openWeeks: any[] = [];
+	for (const w of openWeeksRaw) {
+		const cutoff = await fetchWeekCutoffFromOdds(pb, season.id, w.week);
+		if (cutoff && now >= cutoff) {
+			deadlinePassedWeekIds.add(w.id);
+			continue;
+		}
+		openWeeks.push(w);
+	}
+
+	const closedWeeks = [
+		...visibleWeeks.filter(w => w.status !== 'open'),
+		...openWeeksRaw.filter(w => deadlinePassedWeekIds.has(w.id)),
+	];
 
 	// All NFL teams (only needed for the open-week picker)
 	const teams = openWeeks.length
@@ -93,7 +123,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		? await pb.collection('game_odds').getFullList({
 				filter: `season = "${season.id}" && isActive = true && (${openWeeks.map(w => `week = ${w.week}`).join(' || ')})`,
 				expand: 'homeTeam,awayTeam',
-				sort:   'gameTime'
+				sort:   'game_time_stamp'
 			}).catch(() => [])
 		: [];
 
@@ -248,6 +278,11 @@ export const actions: Actions = {
 			return fail(404, { error: 'Week not found.' });
 		}
 		if (week.status !== 'open') {
+			return fail(400, { error: 'The deadline for this week has passed.' });
+		}
+
+		const cutoff = await fetchWeekCutoffFromOdds(pb, entry.season, week.week);
+		if (cutoff && new Date() >= cutoff) {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 

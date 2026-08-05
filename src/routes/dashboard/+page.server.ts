@@ -72,33 +72,71 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		?? null;
 
 	// Current open/locked week per season the user has entries in.
-	// Prefer the earliest open week with a future deadline; fall back to
-	// the earliest locked week if no open week with a future deadline exists.
+	// Prefer the earliest open week whose effective deadline (kickoff-derived when available)
+	// is in the future; fall back to the earliest locked week, then earliest open week.
 	const currentWeekBySeason: Record<string, any> = {};
-	// PocketBase stores datetimes with a space separator — use the same format for filter comparisons
-	const now = new Date().toISOString().replace('T', ' ').slice(0, 23) + 'Z';
+	const now = new Date();
+
+	const cutoffFromKickoff = (kickoff: string | null): string | null => {
+		if (!kickoff) return null;
+		const d = new Date(kickoff);
+		if (Number.isNaN(d.getTime())) return null;
+		d.setMinutes(d.getMinutes() - 30);
+		return d.toISOString();
+	};
+
+	const derivedDeadlineCache = new Map<string, string | null>();
+	const getDerivedDeadline = async (seasonId: string, weekNum: number): Promise<string | null> => {
+		const key = `${seasonId}:${weekNum}`;
+		if (derivedDeadlineCache.has(key)) return derivedDeadlineCache.get(key) ?? null;
+
+		const odds = await pb.collection('game_odds').getFirstListItem(
+			`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp' }
+		).catch(() => null) as any;
+
+		const derived = cutoffFromKickoff(odds?.game_time_stamp ?? null);
+		derivedDeadlineCache.set(key, derived);
+		return derived;
+	};
+
+	const withEffectiveDeadline = async (weekObj: any | null): Promise<any | null> => {
+		if (!weekObj) return weekObj;
+		const derived = await getDerivedDeadline(weekObj.season, Number(weekObj.week));
+		if (!derived) return weekObj;
+		return { ...weekObj, deadline: derived };
+	};
+
 	await Promise.all(
 		userSeasons.map(async (s: any) => {
-			// First: earliest open week whose deadline is still in the future
-			let w = await pb.collection('weekly_settings').getFirstListItem(
-				`season = "${s.id}" && status = "open" && deadline > "${now}"`,
-				{ sort: 'week' }
-			).catch(() => null);
-			// Fallback: earliest locked week
-			if (!w) {
-				w = await pb.collection('weekly_settings').getFirstListItem(
+			const openWeeks = await pb.collection('weekly_settings').getFullList({
+				filter: `season = "${s.id}" && status = "open"`,
+				sort: 'week'
+			}).catch(() => []) as any[];
+
+			let selected: any | null = null;
+			for (const week of openWeeks) {
+				const effectiveWeek = await withEffectiveDeadline(week);
+				const deadline = effectiveWeek?.deadline ? new Date(effectiveWeek.deadline) : null;
+				if (deadline && !Number.isNaN(deadline.getTime()) && deadline > now) {
+					selected = effectiveWeek;
+					break;
+				}
+			}
+
+			if (!selected && openWeeks.length > 0) {
+				selected = await withEffectiveDeadline(openWeeks[0]);
+			}
+
+			if (!selected) {
+				const lockedWeek = await pb.collection('weekly_settings').getFirstListItem(
 					`season = "${s.id}" && status = "locked"`,
 					{ sort: 'week' }
 				).catch(() => null);
+				selected = await withEffectiveDeadline(lockedWeek);
 			}
-			// Last fallback: any open week (past deadline, e.g. test seasons)
-			if (!w) {
-				w = await pb.collection('weekly_settings').getFirstListItem(
-					`season = "${s.id}" && status = "open"`,
-					{ sort: 'week' }
-				).catch(() => null);
-			}
-			if (w) currentWeekBySeason[s.id] = w;
+
+			if (selected) currentWeekBySeason[s.id] = selected;
 		})
 	);
 
@@ -114,7 +152,8 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 					`season = "${s.id}" && week = ${startWeek}`,
 					{ sort: 'week' }
 				).catch(() => null);
-				if (w) week6BySeason[s.id] = w;
+				const effectiveWeek = await withEffectiveDeadline(w);
+				if (effectiveWeek) week6BySeason[s.id] = effectiveWeek;
 			})
 	);
 

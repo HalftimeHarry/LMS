@@ -17,6 +17,9 @@ describe('entries admin — deleteEntry', () => {
 			entries: {
 				getOne:   vi.fn(),
 				delete:   vi.fn().mockResolvedValue(undefined)
+			},
+			game_odds: {
+				getFirstListItem: vi.fn().mockResolvedValue(null)
 			}
 		};
 		mockPb = { collection: vi.fn((name: string) => collections[name]) };
@@ -51,18 +54,19 @@ describe('entries admin — deleteEntry', () => {
 		expect((result as any).success).toBe(true);
 	});
 
-	// Use a deadline well in the past so tests are not date-sensitive
-	const PAST_DEADLINE = '2020-01-01T00:00:00Z';
-	const TEST_PAST_DEADLINE = '2020-01-01T00:00:00Z';
+	// Use kickoff times that produce clearly past deadlines for deterministic tests.
+	const PAST_KICKOFF = '2020-01-01T00:00:00Z';
+	const TEST_PAST_KICKOFF = '2020-01-01T00:00:00Z';
 
-	it('blocks delete when a real season has a past deadline', async () => {
+	it('blocks delete when a real season has a past kickoff cutoff', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({ game_time_stamp: PAST_KICKOFF });
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					name:              '2027 LMS',
-					status:            'active',
-					firstPickDeadline: PAST_DEADLINE,
+					name:   '2027 LMS',
+					status: 'active',
 				}
 			}
 		});
@@ -76,14 +80,15 @@ describe('entries admin — deleteEntry', () => {
 		expect((result as any).data.error).toMatch(/deadline has passed/i);
 	});
 
-	it('blocks delete when a real complete season has a past deadline', async () => {
+	it('blocks delete when a real complete season has a past kickoff cutoff', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({ game_time_stamp: PAST_KICKOFF });
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					name:              '2027 LMS',
-					status:            'complete',
-					firstPickDeadline: PAST_DEADLINE,
+					name:   '2027 LMS',
+					status: 'complete',
 				}
 			}
 		});
@@ -96,14 +101,15 @@ describe('entries admin — deleteEntry', () => {
 		expect((result as any).status).toBe(400);
 	});
 
-	it('allows delete on a [TEST] season even after the deadline', async () => {
+	it('allows delete on a [TEST] season even after the kickoff cutoff', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({ game_time_stamp: TEST_PAST_KICKOFF });
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					name:              '[TEST] 2027 LMS (1h/week) 2020-01-01T00:00',
-					status:            'active',
-					firstPickDeadline: TEST_PAST_DEADLINE,
+					name:   '[TEST] 2027 LMS (1h/week) 2020-01-01T00:00',
+					status: 'active',
 				}
 			}
 		});

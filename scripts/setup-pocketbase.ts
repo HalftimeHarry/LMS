@@ -93,7 +93,6 @@ async function main() {
         values: ['setup','open','active','complete'], maxSelect: 1 },
       { name: 'regularSeasonOnly', type: 'bool' },
       { name: 'paymentDeadline',   type: 'date' },
-      { name: 'firstPickDeadline', type: 'date' },
       { name: 'notes',             type: 'text' }
     ]
   });

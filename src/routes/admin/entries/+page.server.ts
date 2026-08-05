@@ -36,16 +36,25 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entries      = isSuperAdmin ? allEntries    : allEntries.filter((e: any)    => !testSeasonIds.has(e.season));
 	const statsAll     = isSuperAdmin ? statsEntries  : statsEntries.filter((e: any)  => !testSeasonIds.has(e.season));
 
-	// Map seasonId → firstPickDeadline. [TEST] seasons are excluded — always deletable.
+	// Map seasonId → cutoff (30 min before week 1 kickoff from game_odds).
 	const deadlineMap: Record<string, string> = {};
 	for (const s of seasons) {
-		if (s.firstPickDeadline && !s.name.startsWith('[TEST]')) deadlineMap[s.id] = s.firstPickDeadline;
+		if (s.name.startsWith('[TEST]')) continue;
+		const odds = await pb.collection('game_odds').getFirstListItem(
+			`season = "${s.id}" && week = 1 && isActive = true`,
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+		).catch(() => null) as any;
+		const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+		if (!kickoff) continue;
+		const cutoff = new Date(kickoff);
+		cutoff.setMinutes(cutoff.getMinutes() - 30);
+		deadlineMap[s.id] = cutoff.toISOString();
 	}
 
 	// Active season for the deadline notice in the header
 	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
 
-	// Derive entry deadlines from first game kickoff (20 min before) in game_odds
+	// Derive entry deadlines from first game kickoff (30 min before) in game_odds
 	// LMS = week 1 first game, 2H = secondHalfStartWeek (default 6) first game
 	let lmsEntryDeadline: string | null = null;
 	let shEntryDeadline:  string | null = null;
@@ -56,22 +65,24 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		const [week1Odds, week6Odds] = await Promise.all([
 			pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
-				{ sort: 'gameTime', fields: 'gameTime' }
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 			).catch(() => null),
 			pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'gameTime', fields: 'gameTime' }
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 			).catch(() => null),
 		]);
 
-		if (week1Odds?.gameTime) {
-			const t = new Date(week1Odds.gameTime);
-			t.setMinutes(t.getMinutes() - 20);
+		const week1Kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
+		if (week1Kickoff) {
+			const t = new Date(week1Kickoff);
+			t.setMinutes(t.getMinutes() - 30);
 			lmsEntryDeadline = t.toISOString();
 		}
-		if (week6Odds?.gameTime) {
-			const t = new Date(week6Odds.gameTime);
-			t.setMinutes(t.getMinutes() - 20);
+		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
+		if (week6Kickoff) {
+			const t = new Date(week6Kickoff);
+			t.setMinutes(t.getMinutes() - 30);
 			shEntryDeadline = t.toISOString();
 		}
 	}
@@ -98,19 +109,20 @@ export const actions: Actions = {
 		}
 		const { seasonId, userId, entryType, count, baseName, referredBy = '', complimentary } = parsed.data;
 
-		// Block entry creation after the game-derived deadline (20 min before first kickoff)
+		// Block entry creation after the game-derived deadline (30 min before first kickoff)
 		const season = await pb.collection('seasons').getOne(seasonId).catch(() => null) as any;
 		const pickWeek = entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
 		const firstOdds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${seasonId}" && week = ${pickWeek} && isActive = true`,
-			{ sort: 'gameTime', fields: 'gameTime' }
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 		).catch(() => null) as any;
-		if (firstOdds?.gameTime) {
-			const deadline = new Date(firstOdds.gameTime);
-			deadline.setMinutes(deadline.getMinutes() - 20);
+		const kickoff = firstOdds?.game_time_stamp ?? firstOdds?.gameTime;
+		if (kickoff) {
+			const deadline = new Date(kickoff);
+			deadline.setMinutes(deadline.getMinutes() - 30);
 			if (new Date() > deadline) {
 				return fail(400, {
-					error: `The entry deadline has passed — entries closed 20 minutes before the first Week ${pickWeek} kickoff.`,
+					error: `The entry deadline has passed — entries closed 30 minutes before the first Week ${pickWeek} kickoff.`,
 					action: 'create'
 				});
 			}
@@ -204,7 +216,20 @@ export const actions: Actions = {
 		}
 
 		const isTestSeason = (entry.expand?.season?.name as string | undefined)?.startsWith('[TEST]');
-		const deadline = entry.expand?.season?.firstPickDeadline;
+		let deadline: string | null = null;
+
+		// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+		const week1Odds = await pb.collection('game_odds').getFirstListItem(
+			`season = "${entry.season}" && week = 1 && isActive = true`,
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+		).catch(() => null) as any;
+		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
+		if (kickoff) {
+			const cutoff = new Date(kickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 30);
+			deadline = cutoff.toISOString();
+		}
+
 		if (!isTestSeason && deadline && new Date() > new Date(deadline)) {
 			return fail(400, {
 				error: 'The first-game deadline has passed. Entries can no longer be deleted — change the entry status instead.'

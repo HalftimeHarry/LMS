@@ -85,7 +85,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	// Earliest game time for week 1 — used to pre-fill the deadline field
 	let firstGameTime: string | null = null;
-	// Entry deadlines: 20 min before first kickoff of week 1 (LMS) and shStartWeek (2H)
+	// Entry deadlines: 30 min before first kickoff of week 1 (LMS) and shStartWeek (2H)
 	let lmsEntryDeadline: string | null = null;
 	let shEntryDeadline:  string | null = null;
 	// Per-week auto-pick candidates derived from active odds:
@@ -97,21 +97,23 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
-				{ sort: 'gameTime', fields: 'gameTime' }
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 			);
-			firstGameTime = odds.gameTime;
-			const t = new Date(odds.gameTime);
-			t.setMinutes(t.getMinutes() - 20);
+			const kickoff = odds.game_time_stamp ?? odds.gameTime;
+			firstGameTime = kickoff;
+			const t = new Date(kickoff);
+			t.setMinutes(t.getMinutes() - 30);
 			lmsEntryDeadline = t.toISOString();
 		} catch { /* no odds yet */ }
 
 		try {
 			const shOdds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'gameTime', fields: 'gameTime' }
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 			);
-			const t = new Date(shOdds.gameTime);
-			t.setMinutes(t.getMinutes() - 20);
+			const kickoff = shOdds.game_time_stamp ?? shOdds.gameTime;
+			const t = new Date(kickoff);
+			t.setMinutes(t.getMinutes() - 30);
 			shEntryDeadline = t.toISOString();
 		} catch { /* no odds yet */ }
 
@@ -324,7 +326,7 @@ export const actions: Actions = {
 	},
 
 	/**
-	 * Returns the earliest gameTime from game_odds for a given season+week.
+	 * Returns the earliest game_time_stamp from game_odds for a given season+week.
 	 * Used to auto-populate the week 1 deadline from the actual schedule.
 	 */
 	fetchFirstGame: async ({ request }) => {
@@ -338,9 +340,9 @@ export const actions: Actions = {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${seasonId}" && week = ${week} && isActive = true`,
-				{ sort: 'gameTime', fields: 'gameTime' }
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 			);
-			return { firstGameTime: odds.gameTime };
+			return { firstGameTime: odds.game_time_stamp ?? odds.gameTime };
 		} catch {
 			return fail(404, { error: `No odds found for week ${week}. Enter the deadline manually.` });
 		}
@@ -377,17 +379,16 @@ export const actions: Actions = {
 
 		for (const week of weeks as any[]) {
 			const slotStart = new Date(now.getTime() + (week.week - 1) * intervalMs);
-			const deadline  = new Date(slotStart.getTime() + intervalMs - 20 * 60 * 1000);
+			const deadline  = new Date(slotStart.getTime() + intervalMs - 30 * 60 * 1000);
 			await pb.collection('weekly_settings').update(week.id, {
 				deadline: deadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 				status:   'open',
 			});
 		}
 
-		// Update season's firstPickDeadline to match new week 1 deadline
-		const newFirstDeadline = new Date(now.getTime() + intervalMs - 20 * 60 * 1000);
+		// Keep season paymentDeadline aligned with week 1 timing for test-season flows
+		const newFirstDeadline = new Date(now.getTime() + intervalMs - 30 * 60 * 1000);
 		await pb.collection('seasons').update(seasonId, {
-			firstPickDeadline: newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 			paymentDeadline:   newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 		});
 
@@ -450,17 +451,16 @@ export const actions: Actions = {
 		// 3. Reset week deadlines and statuses
 		for (const week of weeks as any[]) {
 			const slotStart = new Date(now.getTime() + (week.week - 1) * intervalMs);
-			const deadline  = new Date(slotStart.getTime() + intervalMs - 20 * 60 * 1000);
+			const deadline  = new Date(slotStart.getTime() + intervalMs - 30 * 60 * 1000);
 			await pb.collection('weekly_settings').update(week.id, {
 				deadline: deadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 				status:   'open',
 			});
 		}
 
-		// 4. Update season firstPickDeadline
-		const newFirstDeadline = new Date(now.getTime() + intervalMs - 20 * 60 * 1000);
+		// 4. Keep season paymentDeadline aligned with week 1 timing
+		const newFirstDeadline = new Date(now.getTime() + intervalMs - 30 * 60 * 1000);
 		await pb.collection('seasons').update(seasonId, {
-			firstPickDeadline: newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 			paymentDeadline:   newFirstDeadline.toISOString().replace('T', ' ').slice(0, 23) + 'Z',
 			status: 'active',
 		});

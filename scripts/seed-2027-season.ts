@@ -42,7 +42,6 @@ async function main() {
 			...payload,
 			status:            'setup',
 			paymentDeadline:   null,
-			firstPickDeadline: null,
 			notes:             null
 		});
 		console.log(`  created 2027 season: ${season.id}`);

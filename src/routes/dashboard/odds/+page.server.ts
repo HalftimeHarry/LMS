@@ -39,7 +39,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const games = await pb.collection('game_odds').getFullList({
 		filter: `season = "${season.id}" && week = ${week.week} && isActive = true`,
 		expand: 'homeTeam,awayTeam',
-		sort:   'gameTime'
+		sort:   'game_time_stamp'
 	}).catch(() => []) as any[];
 
 	return { season, week, games, isLoggedIn: !!locals.user };

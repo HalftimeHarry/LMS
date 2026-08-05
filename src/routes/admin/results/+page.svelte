@@ -256,7 +256,7 @@
 										<span class="text-xs text-gray-600">({game.homeSpread > 0 ? '+' : ''}{game.homeSpread})</span>
 									{/if}
 									<span class="text-xs text-gray-700">
-										{new Date(game.gameTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+										{new Date(game.game_time_stamp ?? game.gameTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
 									</span>
 								</div>
 								<div class="flex gap-1.5">

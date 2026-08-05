@@ -9,6 +9,7 @@
  *   week          - number (1-18)
  *   homeTeam      - relation → nfl_teams
  *   awayTeam      - relation → nfl_teams
+ *   game_time_stamp - text ISO 8601 UTC kickoff (source of truth)
  *   gameTime      - date
  *   homeSpread    - number (negative = home favored, e.g. -7 means home -7)
  *   homeMoneyline - number (e.g. -350)
@@ -79,6 +80,7 @@ async function main() {
       { name: 'week',          type: 'number',   required: true,  min: 1, max: 18 },
       { name: 'homeTeam',      type: 'relation', required: true,  collectionId: teamsId,   maxSelect: 1, cascadeDelete: false },
       { name: 'awayTeam',      type: 'relation', required: true,  collectionId: teamsId,   maxSelect: 1, cascadeDelete: false },
+      { name: 'game_time_stamp', type: 'text',   required: false },
       { name: 'gameTime',      type: 'date',     required: false },
       { name: 'homeSpread',    type: 'number',   required: false },
       { name: 'homeMoneyline', type: 'number',   required: false },

@@ -100,7 +100,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const games = await pb.collection('game_odds').getFullList({
 		filter: `season = "${anchorSeason.id}" && week = ${weekNum}`,
 		expand: 'homeTeam,awayTeam',
-		sort:   'gameTime'
+		sort:   'game_time_stamp'
 	}).catch(() => []) as any[];
 
 	// Picks + results for each pool in parallel

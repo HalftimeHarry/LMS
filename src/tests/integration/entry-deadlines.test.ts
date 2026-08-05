@@ -1,7 +1,7 @@
 /**
  * Tests for entry and pick deadline logic.
  *
- * Entry deadline  = 20 minutes before the first game kickoff of the relevant week
+ * Entry deadline  = 30 minutes before the first game kickoff of the relevant week
  *   - LMS entries  → Week 1 first kickoff
  *   - 2H entries   → Week 6 (secondHalfStartWeek) first kickoff
  *
@@ -38,8 +38,8 @@ beforeEach(() => {
 	collections = {
 		seasons:         { getOne: vi.fn(), getFullList: vi.fn().mockResolvedValue([]) },
 		entries:         { getOne: vi.fn(), delete: vi.fn().mockResolvedValue(undefined), getFullList: vi.fn().mockResolvedValue([]) },
-		game_odds:       { getFirstListItem: vi.fn() },
-		weekly_settings: { getFirstListItem: vi.fn() },
+		game_odds:       { getFirstListItem: vi.fn().mockResolvedValue(null) },
+		weekly_settings: { getFirstListItem: vi.fn().mockResolvedValue(null) },
 		users:           { getFullList: vi.fn().mockResolvedValue([]) },
 	};
 	mockPb = { collection: vi.fn((name: string) => collections[name]) };
@@ -57,29 +57,31 @@ describe('load — entry deadlines derived from game_odds', () => {
 		collections.users.getFullList   = vi.fn().mockResolvedValue([]);
 	});
 
-	it('sets lmsEntryDeadline to 20 min before week 1 first kickoff', async () => {
+	it('sets lmsEntryDeadline to 30 min before week 1 first kickoff', async () => {
 		const kickoff = minutesFromNow(60); // 60 min from now
-		collections.game_odds.getFirstListItem = vi.fn()
-			.mockResolvedValueOnce({ gameTime: kickoff })   // week 1
-			.mockResolvedValueOnce(null);                   // week 6
+		collections.game_odds.getFirstListItem = vi.fn().mockImplementation((query: string) => {
+			if (query.includes('week = 1')) return Promise.resolve({ game_time_stamp: kickoff });
+			return Promise.resolve(null);
+		});
 
 		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
 
 		const expected = new Date(kickoff);
-		expected.setMinutes(expected.getMinutes() - 20);
+		expected.setMinutes(expected.getMinutes() - 30);
 		expect(result.lmsEntryDeadline).toBe(expected.toISOString());
 	});
 
-	it('sets shEntryDeadline to 20 min before week 6 first kickoff', async () => {
+	it('sets shEntryDeadline to 30 min before week 6 first kickoff', async () => {
 		const kickoff = minutesFromNow(120);
-		collections.game_odds.getFirstListItem = vi.fn()
-			.mockResolvedValueOnce(null)                    // week 1
-			.mockResolvedValueOnce({ gameTime: kickoff });  // week 6
+		collections.game_odds.getFirstListItem = vi.fn().mockImplementation((query: string) => {
+			if (query.includes('week = 6')) return Promise.resolve({ game_time_stamp: kickoff });
+			return Promise.resolve(null);
+		});
 
 		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
 
 		const expected = new Date(kickoff);
-		expected.setMinutes(expected.getMinutes() - 20);
+		expected.setMinutes(expected.getMinutes() - 30);
 		expect(result.shEntryDeadline).toBe(expected.toISOString());
 	});
 
@@ -88,15 +90,16 @@ describe('load — entry deadlines derived from game_odds', () => {
 		collections.seasons.getFullList = vi.fn().mockResolvedValue([seasonWith8]);
 
 		const kickoff = minutesFromNow(90);
-		collections.game_odds.getFirstListItem = vi.fn()
-			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce({ gameTime: kickoff });
+		collections.game_odds.getFirstListItem = vi.fn().mockImplementation((query: string) => {
+			if (query.includes('week = 8')) return Promise.resolve({ game_time_stamp: kickoff });
+			return Promise.resolve(null);
+		});
 
 		await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
 
-		// Second call should query week = 8
-		const secondCall = collections.game_odds.getFirstListItem.mock.calls[1][0] as string;
-		expect(secondCall).toContain('week = 8');
+		// One of the calls should query week = 8 for second-half deadline derivation.
+		const queries = collections.game_odds.getFirstListItem.mock.calls.map((c: any[]) => String(c[0]));
+		expect(queries.some((q: string) => q.includes('week = 8'))).toBe(true);
 	});
 
 	it('returns null deadlines when no odds exist', async () => {
@@ -141,7 +144,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('allows LMS entry creation when week 1 deadline is in the future', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesFromNow(60) // kickoff in 60 min → deadline in 40 min
+			game_time_stamp: minutesFromNow(60) // kickoff in 60 min -> deadline in 30 min
 		});
 
 		const result = await actions.createEntries({
@@ -153,7 +156,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('blocks LMS entry creation when week 1 deadline has passed', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesAgo(10) // kickoff was 10 min ago → deadline was 30 min ago
+			game_time_stamp: minutesAgo(10) // kickoff was 10 min ago -> deadline was 40 min ago
 		});
 
 		const result = await actions.createEntries({
@@ -166,7 +169,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('allows 2H entry creation when week 6 deadline is in the future', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesFromNow(60)
+			game_time_stamp: minutesFromNow(60)
 		});
 
 		const result = await actions.createEntries({
@@ -178,7 +181,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('blocks 2H entry creation when week 6 deadline has passed', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesAgo(10)
+			game_time_stamp: minutesAgo(10)
 		});
 
 		const result = await actions.createEntries({
@@ -191,7 +194,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('queries week 1 odds for LMS entries', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesFromNow(60)
+			game_time_stamp: minutesFromNow(60)
 		});
 
 		await actions.createEntries({
@@ -204,7 +207,7 @@ describe('createEntries — blocked after game-derived deadline', () => {
 
 	it('queries week 6 odds for 2H entries', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
-			gameTime: minutesFromNow(60)
+			game_time_stamp: minutesFromNow(60)
 		});
 
 		await actions.createEntries({
@@ -276,7 +279,7 @@ describe('renameEntry', () => {
 describe('deleteEntry — blocked after first-game deadline', () => {
 	it('deletes entry when season is in setup', async () => {
 		collections.entries.getOne = vi.fn().mockResolvedValue({
-			id: 'e1', expand: { season: { status: 'setup', name: 'Test Season' } }
+			id: 'e1', season: 's1', expand: { season: { status: 'setup', name: 'Test Season' } }
 		});
 
 		const result = await actions.deleteEntry({
@@ -287,14 +290,17 @@ describe('deleteEntry — blocked after first-game deadline', () => {
 		expect((result as any).success).toBe(true);
 	});
 
-	it('blocks delete when firstPickDeadline has passed on a real season', async () => {
+	it('blocks delete when week-1 kickoff cutoff has passed on a real season', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesAgo(10),
+		});
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					status:            'active',
-					name:              '2026 LMS',
-					firstPickDeadline: minutesAgo(30),
+					status: 'active',
+					name:   '2026 LMS',
 				}
 			}
 		});
@@ -307,14 +313,17 @@ describe('deleteEntry — blocked after first-game deadline', () => {
 		expect(collections.entries.delete).not.toHaveBeenCalled();
 	});
 
-	it('allows delete when firstPickDeadline is in the future', async () => {
+	it('allows delete when week-1 kickoff cutoff is in the future', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesFromNow(60),
+		});
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					status:            'active',
-					name:              '2026 LMS',
-					firstPickDeadline: minutesFromNow(30),
+					status: 'active',
+					name:   '2026 LMS',
 				}
 			}
 		});
@@ -327,14 +336,17 @@ describe('deleteEntry — blocked after first-game deadline', () => {
 		expect((result as any).success).toBe(true);
 	});
 
-	it('always allows delete for [TEST] seasons regardless of deadline', async () => {
+	it('always allows delete for [TEST] seasons regardless of kickoff cutoff', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesAgo(999),
+		});
 		collections.entries.getOne = vi.fn().mockResolvedValue({
 			id: 'e1',
+			season: 's1',
 			expand: {
 				season: {
-					status:            'active',
-					name:              '[TEST] 2026 LMS',
-					firstPickDeadline: minutesAgo(999),
+					status: 'active',
+					name:   '[TEST] 2026 LMS',
 				}
 			}
 		});

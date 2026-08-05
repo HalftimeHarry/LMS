@@ -43,8 +43,11 @@ describe('submit pick action', () => {
 			},
 			weekly_settings: {
 				getOne: vi.fn().mockResolvedValue({
-					id: 'week1', status: 'open', secondHalfPicksPerWeek: null
+					id: 'week1', status: 'open', week: 1, secondHalfPicksPerWeek: null
 				})
+			},
+			game_odds: {
+				getFirstListItem: vi.fn().mockResolvedValue({ game_time_stamp: '2099-01-01T12:00:00.000Z' })
 			},
 			seasons: {
 				getOne: vi.fn().mockResolvedValue({

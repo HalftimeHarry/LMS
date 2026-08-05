@@ -164,7 +164,7 @@
 	}
 	function deadlineDiff(iso: string) { return new Date(iso).getTime() - now; }
 
-	// LMS deadline — 20 min before week 1 first kickoff
+	// LMS deadline — 30 min before week 1 first kickoff
 	const activeDeadline     = $derived((data.lmsEntryDeadline as string | null) ?? null);
 	const activeDeadlinePast = $derived(activeDeadline ? now > new Date(activeDeadline).getTime() : false);
 	// LMS is only available before the Week 1 pick deadline; Second Half only after
@@ -176,7 +176,7 @@
 	const activeDeadlineM    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 3_600_000) / 60_000) : 0);
 	const activeDeadlineS    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 60_000) / 1_000) : 0);
 
-	// 2H deadline — 20 min before week 6 first kickoff
+	// 2H deadline — 30 min before week 6 first kickoff
 	const shDeadline     = $derived((data.shEntryDeadline as string | null) ?? null);
 	const shDeadlinePast = $derived(shDeadline ? now > new Date(shDeadline).getTime() : false);
 	const shDeadlineDiff = $derived(shDeadline ? deadlineDiff(shDeadline) : 0);
