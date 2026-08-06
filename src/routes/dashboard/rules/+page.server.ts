@@ -56,7 +56,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		week6Id = week6?.id ?? null;
 	}
 
-	return { season, lmsDeadline, lmsEntryDeadline, week6Deadline, week6PickDeadline, week6Id, canEditRules };
+	return { season, lmsDeadline, lmsEntryDeadline, week6Deadline, week6PickDeadline, week6Id, canEditRules, user: locals.user ? { id: locals.user.id } : null };
 };
 
 export const actions: Actions = {

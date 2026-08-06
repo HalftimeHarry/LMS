@@ -108,8 +108,13 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	const withEffectiveDeadline = async (weekObj: any | null): Promise<any | null> => {
 		if (!weekObj) return weekObj;
 		const derived = await getDerivedDeadlinePair(weekObj.season, Number(weekObj.week));
-		if (!derived.pick && !derived.entry) return weekObj;
-		return { ...weekObj, deadline: derived.pick ?? weekObj.deadline ?? null, entryDeadline: derived.entry ?? null, pickDeadline: derived.pick ?? weekObj.deadline ?? null };
+		if (!derived.pickDeadline && !derived.entryDeadline) return weekObj;
+		return {
+			...weekObj,
+			deadline: derived.pickDeadline ?? weekObj.deadline ?? null,
+			entryDeadline: derived.entryDeadline ?? null,
+			pickDeadline: derived.pickDeadline ?? weekObj.deadline ?? null,
+		};
 	};
 
 	const seasonsToEvaluate = [...seasonIdsToLoad].map(id =>
