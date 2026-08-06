@@ -36,7 +36,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entries      = isSuperAdmin ? allEntries    : allEntries.filter((e: any)    => !testSeasonIds.has(e.season));
 	const statsAll     = isSuperAdmin ? statsEntries  : statsEntries.filter((e: any)  => !testSeasonIds.has(e.season));
 
-	// Map seasonId → cutoff (30 min before week 1 kickoff from game_odds).
+	// Map seasonId → cutoff (40 min before week 1 kickoff from game_odds).
 	const deadlineMap: Record<string, string> = {};
 	for (const s of seasons) {
 		if (s.name.startsWith('[TEST]')) continue;
@@ -47,14 +47,14 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
 		if (!kickoff) continue;
 		const cutoff = new Date(kickoff);
-		cutoff.setMinutes(cutoff.getMinutes() - 30);
+		cutoff.setMinutes(cutoff.getMinutes() - 40);
 		deadlineMap[s.id] = cutoff.toISOString();
 	}
 
 	// Active season for the deadline notice in the header
 	const activeSeason = (seasons as any[]).find(s => s.status === 'active' || s.status === 'open') ?? null;
 
-	// Derive entry deadlines from first game kickoff (30 min before) in game_odds
+	// Derive entry deadlines from first game kickoff (40 min before) in game_odds
 	// LMS = week 1 first game, 2H = secondHalfStartWeek (default 6) first game
 	let lmsEntryDeadline: string | null = null;
 	let shEntryDeadline:  string | null = null;
@@ -76,13 +76,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		const week1Kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
 		if (week1Kickoff) {
 			const t = new Date(week1Kickoff);
-			t.setMinutes(t.getMinutes() - 30);
+			t.setMinutes(t.getMinutes() - 40);
 			lmsEntryDeadline = t.toISOString();
 		}
 		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
 		if (week6Kickoff) {
 			const t = new Date(week6Kickoff);
-			t.setMinutes(t.getMinutes() - 30);
+			t.setMinutes(t.getMinutes() - 40);
 			shEntryDeadline = t.toISOString();
 		}
 	}
@@ -109,7 +109,7 @@ export const actions: Actions = {
 		}
 		const { seasonId, userId, entryType, count, baseName, referredBy = '', complimentary } = parsed.data;
 
-		// Block entry creation after the game-derived deadline (30 min before first kickoff)
+		// Block entry creation after the game-derived deadline (40 min before first kickoff)
 		const season = await pb.collection('seasons').getOne(seasonId).catch(() => null) as any;
 		const pickWeek = entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
 		const firstOdds = await pb.collection('game_odds').getFirstListItem(
@@ -119,10 +119,10 @@ export const actions: Actions = {
 		const kickoff = firstOdds?.game_time_stamp ?? firstOdds?.gameTime;
 		if (kickoff) {
 			const deadline = new Date(kickoff);
-			deadline.setMinutes(deadline.getMinutes() - 30);
+			deadline.setMinutes(deadline.getMinutes() - 40);
 			if (new Date() > deadline) {
 				return fail(400, {
-					error: `The entry deadline has passed — entries closed 30 minutes before the first Week ${pickWeek} kickoff.`,
+					error: `The entry deadline has passed — entries closed 40 minutes before the first Week ${pickWeek} kickoff.`,
 					action: 'create'
 				});
 			}
@@ -218,7 +218,7 @@ export const actions: Actions = {
 		const isTestSeason = (entry.expand?.season?.name as string | undefined)?.startsWith('[TEST]');
 		let deadline: string | null = null;
 
-		// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+		// Source-of-truth deadline: 40 min before first kickoff from game_odds.
 		const week1Odds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${entry.season}" && week = 1 && isActive = true`,
 			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
@@ -226,7 +226,7 @@ export const actions: Actions = {
 		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
 		if (kickoff) {
 			const cutoff = new Date(kickoff);
-			cutoff.setMinutes(cutoff.getMinutes() - 30);
+			cutoff.setMinutes(cutoff.getMinutes() - 40);
 			deadline = cutoff.toISOString();
 		}
 

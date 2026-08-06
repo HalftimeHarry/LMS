@@ -85,7 +85,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	// Earliest game time for week 1 — used to pre-fill the deadline field
 	let firstGameTime: string | null = null;
-	// Entry deadlines: 30 min before first kickoff of week 1 (LMS) and shStartWeek (2H)
+	// Entry deadlines: 40 min before first kickoff of week 1 (LMS) and shStartWeek (2H)
 	let lmsEntryDeadline: string | null = null;
 	let shEntryDeadline:  string | null = null;
 	// Per-week auto-pick candidates derived from active odds:
@@ -102,7 +102,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			const kickoff = odds.game_time_stamp ?? odds.gameTime;
 			firstGameTime = kickoff;
 			const t = new Date(kickoff);
-			t.setMinutes(t.getMinutes() - 30);
+			t.setMinutes(t.getMinutes() - 40);
 			lmsEntryDeadline = t.toISOString();
 		} catch { /* no odds yet */ }
 
@@ -113,7 +113,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			);
 			const kickoff = shOdds.game_time_stamp ?? shOdds.gameTime;
 			const t = new Date(kickoff);
-			t.setMinutes(t.getMinutes() - 30);
+			t.setMinutes(t.getMinutes() - 40);
 			shEntryDeadline = t.toISOString();
 		} catch { /* no odds yet */ }
 

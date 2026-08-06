@@ -11,9 +11,12 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
+	import PoolCard from '$lib/components/PoolCard.svelte';
 	import { teamLogoUrl } from '$lib/teamLogos';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { createDashboardController } from '$lib/controllers';
+	import { resolveCardCountdownDisplay } from '$lib/utils';
 
 	let { data }: { data: PageData } = $props();
 
@@ -74,13 +77,14 @@
 	})());
 
 	// Season is driven by the URL ?season= param — server sets the correct default via redirect
-	const selectedSeasonId = $derived(data.selectedSeasonId as string);
-	const selectedGroup    = $derived(
-		seasonGroups.find(g =>
+	const selectedSeasonId = $derived((data.selectedSeasonId as string | null) ?? '');
+	const selectedGroup    = $derived((() => {
+		if (!selectedSeasonId) return seasonGroups[0] ?? null;
+		return seasonGroups.find(g =>
 			g.season.id === selectedSeasonId ||
 			g.entries.some((e: any) => e.season === selectedSeasonId)
-		) ?? null
-	);
+		) ?? seasonGroups[0] ?? null;
+	})());
 
 	// True when the current user has at least one active entry in the selected season
 	const hasAliveEntries = $derived(
@@ -95,6 +99,16 @@
 
 	function switchSeason(id: string) {
 		goto(`?season=${id}`);
+	}
+
+	function formatCountdown(diff: number, live: boolean) {
+		if (!live || !Number.isFinite(diff)) return '—';
+		const totalSeconds = Math.max(0, Math.floor(diff / 1_000));
+		const days = Math.floor(totalSeconds / 86_400);
+		const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+		const minutes = Math.floor((totalSeconds % 3_600) / 60);
+		const seconds = totalSeconds % 60;
+		return `${days > 0 ? `${days}d ` : ''}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 	}
 
 	// Collapsible — selected season open by default
@@ -141,6 +155,17 @@
 
 	const pickView = $derived((data as any).pickView as 'entries' | 'standings');
 
+	const dashboardCards = $derived(
+		createDashboardController({
+			seasonGroups,
+			selectedSeasonId,
+			currentWeekBySeason: currentWeekBySeason as Record<string, any>,
+			week6BySeason: week6BySeason as Record<string, any>,
+			entries: data.entries as any[],
+			now,
+		}).cardGroups
+	);
+
 	function seasonSpanLabelFromSeason(season: any): string | null {
 		if (!season) return null;
 
@@ -172,6 +197,14 @@
 			return `/dashboard/standings?pool=${pool}&season=${sid}`;
 		}
 		return `/dashboard/entries/${entry.id}`;
+	}
+
+	function fmtDeadline(iso: string | null | undefined): string {
+		if (!iso) return 'TBD';
+		return new Date(iso).toLocaleString('en-US', {
+			weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+		});
 	}
 </script>
 
@@ -324,132 +357,66 @@
 {/if}
 
 <!-- Current week countdowns — LMS + 2H side by side when both active -->
-{#each seasonGroups.filter(g => g.season.id === selectedSeasonId || g.entries.some((e: any) => e.season === selectedSeasonId)) as group}
-	{@const sg        = group}
-	{@const lmsSeason = sg.season}
-	<!-- LMS and 2H share the same season record — no separate shSeason lookup needed -->
-	{@const cw        = currentWeekBySeason[lmsSeason?.id] ?? null}
-	<!-- Show LMS countdown if user has LMS entries in this season -->
-	{@const hasLms    = !!cw && sg.entries.some((e: any) => e.entryType === 'lms')}
-	<!-- 2H countdown: use Week 6 deadline before 2H opens; current week deadline once it's running -->
-	{@const shStartWeek   = lmsSeason?.secondHalfStartWeek ?? 6}
-	{@const week6cw       = week6BySeason[lmsSeason?.id] ?? null}
-	{@const shCw          = (cw && cw.week >= shStartWeek) ? cw : week6cw}
-	{@const myShEntries2  = (data.entries as any[]).filter((e: any) => e.season === lmsSeason?.id && e.entryType === 'second_half')}
-	{@const hasSh         = !!shCw && lmsSeason?.secondHalfEnabled !== false}
-
-	{#if hasLms || hasSh}
-	<div class="mb-4 grid gap-4 {hasLms && hasSh ? 'sm:grid-cols-2' : 'grid-cols-1'}">
-
-		<!-- LMS countdown -->
-		{#if hasLms}
-		{@const diff   = new Date(cw.deadline).getTime() - now}
-		{@const live   = cw.status === 'open' && diff > 0}
-		{@const urgent = live && diff < 3_600_000}
-		{@const d = live ? Math.floor(diff / 86_400_000) : 0}
-		{@const h = live ? Math.floor((diff % 86_400_000) / 3_600_000) : 0}
-		{@const m = live ? Math.floor((diff % 3_600_000)  /    60_000) : 0}
-		{@const s = live ? Math.floor((diff % 60_000)     /     1_000) : 0}
-		<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-5 backdrop-blur-sm transition-[z-index] hover:z-20 focus-within:z-20">
-			<div class="mb-3 flex items-center gap-2 border-b border-[rgba(201,168,76,0.1)] pb-3">
-				<span class="text-[10px] font-bold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Last Man Standing</span>
-				<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="text-red-400 font-medium">LOSER</span></span>
-			</div>
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div>
-					<p class="text-xl font-bold text-white">Week {cw.week}</p>
-					<p class="mt-1 text-xs text-gray-400">
-						Pick deadline: <span class="text-white">{new Date(cw.deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-					</p>
-				</div>
-				<div class="flex items-center gap-3">
-					{#if live}
-						<span class="font-mono text-xl font-bold tabular-nums {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
-							{#if d > 0}{d}d {/if}{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}
-						</span>
-					{/if}
-					<div class="flex items-center gap-1.5">
-						<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}</span>
-						<InfoTip placement="left" text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
-					</div>
-				</div>
-			</div>
-			{#if cw.status === 'open'}
-				<p class="mt-3 text-xs {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
-					{urgent ? '⚠ Deadline closing soon — submit your pick now.' : 'Picks are open. Submit or update your pick from each active entry below before the deadline.'}
-				</p>
-			{:else if cw.status === 'locked'}
-				<p class="mt-3 text-xs text-yellow-500">Deadline passed. Picks are locked — no changes until results are posted.</p>
-			{:else if cw.status === 'results_pending'}
-				<p class="mt-3 text-xs text-orange-400">Games are in. Results are being entered — check back soon.</p>
-			{/if}
-		</div>
+{#each dashboardCards as groupCard}
+	{@const lmsCard = groupCard.lmsCard}
+	{@const shCard = groupCard.secondHalfCard}
+	{#if lmsCard || shCard}
+	<div class="mb-4 grid gap-4 {lmsCard && shCard ? 'sm:grid-cols-2' : 'grid-cols-1'}">
+		{#if lmsCard}
+		<PoolCard
+			title={lmsCard.title}
+			subtitle={lmsCard.subtitle}
+			weekLabel={lmsCard.weekLabel}
+			entryDeadlineLabel={lmsCard.entryDeadline ? fmtDeadline(lmsCard.entryDeadline) : 'TBD'}
+			pickDeadlineLabel={lmsCard.pickDeadline ? fmtDeadline(lmsCard.pickDeadline) : 'TBD'}
+			registrationLabel={lmsCard.registrationLabel}
+			picksLabel={lmsCard.picksLabel}
+			registrationCountdown={formatCountdown(lmsCard.registrationDiffMs, lmsCard.registrationLive)}
+			picksCountdown={formatCountdown(lmsCard.picksDiffMs, lmsCard.picksLive)}
+			registrationLive={lmsCard.registrationLive}
+			picksLive={lmsCard.picksLive}
+			registrationUrgent={lmsCard.registrationUrgent}
+			picksUrgent={lmsCard.picksUrgent}
+			registrationDeadlinePassed={lmsCard.registrationDeadlinePassed}
+			picksDeadlinePassed={lmsCard.picksDeadlinePassed}
+			footerMessage={lmsCard.footerMessage}
+		/>
 		{/if}
 
-		<!-- 2H countdown -->
-		{#if hasSh}
-		{@const shBeforeStart = !cw || cw.week < shStartWeek}
-		{@const diff2   = new Date(shCw.deadline).getTime() - now}
-		<!-- Before Week 6: registration is open as long as we're before the deadline -->
-		{@const live2   = shBeforeStart ? diff2 > 0 : (shCw.status === 'open' && diff2 > 0)}
-		{@const urgent2 = live2 && diff2 < 3_600_000}
-		{@const d2 = live2 ? Math.floor(diff2 / 86_400_000) : 0}
-		{@const h2 = live2 ? Math.floor((diff2 % 86_400_000) / 3_600_000) : 0}
-		{@const m2 = live2 ? Math.floor((diff2 % 3_600_000)  /    60_000) : 0}
-		{@const s2 = live2 ? Math.floor((diff2 % 60_000)     /     1_000) : 0}
-		<div class="relative rounded-xl border border-blue-900/40 bg-black/75 p-5 backdrop-blur-sm transition-[z-index] hover:z-20 focus-within:z-20">
-			<div class="mb-3 flex items-center gap-2 border-b border-blue-900/20 pb-3">
-				<span class="text-[10px] font-bold uppercase tracking-widest text-blue-500/60">Second Half Pool</span>
-				<span class="ml-auto text-[10px] text-gray-600">Pick the <span class="text-green-400 font-medium">WINNER</span> · {shBeforeStart ? `Picks start Wk ${shStartWeek}` : (shCw.week >= 10 ? '10+ = 2 picks' : '6–9 = 1 pick')}</span>
-			</div>
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div>
-					<p class="text-xl font-bold text-white">{shBeforeStart ? `Week ${shStartWeek} start` : `Week ${shCw.week}`}</p>
-					<p class="mt-1 text-xs text-gray-400">
-						{shBeforeStart ? 'Registration closes:' : 'Pick deadline:'} <span class="text-white">{new Date(shCw.deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-					</p>
-				</div>
-				<div class="flex items-center gap-3">
-					{#if live2}
-						<span class="font-mono text-xl font-bold tabular-nums {urgent2 ? 'text-red-400' : 'text-blue-400'}">
-							{#if d2 > 0}{d2}d {/if}{String(h2).padStart(2,'0')}:{String(m2).padStart(2,'0')}:{String(s2).padStart(2,'0')}
-						</span>
-					{/if}
-					<div class="flex items-center gap-1.5">
-						<span class="text-sm font-medium {shBeforeStart ? (live2 ? 'text-green-400' : 'text-gray-500') : (weekStatusColors[shCw.status] ?? 'text-gray-400')}">
-							{shBeforeStart ? (live2 ? 'OPEN' : 'CLOSED') : (weekStatusLabels[shCw.status] ?? shCw.status.toUpperCase())}
-						</span>
-						<InfoTip placement="left" text="OPEN — registration accepted until the Week 6 deadline. Once picks start at Week 6, pick the WINNER each week. Weeks 6–9 = 1 pick, Week 10+ = 2 picks." />
-					</div>
-				</div>
-			</div>
-			{#if shBeforeStart && live2 && myShEntries2.length === 0}
-				<p class="mt-3 text-xs {urgent2 ? 'text-red-400' : 'text-blue-400'}">
-					{urgent2 ? '⚠ Registration closing soon!' : 'Registration is open.'} <a href="/dashboard/entries/new" class="underline hover:opacity-80">Register now →</a>
-				</p>
-			{:else if shBeforeStart && live2 && myShEntries2.length > 0}
-				<p class="mt-3 text-xs text-blue-400">
-					You're registered. Picks open at Week {shStartWeek}.
-				</p>
-			{:else if shBeforeStart && !live2}
-				<p class="mt-3 text-xs text-gray-500">Registration is closed.</p>
-			{:else if myShEntries2.length === 0}
-				<p class="mt-3 text-xs text-blue-400/70">
-					You don't have a Second Half entry yet.
-					<a href="/dashboard/entries/new" class="underline text-blue-400 hover:text-blue-300">Register now →</a>
-				</p>
-			{:else if shCw.status === 'open'}
-				<p class="mt-3 text-xs {urgent2 ? 'text-red-400' : 'text-blue-400'}">
-					{urgent2 ? '⚠ Deadline closing soon — submit your 2H pick now.' : 'Picks are open. Submit or update your Second Half pick before the deadline.'}
-				</p>
-			{:else if shCw.status === 'locked'}
-				<p class="mt-3 text-xs text-yellow-500">Deadline passed. Picks are locked — no changes until results are posted.</p>
-			{:else if shCw.status === 'results_pending'}
-				<p class="mt-3 text-xs text-orange-400">Games are in. Results are being entered — check back soon.</p>
-			{/if}
-		</div>
+		{#if shCard}
+		<PoolCard
+			title={shCard.title}
+			subtitle={shCard.subtitle}
+			weekLabel={shCard.weekLabel}
+			entryDeadlineLabel={shCard.entryDeadline ? fmtDeadline(shCard.entryDeadline) : 'TBD'}
+			pickDeadlineLabel={shCard.pickDeadline ? fmtDeadline(shCard.pickDeadline) : 'TBD'}
+			registrationLabel={shCard.registrationLabel}
+			picksLabel={shCard.picksLabel}
+			registrationCountdown={formatCountdown(shCard.registrationDiffMs, shCard.registrationLive)}
+			picksCountdown={resolveCardCountdownDisplay({
+				isSecondHalfPending: shCard.picksLabel === 'Picks pending',
+				registrationDiffMs: shCard.registrationDiffMs,
+				registrationLive: shCard.registrationLive,
+				picksDiffMs: shCard.picksDiffMs,
+				picksLive: shCard.picksLive
+			})}
+			registrationLive={shCard.registrationLive}
+			picksLive={shCard.picksLive}
+			registrationUrgent={shCard.registrationUrgent}
+			picksUrgent={shCard.picksUrgent}
+			registrationDeadlinePassed={shCard.registrationDeadlinePassed}
+			picksDeadlinePassed={shCard.picksDeadlinePassed}
+			footerMessage={shCard.footerMessage}
+			ctaHref={shCard.ctaHref}
+			ctaText={shCard.ctaText}
+			borderClass="border-blue-900/40"
+			dividerClass="border-blue-900/20"
+			titleClass="text-blue-500/60"
+			subtitleClass="text-green-400"
+			picksClass="text-blue-400"
+			footerClass="text-blue-400/70"
+		/>
 		{/if}
-
 	</div>
 	{/if}
 {/each}

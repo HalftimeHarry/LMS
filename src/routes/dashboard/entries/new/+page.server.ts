@@ -5,7 +5,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 function deriveCutoffFromKickoff(kickoffIso: string): string {
 	const cutoff = new Date(kickoffIso);
-	cutoff.setMinutes(cutoff.getMinutes() - 30);
+	cutoff.setMinutes(cutoff.getMinutes() - 40);
 	return cutoff.toISOString();
 }
 

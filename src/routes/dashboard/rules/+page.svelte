@@ -5,11 +5,14 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const season       = $derived((data as any).season as any);
-	const lmsDeadline  = $derived((data as any).lmsDeadline as string | null);
-	const week6Deadline = $derived((data as any).week6Deadline as string | null);
+	const season            = $derived((data as any).season as any);
+	const lmsDeadline       = $derived((data as any).lmsDeadline as string | null);
+	const lmsEntryDeadline  = $derived((data as any).lmsEntryDeadline as string | null);
+	const week6Deadline     = $derived((data as any).week6Deadline as string | null);
+	const week6PickDeadline = $derived((data as any).week6PickDeadline as string | null);
 	const week6Id = $derived((data as any).week6Id as string | null);
 	const canEditRules = $derived(!!(data as any).canEditRules);
+	const isLoggedIn = $derived(!!(data as any).user?.id);
 
 	// Format a date string for display: "Thursday, September 4, 2027 at 3:00 PM PST"
 	function fmtDeadline(iso: string | null | undefined): string {
@@ -177,6 +180,9 @@
 	<p class="mb-4 text-sm text-gray-300">
 		Entry fees must be received by <strong class="text-white">{paymentDeadline}</strong> — the sooner the better.
 	</p>
+	<p class="mb-4 text-sm text-gray-300">
+		Entry registration closes <strong class="text-white">40 minutes before the first kickoff of the pool week</strong> for both LMS and Second Half, so late entries will not be accepted after that cutoff.
+	</p>
 	<div class="grid gap-3 sm:grid-cols-2">
 		{#each [
 			{ method: 'Venmo',   detail: '@Michael-Campo-5' },
@@ -321,22 +327,35 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<p class="text-xl font-bold text-white">Week {lmsStartWeek} start</p>
-				<p class="mt-1 text-xs text-gray-400">
-					Pick deadline:
-					<span class="text-white">{lmsDeadline
-						? new Date(lmsDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-						: 'TBD'}</span>
-				</p>
+				<div class="mt-1 space-y-1 text-xs text-gray-400">
+					<p>
+						Entry deadline:
+						<span class="text-white">{lmsEntryDeadline
+							? fmtDeadline(lmsEntryDeadline)
+							: 'TBD'}</span>
+					</p>
+					<p>
+						Pick deadline:
+						<span class="text-white">{lmsDeadline
+							? fmtDeadline(lmsDeadline)
+							: 'TBD'}</span>
+					</p>
+				</div>
 			</div>
-			<div class="flex items-center gap-3">
-				{#if lmsDeadline && lmsLive}
-					<span class="font-mono text-xl font-bold tabular-nums {lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]'}">
-						{#if lmsDays > 0}{lmsDays}d {/if}{String(lmsHours).padStart(2, '0')}:{String(lmsMinutes).padStart(2, '0')}:{String(lmsSeconds).padStart(2, '0')}
-					</span>
-				{/if}
-				<span class="text-sm font-medium {lmsDeadline ? (lmsLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
-					{lmsDeadline ? (lmsLive ? 'OPEN' : 'CLOSED') : 'TBD'}
-				</span>
+			<div class="flex flex-wrap items-end gap-2">
+				<div class="min-w-[120px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
+					<div class="font-mono text-lg font-bold tabular-nums {lmsLive ? (lmsUrgent ? 'text-red-400' : 'text-[#c9a84c]') : 'text-gray-500'}">
+						{#if lmsDeadline && lmsLive}
+							{#if lmsDays > 0}{lmsDays}d {/if}{String(lmsHours).padStart(2, '0')}:{String(lmsMinutes).padStart(2, '0')}:{String(lmsSeconds).padStart(2, '0')}
+						{:else}
+							—
+						{/if}
+					</div>
+					<div class="text-xs uppercase tracking-[0.2em] text-gray-500">Registration</div>
+					<div class="text-sm font-medium {lmsDeadline ? (lmsLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
+						{lmsDeadline ? (lmsLive ? 'OPEN' : 'CLOSED') : 'TBD'}
+					</div>
+				</div>
 			</div>
 		</div>
 		{#if lmsDeadline && lmsLive}
@@ -382,28 +401,49 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<p class="text-xl font-bold text-white">Week {shStartWeek} start</p>
-				<p class="mt-1 text-xs text-gray-400">
-					Registration closes:
-					<span class="text-white">{week6Deadline
-						? new Date(week6Deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-						: 'TBD'}</span>
-				</p>
+				<div class="mt-1 space-y-1 text-xs text-gray-400">
+					<p>
+						Entry deadline:
+						<span class="text-white">{week6Deadline
+							? fmtDeadline(week6Deadline)
+							: 'TBD'}</span>
+					</p>
+					<p>
+						Pick deadline:
+						<span class="text-white">{week6PickDeadline
+							? fmtDeadline(week6PickDeadline)
+							: 'TBD'}</span>
+					</p>
+				</div>
 			</div>
-			<div class="flex items-center gap-3">
-				{#if week6Deadline && shLive}
-					<span class="font-mono text-xl font-bold tabular-nums {shUrgent ? 'text-red-400' : 'text-blue-400'}">
-						{#if shDays > 0}{shDays}d {/if}{String(shHours).padStart(2, '0')}:{String(shMinutes).padStart(2, '0')}:{String(shSeconds).padStart(2, '0')}
-					</span>
-				{/if}
-				<span class="text-sm font-medium {week6Deadline ? (shLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
-					{week6Deadline ? (shLive ? 'OPEN' : 'CLOSED') : 'TBD'}
-				</span>
+			<div class="flex flex-wrap items-end gap-2">
+				<div class="min-w-[120px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
+					<div class="font-mono text-lg font-bold tabular-nums {shLive ? (shUrgent ? 'text-red-400' : 'text-blue-400') : 'text-gray-500'}">
+						{#if week6Deadline && shLive}
+							{#if shDays > 0}{shDays}d {/if}{String(shHours).padStart(2, '0')}:{String(shMinutes).padStart(2, '0')}:{String(shSeconds).padStart(2, '0')}
+						{:else}
+							—
+						{/if}
+					</div>
+					<div class="text-xs uppercase tracking-[0.2em] text-gray-500">Registration</div>
+					<div class="text-sm font-medium {week6Deadline ? (shLive ? 'text-green-400' : 'text-gray-500') : 'text-gray-500'}">
+						{week6Deadline ? (shLive ? 'OPEN' : 'CLOSED') : 'TBD'}
+					</div>
+				</div>
 			</div>
 		</div>
 		{#if week6Deadline && shLive}
 			<p class="mt-3 text-xs {shUrgent ? 'text-red-400' : 'text-blue-400'}">
-				{shUrgent ? 'Registration closing soon.' : 'Registration is open.'}
-				<a href="/dashboard/entries/new" class="underline hover:opacity-80">Register now →</a>
+				{#if isLoggedIn}
+					{shUrgent ? 'Picks open soon.' : 'Picks are open for registered entries.'}
+				{:else}
+					{shUrgent ? 'Registration closing soon.' : 'Registration is open.'}
+				{/if}
+				{#if isLoggedIn}
+					<a href="/dashboard/picks" class="underline hover:opacity-80">View picks →</a>
+				{:else}
+					<a href="/register" class="underline hover:opacity-80">Register now →</a>
+				{/if}
 			</p>
 		{:else if week6Deadline && !shLive}
 			<p class="mt-3 text-xs text-gray-500">Registration is closed.</p>
@@ -412,7 +452,7 @@
 		{/if}
 	</div>
 	<p class="mb-4 text-sm text-gray-400">
-		A separate pool that starts at Week {shStartWeek}. Entry deadline: <strong class="text-white">{shDeadline}</strong>.
+		A separate pool that starts at Week {shStartWeek}. Entry registration closes <strong class="text-white">40 minutes before the first kickoff of Week {shStartWeek}</strong>.
 		Entry fee: <strong class="text-white">${shFee}</strong>.
 	</p>
 	<ol class="space-y-4">

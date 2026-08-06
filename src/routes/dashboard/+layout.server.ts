@@ -7,7 +7,7 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
 	const exempt = ['/dashboard/rules', '/dashboard/standings', '/dashboard/odds'];
 	if (isAdminRole(locals.role) && !exempt.some((p) => url.pathname.startsWith(p))) {
-		redirect(302, '/admin');
+		throw redirect(302, '/admin');
 	}
 	return {};
 };
