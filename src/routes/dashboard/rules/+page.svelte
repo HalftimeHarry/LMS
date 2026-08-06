@@ -5,9 +5,11 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const season       = $derived((data as any).season as any);
-	const lmsDeadline  = $derived((data as any).lmsDeadline as string | null);
-	const week6Deadline = $derived((data as any).week6Deadline as string | null);
+	const season            = $derived((data as any).season as any);
+	const lmsDeadline       = $derived((data as any).lmsDeadline as string | null);
+	const lmsEntryDeadline  = $derived((data as any).lmsEntryDeadline as string | null);
+	const week6Deadline     = $derived((data as any).week6Deadline as string | null);
+	const week6PickDeadline = $derived((data as any).week6PickDeadline as string | null);
 	const week6Id = $derived((data as any).week6Id as string | null);
 	const canEditRules = $derived(!!(data as any).canEditRules);
 
@@ -177,6 +179,9 @@
 	<p class="mb-4 text-sm text-gray-300">
 		Entry fees must be received by <strong class="text-white">{paymentDeadline}</strong> — the sooner the better.
 	</p>
+	<p class="mb-4 text-sm text-gray-300">
+		Entry registration closes <strong class="text-white">40 minutes before the first kickoff of the pool week</strong> for both LMS and Second Half, so late entries will not be accepted after that cutoff.
+	</p>
 	<div class="grid gap-3 sm:grid-cols-2">
 		{#each [
 			{ method: 'Venmo',   detail: '@Michael-Campo-5' },
@@ -321,12 +326,20 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<p class="text-xl font-bold text-white">Week {lmsStartWeek} start</p>
-				<p class="mt-1 text-xs text-gray-400">
-					Pick deadline:
-					<span class="text-white">{lmsDeadline
-						? new Date(lmsDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-						: 'TBD'}</span>
-				</p>
+				<div class="mt-1 space-y-1 text-xs text-gray-400">
+					<p>
+						Entry deadline:
+						<span class="text-white">{lmsEntryDeadline
+							? fmtDeadline(lmsEntryDeadline)
+							: 'TBD'}</span>
+					</p>
+					<p>
+						Pick deadline:
+						<span class="text-white">{lmsDeadline
+							? fmtDeadline(lmsDeadline)
+							: 'TBD'}</span>
+					</p>
+				</div>
 			</div>
 			<div class="flex items-center gap-3">
 				{#if lmsDeadline && lmsLive}
@@ -382,12 +395,20 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
 				<p class="text-xl font-bold text-white">Week {shStartWeek} start</p>
-				<p class="mt-1 text-xs text-gray-400">
-					Registration closes:
-					<span class="text-white">{week6Deadline
-						? new Date(week6Deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
-						: 'TBD'}</span>
-				</p>
+				<div class="mt-1 space-y-1 text-xs text-gray-400">
+					<p>
+						Entry deadline:
+						<span class="text-white">{week6Deadline
+							? fmtDeadline(week6Deadline)
+							: 'TBD'}</span>
+					</p>
+					<p>
+						Pick deadline:
+						<span class="text-white">{week6PickDeadline
+							? fmtDeadline(week6PickDeadline)
+							: 'TBD'}</span>
+					</p>
+				</div>
 			</div>
 			<div class="flex items-center gap-3">
 				{#if week6Deadline && shLive}
@@ -412,7 +433,7 @@
 		{/if}
 	</div>
 	<p class="mb-4 text-sm text-gray-400">
-		A separate pool that starts at Week {shStartWeek}. Entry deadline: <strong class="text-white">{shDeadline}</strong>.
+		A separate pool that starts at Week {shStartWeek}. Entry registration closes <strong class="text-white">40 minutes before the first kickoff of Week {shStartWeek}</strong>.
 		Entry fee: <strong class="text-white">${shFee}</strong>.
 	</p>
 	<ol class="space-y-4">

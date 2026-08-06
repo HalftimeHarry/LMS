@@ -74,13 +74,14 @@
 	})());
 
 	// Season is driven by the URL ?season= param — server sets the correct default via redirect
-	const selectedSeasonId = $derived(data.selectedSeasonId as string);
-	const selectedGroup    = $derived(
-		seasonGroups.find(g =>
+	const selectedSeasonId = $derived((data.selectedSeasonId as string | null) ?? '');
+	const selectedGroup    = $derived((() => {
+		if (!selectedSeasonId) return seasonGroups[0] ?? null;
+		return seasonGroups.find(g =>
 			g.season.id === selectedSeasonId ||
 			g.entries.some((e: any) => e.season === selectedSeasonId)
-		) ?? null
-	);
+		) ?? seasonGroups[0] ?? null;
+	})());
 
 	// True when the current user has at least one active entry in the selected season
 	const hasAliveEntries = $derived(
@@ -335,6 +336,10 @@
 	{@const shStartWeek   = lmsSeason?.secondHalfStartWeek ?? 6}
 	{@const week6cw       = week6BySeason[lmsSeason?.id] ?? null}
 	{@const shCw          = (cw && cw.week >= shStartWeek) ? cw : week6cw}
+	{@const lmsEntryDeadline = cw?.entryDeadline ?? null}
+	{@const lmsPickDeadline = cw?.pickDeadline ?? cw?.deadline ?? null}
+	{@const shEntryDeadline = shCw?.entryDeadline ?? null}
+	{@const shPickDeadline  = shCw?.pickDeadline ?? shCw?.deadline ?? null}
 	{@const myShEntries2  = (data.entries as any[]).filter((e: any) => e.season === lmsSeason?.id && e.entryType === 'second_half')}
 	{@const hasSh         = !!shCw && lmsSeason?.secondHalfEnabled !== false}
 
@@ -343,8 +348,10 @@
 
 		<!-- LMS countdown -->
 		{#if hasLms}
-		{@const diff   = new Date(cw.deadline).getTime() - now}
-		{@const live   = cw.status === 'open' && diff > 0}
+		{@const lmsDeadlineTime = lmsPickDeadline ? new Date(lmsPickDeadline).getTime() : NaN}
+		{@const diff   = Number.isFinite(lmsDeadlineTime) ? lmsDeadlineTime - now : 0}
+		{@const live   = !!cw && cw.status === 'open' && Number.isFinite(lmsDeadlineTime) && diff > 0}
+		{@const lmsDeadlinePassed = Number.isFinite(lmsDeadlineTime) && diff <= 0}
 		{@const urgent = live && diff < 3_600_000}
 		{@const d = live ? Math.floor(diff / 86_400_000) : 0}
 		{@const h = live ? Math.floor((diff % 86_400_000) / 3_600_000) : 0}
@@ -358,9 +365,19 @@
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<p class="text-xl font-bold text-white">Week {cw.week}</p>
-					<p class="mt-1 text-xs text-gray-400">
-						Pick deadline: <span class="text-white">{new Date(cw.deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-					</p>
+					<div class="mt-1 space-y-1 text-xs text-gray-400">
+						<p>
+							Entry deadline:
+							<span class="text-white">{lmsEntryDeadline ? new Date(lmsEntryDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'}</span>
+						</p>
+						{#if !lmsEntryDeadline && lmsPickDeadline}
+							<p class="text-[11px] text-gray-500">Entry cutoff will appear once kickoff data is published.</p>
+						{/if}
+						<p>
+							Pick deadline:
+							<span class="text-white">{lmsPickDeadline ? new Date(lmsPickDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'}</span>
+						</p>
+					</div>
 				</div>
 				<div class="flex items-center gap-3">
 					{#if live}
@@ -369,16 +386,18 @@
 						</span>
 					{/if}
 					<div class="flex items-center gap-1.5">
-						<span class="text-sm font-medium {weekStatusColors[cw.status] ?? 'text-gray-400'}">{weekStatusLabels[cw.status] ?? cw.status.toUpperCase()}</span>
+						<span class="text-sm font-medium {lmsPickDeadline ? (lmsDeadlinePassed ? 'text-gray-500' : 'text-green-400') : (weekStatusColors[cw.status] ?? 'text-gray-400')}">
+							{lmsPickDeadline ? (lmsDeadlinePassed ? 'CLOSED' : 'OPEN') : (weekStatusLabels[cw.status] ?? cw.status.toUpperCase())}
+						</span>
 						<InfoTip placement="left" text="OPEN — picks accepted until the deadline. LOCKED — deadline passed, no changes. RESULTS PENDING — games finished, results being entered. COMPLETE — eliminations processed." />
 					</div>
 				</div>
 			</div>
-			{#if cw.status === 'open'}
+			{#if lmsPickDeadline && !lmsDeadlinePassed}
 				<p class="mt-3 text-xs {urgent ? 'text-red-400' : 'text-[#c9a84c]'}">
 					{urgent ? '⚠ Deadline closing soon — submit your pick now.' : 'Picks are open. Submit or update your pick from each active entry below before the deadline.'}
 				</p>
-			{:else if cw.status === 'locked'}
+			{:else if lmsPickDeadline && lmsDeadlinePassed}
 				<p class="mt-3 text-xs text-yellow-500">Deadline passed. Picks are locked — no changes until results are posted.</p>
 			{:else if cw.status === 'results_pending'}
 				<p class="mt-3 text-xs text-orange-400">Games are in. Results are being entered — check back soon.</p>
@@ -389,9 +408,11 @@
 		<!-- 2H countdown -->
 		{#if hasSh}
 		{@const shBeforeStart = !cw || cw.week < shStartWeek}
-		{@const diff2   = new Date(shCw.deadline).getTime() - now}
+		{@const shDeadlineTime = shPickDeadline ? new Date(shPickDeadline).getTime() : NaN}
+		{@const diff2   = Number.isFinite(shDeadlineTime) ? shDeadlineTime - now : 0}
+		{@const shDeadlinePassed = Number.isFinite(shDeadlineTime) && diff2 <= 0}
 		<!-- Before Week 6: registration is open as long as we're before the deadline -->
-		{@const live2   = shBeforeStart ? diff2 > 0 : (shCw.status === 'open' && diff2 > 0)}
+		{@const live2   = shBeforeStart ? Number.isFinite(shDeadlineTime) && diff2 > 0 : (shCw?.status === 'open' && Number.isFinite(shDeadlineTime) && diff2 > 0)}
 		{@const urgent2 = live2 && diff2 < 3_600_000}
 		{@const d2 = live2 ? Math.floor(diff2 / 86_400_000) : 0}
 		{@const h2 = live2 ? Math.floor((diff2 % 86_400_000) / 3_600_000) : 0}
@@ -405,9 +426,19 @@
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<div>
 					<p class="text-xl font-bold text-white">{shBeforeStart ? `Week ${shStartWeek} start` : `Week ${shCw.week}`}</p>
-					<p class="mt-1 text-xs text-gray-400">
-						{shBeforeStart ? 'Registration closes:' : 'Pick deadline:'} <span class="text-white">{new Date(shCw.deadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}</span>
-					</p>
+					<div class="mt-1 space-y-1 text-xs text-gray-400">
+						<p>
+							Entry deadline:
+							<span class="text-white">{shEntryDeadline ? new Date(shEntryDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'}</span>
+						</p>
+						{#if !shEntryDeadline && shPickDeadline}
+							<p class="text-[11px] text-gray-500">Entry cutoff will appear once kickoff data is published.</p>
+						{/if}
+						<p>
+							Pick deadline:
+							<span class="text-white">{shPickDeadline ? new Date(shPickDeadline).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }) : 'TBD'}</span>
+						</p>
+					</div>
 				</div>
 				<div class="flex items-center gap-3">
 					{#if live2}
@@ -416,8 +447,8 @@
 						</span>
 					{/if}
 					<div class="flex items-center gap-1.5">
-						<span class="text-sm font-medium {shBeforeStart ? (live2 ? 'text-green-400' : 'text-gray-500') : (weekStatusColors[shCw.status] ?? 'text-gray-400')}">
-							{shBeforeStart ? (live2 ? 'OPEN' : 'CLOSED') : (weekStatusLabels[shCw.status] ?? shCw.status.toUpperCase())}
+						<span class="text-sm font-medium {shBeforeStart ? (live2 ? 'text-green-400' : 'text-gray-500') : (shPickDeadline ? (shDeadlinePassed ? 'text-gray-500' : 'text-blue-400') : (weekStatusColors[shCw.status] ?? 'text-gray-400'))}">
+							{shBeforeStart ? (live2 ? 'OPEN' : 'CLOSED') : (shPickDeadline ? (shDeadlinePassed ? 'CLOSED' : 'OPEN') : (weekStatusLabels[shCw.status] ?? shCw.status.toUpperCase()))}
 						</span>
 						<InfoTip placement="left" text="OPEN — registration accepted until the Week 6 deadline. Once picks start at Week 6, pick the WINNER each week. Weeks 6–9 = 1 pick, Week 10+ = 2 picks." />
 					</div>
@@ -433,6 +464,8 @@
 				</p>
 			{:else if shBeforeStart && !live2}
 				<p class="mt-3 text-xs text-gray-500">Registration is closed.</p>
+			{:else if shPickDeadline && shDeadlinePassed}
+				<p class="mt-3 text-xs text-yellow-500">Deadline passed. Picks are locked — no changes until results are posted.</p>
 			{:else if myShEntries2.length === 0}
 				<p class="mt-3 text-xs text-blue-400/70">
 					You don't have a Second Half entry yet.

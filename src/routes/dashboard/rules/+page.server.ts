@@ -1,4 +1,5 @@
 import { pbAdmin } from '$lib/server/pb-admin';
+import { deriveDeadlineFromKickoff } from '$lib/server/deadlines';
 import { fail } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Actions } from './$types';
@@ -14,8 +15,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const season = seasons[0] ?? null;
 
-	// Fetch week 1 kickoff-derived LMS entry cutoff (30 min before first active game)
+	// Fetch week 1 kickoff-derived LMS deadlines: pick deadline (30 min before kickoff) and entry cutoff (40 min before kickoff)
 	let lmsDeadline: string | null = null;
+	let lmsEntryDeadline: string | null = null;
 	if (season) {
 		const week1Odds = await pb.collection('game_odds')
 			.getFirstListItem(
@@ -25,15 +27,13 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.catch(() => null) as any;
 
 		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
-		if (kickoff) {
-			const cutoff = new Date(kickoff);
-			cutoff.setMinutes(cutoff.getMinutes() - 30);
-			lmsDeadline = cutoff.toISOString();
-		}
+		lmsDeadline = deriveDeadlineFromKickoff(kickoff, 30);
+		lmsEntryDeadline = deriveDeadlineFromKickoff(kickoff, 40);
 	}
 
-	// Fetch week 6 deadline for 2H entry cutoff
+	// Fetch week 6 kickoff-derived 2H entry cutoff (40 min before kickoff) and weekly pick deadline (30 min before kickoff)
 	let week6Deadline: string | null = null;
+	let week6PickDeadline: string | null = null;
 	let week6Id: string | null = null;
 	if (season) {
 		const shStartWeek = season.secondHalfStartWeek ?? 6;
@@ -45,20 +45,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.catch(() => null) as any;
 
 		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
-		if (week6Kickoff) {
-			const cutoff = new Date(week6Kickoff);
-			cutoff.setMinutes(cutoff.getMinutes() - 30);
-			week6Deadline = cutoff.toISOString();
-		}
+		week6Deadline = deriveDeadlineFromKickoff(week6Kickoff, 40);
+		week6PickDeadline = deriveDeadlineFromKickoff(week6Kickoff, 30);
 
 		const week6 = await pb.collection('weekly_settings')
 			.getFirstListItem(`season = "${season.id}" && week = ${shStartWeek}`, { fields: 'id,deadline' })
 			.catch(() => null) as any;
 		if (!week6Deadline) week6Deadline = week6?.deadline ?? null;
+		if (!week6PickDeadline) week6PickDeadline = week6?.deadline ?? null;
 		week6Id = week6?.id ?? null;
 	}
 
-	return { season, lmsDeadline, week6Deadline, week6Id, canEditRules };
+	return { season, lmsDeadline, lmsEntryDeadline, week6Deadline, week6PickDeadline, week6Id, canEditRules };
 };
 
 export const actions: Actions = {

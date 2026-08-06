@@ -13,7 +13,7 @@ async function fetchWeekCutoff(pb: any, seasonId: string, weekNum: number): Prom
 	if (!kickoff) return null;
 
 	const cutoff = new Date(kickoff);
-	cutoff.setMinutes(cutoff.getMinutes() - 30);
+	cutoff.setMinutes(cutoff.getMinutes() - 40);
 	return cutoff;
 }
 
@@ -57,7 +57,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		};
 	}
 
-	// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+	// Source-of-truth deadline: 40 min before first kickoff from game_odds.
 	const cutoff = await fetchWeekCutoff(pb, season.id, week.week);
 	if (cutoff && new Date() >= cutoff) {
 		return {

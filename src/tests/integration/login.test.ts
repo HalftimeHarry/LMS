@@ -15,7 +15,8 @@ vi.mock('pocketbase', () => {
 		this.authStore        = {
 			token:   'mock-token',
 			record:  { id: 'u1', role: 'participant', displayName: 'Test User' },
-			isValid: true
+			isValid: true,
+			save: vi.fn()
 		};
 	});
 	return { default: MockPocketBase };
@@ -23,6 +24,7 @@ vi.mock('pocketbase', () => {
 
 import PocketBase from 'pocketbase';
 import { actions } from '../../routes/login/+page.server';
+import { handle } from '../../hooks.server';
 
 function makeFormData(fields: Record<string, string>) {
 	return { get: (key: string) => fields[key] ?? null } as unknown as FormData;
@@ -56,7 +58,8 @@ function mockPbWithRole(role: string, authFails = false) {
 		this.authStore = {
 			token:   'mock-token',
 			record:  authFails ? null : { id: 'u1', role, displayName: 'Test' },
-			isValid: !authFails
+			isValid: !authFails,
+			save: vi.fn()
 		};
 	} as any);
 }
@@ -96,5 +99,21 @@ describe('login action', () => {
 		const { result } = await runAction({ email: 'a@b.com', password: 'wrong' });
 		expect(result?.status).toBe(400);
 		expect(result?.data?.error).toBe('Invalid email or password.');
+	});
+
+	it('preserves the pb_auth cookie when hydrating the session', async () => {
+		const cookies = {
+			get: vi.fn().mockReturnValue(JSON.stringify({ token: 'mock-token', record: { id: 'u1', role: 'participant' } })),
+			set: vi.fn(),
+			delete: vi.fn()
+		};
+		const event = { cookies, locals: {} } as any;
+		const resolve = vi.fn().mockResolvedValue('ok');
+
+		await handle({ event, resolve } as any);
+
+		expect(cookies.delete).not.toHaveBeenCalled();
+		expect(event.locals.user?.id).toBe('u1');
+		expect(event.locals.role).toBe('participant');
 	});
 });

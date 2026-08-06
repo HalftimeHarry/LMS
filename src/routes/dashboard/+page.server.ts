@@ -1,11 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
+import { getDeadlinePairFromKickoff } from '$lib/server/deadlines';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url, depends, cookies }) => {
 	depends('dashboard:season');
-	if (!locals.user) redirect(302, '/login?redirect=/dashboard');
-	if (locals.role === 'super_admin' || locals.role === 'pool_admin') redirect(302, '/admin');
+	if (!locals.user) throw redirect(302, '/login?redirect=/dashboard');
+	if (locals.role === 'super_admin' || locals.role === 'pool_admin') throw redirect(302, '/admin');
 
 	let pb: Awaited<ReturnType<typeof pbAdmin>>;
 	try {
@@ -36,6 +37,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 
 	// Seasons the user actually has entries in
 	const userSeasonIds = [...new Set(e.map((x: any) => x.season as string))];
+	const seasonIdsToLoad = new Set<string>(userSeasonIds);
 	const userSeasons   = userSeasonIds.map(id =>
 		allSeasons.find((s: any) => s.id === id) ?? { id, name: '—', status: 'unknown' }
 	);
@@ -61,9 +63,19 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		(paramIsValid && (!hasRealSeason || paramIsReal)) ? seasonParam!
 		: bestSeasonId;
 
+	if (defaultSeasonId) seasonIdsToLoad.add(defaultSeasonId);
+
+	console.log('[dashboard debug]', {
+		seasonParam,
+		defaultSeasonId,
+		userSeasonIds,
+		seasonIdsToLoad: [...seasonIdsToLoad],
+		selectedSeasonName: allSeasons.find((s: any) => s.id === defaultSeasonId)?.name ?? null,
+	});
+
 	// Redirect to canonical URL if param is missing or pointing to a test season when a real one exists
 	if (defaultSeasonId && seasonParam !== defaultSeasonId) {
-		redirect(303, `/dashboard?season=${defaultSeasonId}`);
+		throw redirect(303, `/dashboard?season=${defaultSeasonId}`);
 	}
 
 	// Selected season object
@@ -77,38 +89,35 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	const currentWeekBySeason: Record<string, any> = {};
 	const now = new Date();
 
-	const cutoffFromKickoff = (kickoff: string | null): string | null => {
-		if (!kickoff) return null;
-		const d = new Date(kickoff);
-		if (Number.isNaN(d.getTime())) return null;
-		d.setMinutes(d.getMinutes() - 30);
-		return d.toISOString();
-	};
-
-	const derivedDeadlineCache = new Map<string, string | null>();
-	const getDerivedDeadline = async (seasonId: string, weekNum: number): Promise<string | null> => {
+	const derivedDeadlineCache = new Map<string, { pick: string | null; entry: string | null }>();
+	const getDerivedDeadlinePair = async (seasonId: string, weekNum: number): Promise<{ pick: string | null; entry: string | null }> => {
 		const key = `${seasonId}:${weekNum}`;
-		if (derivedDeadlineCache.has(key)) return derivedDeadlineCache.get(key) ?? null;
+		if (derivedDeadlineCache.has(key)) return derivedDeadlineCache.get(key)!;
 
 		const odds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp' }
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
 		).catch(() => null) as any;
 
-		const derived = cutoffFromKickoff(odds?.game_time_stamp ?? null);
+		const kickoff = odds?.game_time_stamp ?? odds?.gameTime ?? null;
+		const derived = getDeadlinePairFromKickoff(kickoff);
 		derivedDeadlineCache.set(key, derived);
 		return derived;
 	};
 
 	const withEffectiveDeadline = async (weekObj: any | null): Promise<any | null> => {
 		if (!weekObj) return weekObj;
-		const derived = await getDerivedDeadline(weekObj.season, Number(weekObj.week));
-		if (!derived) return weekObj;
-		return { ...weekObj, deadline: derived };
+		const derived = await getDerivedDeadlinePair(weekObj.season, Number(weekObj.week));
+		if (!derived.pick && !derived.entry) return weekObj;
+		return { ...weekObj, deadline: derived.pick ?? weekObj.deadline ?? null, entryDeadline: derived.entry ?? null, pickDeadline: derived.pick ?? weekObj.deadline ?? null };
 	};
 
+	const seasonsToEvaluate = [...seasonIdsToLoad].map(id =>
+		allSeasons.find((s: any) => s.id === id) ?? { id, name: '—', status: 'unknown' }
+	);
+
 	await Promise.all(
-		userSeasons.map(async (s: any) => {
+		seasonsToEvaluate.map(async (s: any) => {
 			const openWeeks = await pb.collection('weekly_settings').getFullList({
 				filter: `season = "${s.id}" && status = "open"`,
 				sort: 'week'
@@ -124,8 +133,18 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 				}
 			}
 
+			if (selected) {
+				console.log('[dashboard debug] selected week', {
+					seasonId: s.id,
+					week: selected.week,
+					deadline: selected.deadline,
+					entryDeadline: selected.entryDeadline,
+					pickDeadline: selected.pickDeadline,
+				});
+			}
+
 			if (!selected && openWeeks.length > 0) {
-				selected = await withEffectiveDeadline(openWeeks[0]);
+				selected = await withEffectiveDeadline(openWeeks[openWeeks.length - 1]);
 			}
 
 			if (!selected) {
@@ -144,7 +163,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	// The 2H countdown card shows this deadline before the 2H pool opens.
 	const week6BySeason: Record<string, any> = {};
 	await Promise.all(
-		userSeasons
+		seasonsToEvaluate
 			.filter((s: any) => s.secondHalfEnabled !== false)
 			.map(async (s: any) => {
 				const startWeek = s.secondHalfStartWeek ?? 6;
@@ -208,7 +227,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	}> = {};
 
 	await Promise.all(
-		userSeasonIds.map(async (sid) => {
+		[...seasonIdsToLoad].map(async (sid) => {
 			const season   = allSeasons.find((s: any) => s.id === sid);
 			const lmsFee   = (season?.lmsEntryFee        ?? 0) as number;
 			const shFee    = (season?.secondHalfEntryFee ?? 0) as number;
