@@ -3,6 +3,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/stores';
 	import InfoTip from '$lib/components/InfoTip.svelte';
+	import { isAddEntriesDisabledByPoolFilter } from '$lib/utils';
 	import { createEntriesController } from '$lib/controllers';
 	import type { PageData, ActionData } from './$types';
 
@@ -62,7 +63,15 @@
 		playerSearch     = '';
 		selectedUserId   = '';
 		selectedSeasonId = defaultSeason?.id ?? '';
-		entryType        = 'lms';
+		if (filterPoolType === 'second_half' && canSelectSh) {
+			entryType = 'second_half';
+		} else if (filterPoolType === 'lms' && canSelectLms) {
+			entryType = 'lms';
+		} else if (canSelectSh && !canSelectLms) {
+			entryType = 'second_half';
+		} else {
+			entryType = 'lms';
+		}
 		complimentary    = false;
 		entryCount       = 1;
 		referredBy       = '';
@@ -133,9 +142,9 @@
 	$effect(() => {
 		if (modalHasLms && !modalHasSh) entryType = 'lms';
 		if (!modalHasLms && modalHasSh) entryType = 'second_half';
-		// Auto-switch when deadline flips
-		if (!canSelectLms && entryType === 'lms')          entryType = 'second_half';
-		if (!canSelectSh  && entryType === 'second_half')  entryType = 'lms';
+		// Auto-switch only when one pool is unavailable and the other is available.
+		if (!canSelectLms && canSelectSh && entryType === 'lms')          entryType = 'second_half';
+		if (!canSelectSh  && canSelectLms && entryType === 'second_half') entryType = 'lms';
 	});
 
 	// Base name — auto-fills from player + entry type, stays editable
@@ -155,6 +164,7 @@
 
 	// Deadline helpers — keyed by seasonId
 	const deadlineMap        = $derived(data.deadlineMap as Record<string, string>);
+	const shDeadlineMap      = $derived((data.shDeadlineMap as Record<string, string>) ?? {});
 	const PST = 'America/Los_Angeles';
 	function fmtDeadline(iso: string) {
 		return new Date(iso).toLocaleString('en-US', {
@@ -164,21 +174,30 @@
 	}
 	function deadlineDiff(iso: string) { return new Date(iso).getTime() - now; }
 
-	// LMS deadline — 30 min before week 1 first kickoff
-	const activeDeadline     = $derived((data.lmsEntryDeadline as string | null) ?? null);
+	const activeSeasonId = $derived((data.activeSeason as any)?.id as string | null);
+
+	// LMS deadline — 40 min before week 1 first kickoff
+	const activeDeadline     = $derived((activeSeasonId && deadlineMap[activeSeasonId]) || (data.lmsEntryDeadline as string | null) || null);
 	const activeDeadlinePast = $derived(activeDeadline ? now > new Date(activeDeadline).getTime() : false);
-	// LMS is only available before the Week 1 pick deadline; Second Half only after
-	const canSelectLms = $derived(!activeDeadlinePast);
-	const canSelectSh  = $derived(activeDeadlinePast);
+
+	// 2H deadline — 40 min before secondHalfStartWeek first kickoff
+	const shDeadline     = $derived((activeSeasonId && shDeadlineMap[activeSeasonId]) || (data.shEntryDeadline as string | null) || null);
+	const shDeadlinePast = $derived(shDeadline ? now > new Date(shDeadline).getTime() : false);
+
+	// Modal selection deadlines use the selected season where available.
+	const modalLmsDeadline = $derived((selectedSeasonId && deadlineMap[selectedSeasonId]) || activeDeadline);
+	const modalShDeadline  = $derived((selectedSeasonId && shDeadlineMap[selectedSeasonId]) || shDeadline);
+	const modalLmsDeadlinePast = $derived(modalLmsDeadline ? now > new Date(modalLmsDeadline).getTime() : false);
+	const modalShDeadlinePast  = $derived(modalShDeadline ? now > new Date(modalShDeadline).getTime() : false);
+
+	// Pool availability is based on each pool's own entry deadline and season toggles.
+	const canSelectLms = $derived(modalHasLms && !modalLmsDeadlinePast);
+	const canSelectSh  = $derived(modalHasSh && !modalShDeadlinePast);
 	const activeDeadlineDiff = $derived(activeDeadline ? deadlineDiff(activeDeadline) : 0);
 	const activeDeadlineDays = $derived(activeDeadlineDiff > 0 ? Math.floor(activeDeadlineDiff / 86_400_000) : 0);
 	const activeDeadlineH    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 86_400_000) / 3_600_000) : 0);
 	const activeDeadlineM    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 3_600_000) / 60_000) : 0);
 	const activeDeadlineS    = $derived(activeDeadlineDiff > 0 ? Math.floor((activeDeadlineDiff % 60_000) / 1_000) : 0);
-
-	// 2H deadline — 30 min before week 6 first kickoff
-	const shDeadline     = $derived((data.shEntryDeadline as string | null) ?? null);
-	const shDeadlinePast = $derived(shDeadline ? now > new Date(shDeadline).getTime() : false);
 	const shDeadlineDiff = $derived(shDeadline ? deadlineDiff(shDeadline) : 0);
 	const shDeadlineDays = $derived(shDeadlineDiff > 0 ? Math.floor(shDeadlineDiff / 86_400_000) : 0);
 	const shDeadlineH    = $derived(shDeadlineDiff > 0 ? Math.floor((shDeadlineDiff % 86_400_000) / 3_600_000) : 0);
@@ -186,8 +205,24 @@
 	const shDeadlineS    = $derived(shDeadlineDiff > 0 ? Math.floor((shDeadlineDiff % 60_000) / 1_000) : 0);
 
 	// Which deadline applies to the current pool type filter
-	const currentDeadlinePast = $derived(filterPoolType === 'second_half' ? shDeadlinePast : activeDeadlinePast);
-	const currentDeadlineDiff = $derived(filterPoolType === 'second_half' ? shDeadlineDiff : activeDeadlineDiff);
+	const currentDeadlinePast = $derived(isAddEntriesDisabledByPoolFilter({
+		poolType: filterPoolType,
+		lmsDeadlinePast: activeDeadlinePast,
+		secondHalfDeadlinePast: shDeadlinePast
+	}));
+	const currentDeadlineDiff = $derived(
+		filterPoolType === 'lms'
+			? activeDeadlineDiff
+			: filterPoolType === 'second_half'
+				? shDeadlineDiff
+				: activeDeadlinePast && shDeadlinePast
+					? 0
+					: activeDeadlinePast
+						? shDeadlineDiff
+						: shDeadlinePast
+							? activeDeadlineDiff
+							: Math.min(activeDeadlineDiff, shDeadlineDiff)
+	);
 	const currentDeadlineDays = $derived(filterPoolType === 'second_half' ? shDeadlineDays : activeDeadlineDays);
 	const currentDeadlineH    = $derived(filterPoolType === 'second_half' ? shDeadlineH    : activeDeadlineH);
 	const currentDeadlineM    = $derived(filterPoolType === 'second_half' ? shDeadlineM    : activeDeadlineM);
@@ -645,7 +680,15 @@
 					</label>
 				</div>
 				<p class="text-xs text-gray-600">
-					{#if canSelectLms}LMS available until Week 1 pick deadline · Second Half opens after{:else}Second Half available · LMS closed after Week 1 deadline{/if}
+					{#if canSelectLms && canSelectSh}
+						Both pools available
+					{:else if canSelectLms}
+						LMS available · 2nd Half deadline has passed
+					{:else if canSelectSh}
+						2nd Half available · LMS deadline has passed
+					{:else}
+						Both pool deadlines have passed
+					{/if}
 				</p>
 			</div>
 			{/if}

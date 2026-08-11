@@ -192,6 +192,59 @@ describe('createEntries — blocked after game-derived deadline', () => {
 		expect((result as any).data.error).toMatch(/deadline has passed/i);
 	});
 
+	it('blocks LMS but allows 2H when week 1 deadline passed and week 6 deadline still open', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockImplementation((query: string) => {
+			if (query.includes('week = 1')) {
+				return Promise.resolve({ game_time_stamp: minutesAgo(10) });
+			}
+			if (query.includes('week = 6')) {
+				return Promise.resolve({ game_time_stamp: minutesFromNow(60) });
+			}
+			return Promise.resolve(null);
+		});
+
+		const lmsResult = await actions.createEntries({
+			request: { formData: async () => makeFormData(BASE_FIELDS) }
+		} as any);
+		expect((lmsResult as any).status).toBe(400);
+
+		const shResult = await actions.createEntries({
+			request: {
+				formData: async () => makeFormData({
+					...BASE_FIELDS,
+					entryType: 'second_half',
+					baseName: 'Test 2nd Half'
+				})
+			}
+		} as any);
+		expect((shResult as any)?.status).not.toBe(400);
+	});
+
+	it('blocks 2H when week 6 deadline has passed, even if week 1 remains open', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockImplementation((query: string) => {
+			if (query.includes('week = 1')) {
+				return Promise.resolve({ game_time_stamp: minutesFromNow(60) });
+			}
+			if (query.includes('week = 6')) {
+				return Promise.resolve({ game_time_stamp: minutesAgo(10) });
+			}
+			return Promise.resolve(null);
+		});
+
+		const result = await actions.createEntries({
+			request: {
+				formData: async () => makeFormData({
+					...BASE_FIELDS,
+					entryType: 'second_half',
+					baseName: 'Test 2nd Half'
+				})
+			}
+		} as any);
+
+		expect((result as any).status).toBe(400);
+		expect((result as any).data.error).toMatch(/week 6 kickoff/i);
+	});
+
 	it('queries week 1 odds for LMS entries', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
 			game_time_stamp: minutesFromNow(60)
@@ -228,6 +281,87 @@ describe('createEntries — blocked after game-derived deadline', () => {
 		// No odds = no deadline enforcement = should not fail with a deadline error
 		const error: string | undefined = (result as any)?.data?.error;
 		expect(error ?? '').not.toMatch(/deadline has passed/i);
+	});
+
+	it('creates second-half entries as "2nd Half N" and strips trailing LMS from base name', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesFromNow(60)
+		});
+
+		await actions.createEntries({
+			request: {
+				formData: async () => makeFormData({
+					seasonId:  's1',
+					userId:    'u1',
+					entryType: 'second_half',
+					count:     '2',
+					baseName:  'Turbo Nasty LMS'
+				})
+			}
+		} as any);
+
+		expect(collections.entries.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+			entryType: 'second_half',
+			entryName: 'Turbo Nasty 2nd Half 1'
+		}));
+		expect(collections.entries.create).toHaveBeenNthCalledWith(2, expect.objectContaining({
+			entryType: 'second_half',
+			entryName: 'Turbo Nasty 2nd Half 2'
+		}));
+	});
+
+	it('continues second-half numbering from existing second-half entries only', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesFromNow(60)
+		});
+		collections.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'e1', entryType: 'lms' },
+			{ id: 'e2', entryType: 'second_half' }
+		]);
+
+		await actions.createEntries({
+			request: {
+				formData: async () => makeFormData({
+					seasonId:  's1',
+					userId:    'u1',
+					entryType: 'second_half',
+					count:     '1',
+					baseName:  'Turbo Nasty'
+				})
+			}
+		} as any);
+
+		expect(collections.entries.create).toHaveBeenCalledWith(expect.objectContaining({
+			entryType: 'second_half',
+			entryName: 'Turbo Nasty 2nd Half 2'
+		}));
+	});
+
+	it('keeps LMS naming behavior unchanged', async () => {
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue({
+			game_time_stamp: minutesFromNow(60)
+		});
+		collections.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'e1', entryType: 'lms' },
+			{ id: 'e2', entryType: 'second_half' }
+		]);
+
+		await actions.createEntries({
+			request: {
+				formData: async () => makeFormData({
+					seasonId:  's1',
+					userId:    'u1',
+					entryType: 'lms',
+					count:     '1',
+					baseName:  'Turbo Nasty LMS'
+				})
+			}
+		} as any);
+
+		expect(collections.entries.create).toHaveBeenCalledWith(expect.objectContaining({
+			entryType: 'lms',
+			entryName: 'Turbo Nasty LMS 2'
+		}));
 	});
 });
 

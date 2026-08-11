@@ -5,6 +5,20 @@ import { EntryProvider, SeasonProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryStatus } from '$lib/providers';
 
+function buildEntryName(baseName: string, entryType: 'lms' | 'second_half', sequence: number, offset: number, count: number): string {
+	if (entryType === 'second_half') {
+		const cleanedBase = baseName
+			.replace(/\s+LMS(?:\s+\d+)?$/i, '')
+			.replace(/\s+2nd\s+Half(?:\s+\d+)?$/i, '')
+			.trim();
+		return `${cleanedBase} 2nd Half ${sequence}`;
+	}
+
+	return count === 1 && offset === 0
+		? baseName
+		: `${baseName} ${sequence}`;
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const pb           = await pbAdmin();
 	const isSuperAdmin = locals.role === 'super_admin';
@@ -36,19 +50,36 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const entries      = isSuperAdmin ? allEntries    : allEntries.filter((e: any)    => !testSeasonIds.has(e.season));
 	const statsAll     = isSuperAdmin ? statsEntries  : statsEntries.filter((e: any)  => !testSeasonIds.has(e.season));
 
-	// Map seasonId → cutoff (40 min before week 1 kickoff from game_odds).
+	// Map seasonId → entry cutoffs (40 min before first kickoff from game_odds).
 	const deadlineMap: Record<string, string> = {};
+	const shDeadlineMap: Record<string, string> = {};
 	for (const s of seasons) {
 		if (s.name.startsWith('[TEST]')) continue;
-		const odds = await pb.collection('game_odds').getFirstListItem(
-			`season = "${s.id}" && week = 1 && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
-		).catch(() => null) as any;
-		const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
-		if (!kickoff) continue;
-		const cutoff = new Date(kickoff);
-		cutoff.setMinutes(cutoff.getMinutes() - 40);
-		deadlineMap[s.id] = cutoff.toISOString();
+		const shStartWeek = (s as any).secondHalfStartWeek ?? 6;
+		const [week1Odds, shOdds] = await Promise.all([
+			pb.collection('game_odds').getFirstListItem(
+				`season = "${s.id}" && week = 1 && isActive = true`,
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			).catch(() => null),
+			pb.collection('game_odds').getFirstListItem(
+				`season = "${s.id}" && week = ${shStartWeek} && isActive = true`,
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			).catch(() => null),
+		]);
+
+		const week1Kickoff = (week1Odds as any)?.game_time_stamp ?? (week1Odds as any)?.gameTime;
+		if (week1Kickoff) {
+			const cutoff = new Date(week1Kickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 40);
+			deadlineMap[s.id] = cutoff.toISOString();
+		}
+
+		const shKickoff = (shOdds as any)?.game_time_stamp ?? (shOdds as any)?.gameTime;
+		if (shKickoff) {
+			const cutoff = new Date(shKickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 40);
+			shDeadlineMap[s.id] = cutoff.toISOString();
+		}
 	}
 
 	// Active season for the deadline notice in the header
@@ -60,34 +91,11 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	let shEntryDeadline:  string | null = null;
 
 	if (activeSeason) {
-		const shStartWeek = (activeSeason as any).secondHalfStartWeek ?? 6;
-
-		const [week1Odds, week6Odds] = await Promise.all([
-			pb.collection('game_odds').getFirstListItem(
-				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
-			).catch(() => null),
-			pb.collection('game_odds').getFirstListItem(
-				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
-			).catch(() => null),
-		]);
-
-		const week1Kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
-		if (week1Kickoff) {
-			const t = new Date(week1Kickoff);
-			t.setMinutes(t.getMinutes() - 40);
-			lmsEntryDeadline = t.toISOString();
-		}
-		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
-		if (week6Kickoff) {
-			const t = new Date(week6Kickoff);
-			t.setMinutes(t.getMinutes() - 40);
-			shEntryDeadline = t.toISOString();
-		}
+		lmsEntryDeadline = deadlineMap[activeSeason.id] ?? null;
+		shEntryDeadline = shDeadlineMap[activeSeason.id] ?? null;
 	}
 
-	return { entries, statsAll, seasons, participants, statusFilter, poolType, deadlineMap, activeSeason, lmsEntryDeadline, shEntryDeadline };
+	return { entries, statsAll, seasons, participants, statusFilter, poolType, deadlineMap, shDeadlineMap, activeSeason, lmsEntryDeadline, shEntryDeadline };
 };
 
 export const actions: Actions = {
@@ -135,9 +143,8 @@ export const actions: Actions = {
 		const created: string[] = [];
 		try {
 			for (let i = 0; i < count; i++) {
-				const entryName = count === 1 && offset === 0
-					? baseName
-					: `${baseName} ${offset + i + 1}`;
+				const sequence = offset + i + 1;
+				const entryName = buildEntryName(baseName, entryType, sequence, offset, count);
 				await pb.collection('entries').create({
 					season:        seasonId,
 					user:          userId,

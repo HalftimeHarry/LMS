@@ -53,3 +53,18 @@ export function resolveCardCountdownDisplay({
 export function resolveStatusLabelText(_isLoggedIn: boolean, label: string): string {
 	return label;
 }
+
+export function isAddEntriesDisabledByPoolFilter({
+	poolType,
+	lmsDeadlinePast,
+	secondHalfDeadlinePast
+}: {
+	poolType: 'all' | 'lms' | 'second_half' | string;
+	lmsDeadlinePast: boolean;
+	secondHalfDeadlinePast: boolean;
+}): boolean {
+	if (poolType === 'lms') return lmsDeadlinePast;
+	if (poolType === 'second_half') return secondHalfDeadlinePast;
+	// "All entries" should stay enabled as long as at least one pool is still open.
+	return lmsDeadlinePast && secondHalfDeadlinePast;
+}
