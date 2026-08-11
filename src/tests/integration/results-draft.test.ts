@@ -16,7 +16,7 @@
  * 2H  elimination rule:  picked team LOSES → eliminated
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { actions } from '../../routes/admin/results/+page.server';
 import { pbAdmin } from '$lib/server/pb-admin';
 
@@ -65,15 +65,54 @@ function baseFields(extra: Record<string, string> = {}) {
 }
 
 beforeEach(() => {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date('2026-09-20T12:00:00.000Z'));
+
 	collections = {
 		game_odds:        { getFullList: vi.fn().mockResolvedValue([GAME]) },
 		picks:            { getFullList: vi.fn() },
 		pick_results:     { getFirstListItem: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 'pr1' }), update: vi.fn().mockResolvedValue({}) },
 		entries:          { update: vi.fn().mockResolvedValue({}) },
-		weekly_settings:  { getOne: vi.fn().mockResolvedValue({ id: LMS_WEEK, status: 'locked', week: 1 }), update: vi.fn().mockResolvedValue({}) },
+		weekly_settings:  { getOne: vi.fn().mockResolvedValue({ id: LMS_WEEK, status: 'locked', week: 1, deadline: '2026-09-10T23:50:00.000Z' }), update: vi.fn().mockResolvedValue({}) },
 	};
 	mockPb = { collection: vi.fn((name: string) => collections[name]) };
 	vi.mocked(pbAdmin).mockResolvedValue(mockPb);
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+});
+
+describe('recordResults — server-side results window gating', () => {
+	it('blocks direct POST before global results unlock', async () => {
+		vi.setSystemTime(new Date('2026-09-09T20:00:00.000Z'));
+		collections.picks.getFullList = vi.fn().mockResolvedValue([]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect((result as any).status).toBe(403);
+		expect((result as any).data?.error ?? '').toMatch(/locked until/i);
+	});
+
+	it('blocks direct POST before the selected week deadline', async () => {
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: LMS_WEEK,
+			status: 'locked',
+			week: 1,
+			deadline: '2026-09-20T15:00:00.000Z'
+		});
+		vi.setSystemTime(new Date('2026-09-20T14:00:00.000Z'));
+		collections.picks.getFullList = vi.fn().mockResolvedValue([]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect((result as any).status).toBe(403);
+		expect((result as any).data?.error ?? '').toMatch(/not active for this week/i);
+	});
 });
 
 // ── Save Draft — week status stays locked ─────────────────────────────────────
@@ -202,7 +241,7 @@ describe('recordResults — Save & Finalize (no draft)', () => {
 
 	it('does NOT advance week if already complete', async () => {
 		collections.picks.getFullList    = vi.fn().mockResolvedValue([]);
-		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: LMS_WEEK, status: 'complete', week: 1 });
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: LMS_WEEK, status: 'complete', week: 1, deadline: '2026-09-10T23:50:00.000Z' });
 
 		await actions.recordResults({
 			request: { formData: async () => makeFormData(baseFields()) }
@@ -228,7 +267,7 @@ describe('recordResults — 2H elimination rule (picked team LOSES)', () => {
 	}
 
 	beforeEach(() => {
-		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6 });
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6, deadline: '2026-09-15T23:50:00.000Z' });
 	});
 
 	it('eliminates 2H entry when picked team LOSES', async () => {
@@ -379,7 +418,7 @@ describe('recordResults — tie result eliminates pickers of both teams', () => 
 
 	it('2H: eliminates entry that picked the home team in a tie', async () => {
 		const SH_WEEK = 'shWeek6';
-		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6 });
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6, deadline: '2026-09-15T23:50:00.000Z' });
 		collections.picks.getFullList = vi.fn().mockResolvedValue([{
 			id: 'pick_sh', entryType: 'second_half', pickedTeams: [HOME_TEAM],
 			expand: { entry: { id: 'entry_sh', status: 'active' } },
@@ -400,7 +439,7 @@ describe('recordResults — tie result eliminates pickers of both teams', () => 
 
 	it('2H: eliminates entries that picked both teams in a tie', async () => {
 		const SH_WEEK = 'shWeek6';
-		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6 });
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: SH_WEEK, status: 'locked', week: 6, deadline: '2026-09-15T23:50:00.000Z' });
 		collections.picks.getFullList = vi.fn().mockResolvedValue([
 			{
 				id: 'pick_sh_home', entryType: 'second_half', pickedTeams: [HOME_TEAM],

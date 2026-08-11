@@ -1,5 +1,5 @@
 import { pbAdmin } from '$lib/server/pb-admin';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import { WeekProvider, SeasonProvider, TeamProvider, EntryProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryType } from '$lib/providers';
@@ -8,6 +8,10 @@ const RESULTS_DELAY_MS  = 10 * 60 * 1000;
 const COMPLETE_DELAY_MS = 18 * 60 * 1000;
 
 export const load: PageServerLoad = async ({ url, locals }) => {
+	if (locals.role !== 'super_admin') {
+		throw error(403, 'Only super admins can access Season Settings.');
+	}
+
 	const pb           = await pbAdmin();
 	const isSuperAdmin = locals.role === 'super_admin';
 	const seasonId     = url.searchParams.get('season') ?? '';
@@ -216,7 +220,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 };
 
 export const actions: Actions = {
-	createWeek: async ({ request }) => {
+	createWeek: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 
@@ -248,6 +253,7 @@ export const actions: Actions = {
 	},
 
 	setStatus: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
@@ -266,7 +272,8 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	updateDeadline: async ({ request }) => {
+	updateDeadline: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id       = data.get('id')       as string;
@@ -310,7 +317,8 @@ export const actions: Actions = {
 		return { success: true, deadline: iso };
 	},
 
-	setFavorite: async ({ request }) => {
+	setFavorite: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id     = data.get('id')     as string;
@@ -329,7 +337,8 @@ export const actions: Actions = {
 	 * Returns the earliest game_time_stamp from game_odds for a given season+week.
 	 * Used to auto-populate the week 1 deadline from the actual schedule.
 	 */
-	fetchFirstGame: async ({ request }) => {
+	fetchFirstGame: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb       = await pbAdmin();
 		const data     = await request.formData();
 		const seasonId = data.get('seasonId') as string;
@@ -597,7 +606,8 @@ export const actions: Actions = {
 		return { success: true, advanceLog: log };
 	},
 
-	deleteWeek: async ({ request }) => {
+	deleteWeek: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 		const id   = data.get('id') as string;
@@ -614,7 +624,8 @@ export const actions: Actions = {
 	 * Skips weeks that already exist. Uses Thursday 3 pm UTC as a placeholder
 	 * deadline — admins can edit individual weeks afterward.
 	 */
-	bulkCreateWeeks: async ({ request }) => {
+	bulkCreateWeeks: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
 		const pb   = await pbAdmin();
 		const data = await request.formData();
 

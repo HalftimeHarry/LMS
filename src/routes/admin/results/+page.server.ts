@@ -2,6 +2,42 @@ import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import type { Actions, PageServerLoad } from './$types';
 
+const RESULTS_UNLOCK_AT_ISO = '2026-09-09T23:50:00.000Z';
+
+function canUseResults(nowMs: number) {
+	return nowMs >= new Date(RESULTS_UNLOCK_AT_ISO).getTime();
+}
+
+async function getWeekDeadlineMs(pb: any, weekId: string): Promise<number | null> {
+	const week = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+	if (!week?.deadline) return null;
+	const ms = new Date(week.deadline).getTime();
+	return Number.isFinite(ms) ? ms : null;
+}
+
+async function validateResultsActionWindow(pb: any, weekIds: string[]) {
+	const nowMs = Date.now();
+	if (!canUseResults(nowMs)) {
+		return fail(403, {
+			error: `Results are locked until ${new Date(RESULTS_UNLOCK_AT_ISO).toISOString()}.`
+		});
+	}
+
+	for (const weekId of weekIds.filter(Boolean)) {
+		const deadlineMs = await getWeekDeadlineMs(pb, weekId);
+		if (!deadlineMs) {
+			return fail(400, { error: `Missing deadline for week ${weekId}.` });
+		}
+		if (nowMs < deadlineMs) {
+			return fail(403, {
+				error: `Results are not active for this week until after ${new Date(deadlineMs).toISOString()}.`
+			});
+		}
+	}
+
+	return null;
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 async function fetchPicksAndResults(pb: any, weekId: string) {
@@ -30,6 +66,9 @@ async function fetchPicksAndResults(pb: any, weekId: string) {
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const pb        = await pbAdmin();
 	const isSuperAdmin = locals.role === 'super_admin';
+	const resultsUnlockAt = RESULTS_UNLOCK_AT_ISO;
+	const serverNow = Date.now();
+	const resultsUnlocked = serverNow >= new Date(resultsUnlockAt).getTime();
 	const yearParam = url.searchParams.get('year') ?? '';
 	const weekParam = url.searchParams.get('week');
 
@@ -57,7 +96,23 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		: (yearPairs[0] ?? null);
 
 	if (!activePair) {
-		return { seasons, yearPairs, activePair: null, weekNum: 1, lmsWeek: null, shWeek: null, games: [], lmsPicks: [], shPicks: [], lmsPickResults: [], shPickResults: [], allWeeks: [] };
+		return {
+			seasons,
+			yearPairs,
+			activePair: null,
+			weekNum: 1,
+			lmsWeek: null,
+			shWeek: null,
+			games: [],
+			lmsPicks: [],
+			shPicks: [],
+			lmsPickResults: [],
+			shPickResults: [],
+			allWeeks: [],
+			resultsUnlockAt,
+			resultsUnlocked,
+			serverNow,
+		};
 	}
 
 	// Use LMS season as the source of truth for week nav + games (same NFL schedule)
@@ -112,7 +167,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	// Week nav from anchor season
 	const allWeeks = await pb.collection('weekly_settings').getFullList({
 		filter: `season = "${anchorSeason.id}"`,
-		fields: 'id,week,status',
+		fields: 'id,week,status,deadline',
 		sort:   'week'
 	}).catch(() => []) as any[];
 
@@ -133,6 +188,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		shPickResults:  shData.pickResults,
 		allWeeks,
 		shStartWeek,
+		resultsUnlockAt,
+		resultsUnlocked,
+		serverNow,
 	};
 };
 
@@ -168,6 +226,8 @@ export const actions: Actions = {
 		const isDraft    = data.get('draft') === '1';
 
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
+		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
+		if (windowError) return windowError;
 
 		// Parse game outcomes: gameId_<id> = home|away|tie
 		const outcomes: Record<string, 'home' | 'away' | 'tie'> = {};
@@ -298,6 +358,8 @@ export const actions: Actions = {
 		const weekNum     = Number(data.get('weekNum'));
 
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
+		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
+		if (windowError) return windowError;
 
 		const CHUNK = 20;
 		let deletedResults = 0;
@@ -346,6 +408,8 @@ export const actions: Actions = {
 		const lmsWeekId  = (data.get('lmsWeekId') as string) || null;
 		const shWeekId   = (data.get('shWeekId')  as string) || null;
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
+		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
+		if (windowError) return windowError;
 		try {
 			await Promise.all([
 				lmsWeekId ? pb.collection('weekly_settings').update(lmsWeekId, { status: 'complete' }) : Promise.resolve(),
@@ -373,6 +437,8 @@ export const actions: Actions = {
 		const weekNum    = Number(data.get('weekNum'));
 
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
+		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
+		if (windowError) return windowError;
 
 		let autoPicked = 0;
 
@@ -447,6 +513,9 @@ export const actions: Actions = {
 		if (!entryId || !weekId)        return fail(400, { error: 'Entry and week are required.' });
 		if (!teamIds?.length)           return fail(400, { error: 'At least one team must be selected.' });
 		if (!reason)                    return fail(400, { error: 'A reason is required for audit purposes.' });
+
+		const windowError = await validateResultsActionWindow(pb, [weekId]);
+		if (windowError) return windowError;
 
 		try {
 			let pick: any;

@@ -57,9 +57,84 @@
 	const selectedData = $derived(
 		(data.seasonDataMap as any)[selectedSeasonId] ?? null
 	);
+	const selectedPoolType = $derived((() => {
+		const season = selectedSeason as any;
+		if (!season) return 'all';
+		const byFlags = season.lmsEnabled === false && season.secondHalfEnabled !== false;
+		const byName = String(season.name ?? '').toLowerCase().includes('second half');
+		return byFlags || byName ? 'second_half' : 'all';
+	})());
+
+	function adminEntriesHref(status?: 'pending_payment') {
+		const params = new URLSearchParams();
+		if (selectedPoolType !== 'all') params.set('poolType', selectedPoolType);
+		if (status) params.set('status', status);
+		const query = params.toString();
+		return query ? `/admin/entries?${query}` : '/admin/entries';
+	}
 	const stats                 = $derived(selectedData?.stats                 ?? null);
 	const currentWeek           = $derived(selectedData?.currentWeek           ?? null);
-	const pendingPaymentEntries = $derived(selectedData?.pendingPaymentEntries ?? []);
+	const tableEntries          = $derived(selectedData?.tableEntries          ?? []);
+
+	let now = $state(Date.now());
+	$effect(() => {
+		const id = setInterval(() => { now = Date.now(); }, 10_000);
+		return () => clearInterval(id);
+	});
+
+	const paymentMethods = [
+		{ value: 'cash', label: 'Cash' },
+		{ value: 'venmo', label: 'Venmo' },
+		{ value: 'check', label: 'Check' },
+		{ value: 'paypal', label: 'PayPal' },
+		{ value: 'zelle', label: 'Zelle' },
+		{ value: 'free', label: 'Free' }
+	];
+
+	let pendingApprovalEntry = $state<any | null>(null);
+	let paymentMethodChoice = $state('cash');
+	let paymentBusy = $state(false);
+	let paymentError = $state('');
+	let paymentMessage = $state('');
+
+	function openPaymentApproval(entry: any) {
+		pendingApprovalEntry = entry;
+		paymentMethodChoice = 'cash';
+		paymentError = '';
+	}
+
+	function closePaymentApproval() {
+		pendingApprovalEntry = null;
+		paymentBusy = false;
+		paymentError = '';
+	}
+
+	async function approvePendingPayment() {
+		if (!pendingApprovalEntry) return;
+		paymentBusy = true;
+		paymentError = '';
+		paymentMessage = '';
+		try {
+			const fd = new FormData();
+			fd.append('id', pendingApprovalEntry.id);
+			fd.append('paymentMethod', paymentMethodChoice);
+
+			const res = await fetch('?/approveEntryPayment', { method: 'POST', body: fd });
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				paymentError = json?.data?.error ?? 'Failed to approve payment.';
+				return;
+			}
+
+			paymentMessage = `Payment approved for ${pendingApprovalEntry.entryName}.`;
+			closePaymentApproval();
+			await invalidateAll();
+		} catch (e: any) {
+			paymentError = e?.message ?? 'Failed to approve payment.';
+		} finally {
+			paymentBusy = false;
+		}
+	}
 
 	const seasonStatusColors: Record<string, string> = {
 		setup:    'border-gray-700 bg-gray-900 text-gray-400',
@@ -71,9 +146,33 @@
 	const seasonStatusLabel: Record<string, string> = {
 		setup:    'Setup',
 		open:     'Open — accepting LMS entries',
-		active:   'Active — accepting 2nd Half entries',
+		active:   'Active',
 		complete: 'Complete'
 	};
+
+	function dynamicSeasonStatusLabel(season: any): string {
+		if (!season) return '';
+		if (season.status !== 'active') return seasonStatusLabel[season.status] ?? season.status;
+
+		const seasonData = (data.seasonDataMap as any)?.[season.id] ?? null;
+		const lmsDeadlineIso = seasonData?.lmsEntryDeadline as string | null;
+		const shDeadlineIso = seasonData?.shEntryDeadline as string | null;
+		const isSecondHalf = String(season.name ?? '').toLowerCase().includes('second half')
+			|| (season.lmsEnabled === false && season.secondHalfEnabled !== false);
+
+		const pastLmsDeadline = lmsDeadlineIso ? now > new Date(lmsDeadlineIso).getTime() : false;
+		const pastShDeadline = shDeadlineIso ? now > new Date(shDeadlineIso).getTime() : false;
+
+		if (isSecondHalf) {
+			return pastShDeadline
+				? 'Active — entries closed'
+				: 'Active — accepting 2nd Half entries';
+		}
+
+		if (!pastLmsDeadline) return 'Active — accepting all entries';
+		if (!pastShDeadline) return 'Active — accepting 2nd Half entries only';
+		return 'Active — entries closed';
+	}
 
 	// Season group filter for the "All Seasons" list
 	// Groups: 'real' | '1h' | '1d'
@@ -133,7 +232,7 @@
 				<div>
 					<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Current Season</p>
 					<p class="mt-1 text-2xl font-bold text-white">{s.name}</p>
-					<p class="mt-1 text-sm text-[#c9a84c]">{seasonStatusLabel[s.status] ?? s.status}</p>
+					<p class="mt-1 text-sm text-[#c9a84c]">{dynamicSeasonStatusLabel(s)}</p>
 				</div>
 				<div class="flex flex-wrap gap-2 text-xs">
 					{#if isSuperAdmin}
@@ -297,49 +396,6 @@
 	</div>
 </div>
 
-<!-- Quick actions -->
-<div class="border-t border-gray-800 p-5">
-	<div class="mb-3 flex items-center gap-2">
-		<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Quick Actions</h2>
-		<InfoTip text="Shortcuts to the most common admin tasks for the currently selected season." />
-	</div>
-	<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-		<a href="/admin/entries?status=pending_payment"
-			class="flex items-center justify-between rounded-lg border border-yellow-900 bg-gray-900/60 px-4 py-3 transition hover:border-yellow-700">
-			<div>
-				<p class="text-sm font-medium text-white">Pending Payments</p>
-				<p class="text-xs text-yellow-400">{stats.pendingPayment} entr{stats.pendingPayment === 1 ? 'y' : 'ies'} awaiting payment</p>
-			</div>
-			<span class="text-yellow-600">→</span>
-		</a>
-		<a href="/admin/entries"
-			class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
-			<div>
-				<p class="text-sm font-medium text-white">All Entries</p>
-				<p class="text-xs text-gray-500">Manage entries & payments</p>
-			</div>
-			<span class="text-gray-600">→</span>
-		</a>
-		<a href="/admin/weeks"
-			class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
-			<div>
-				<p class="text-sm font-medium text-white">Season Settings</p>
-				<p class="text-xs text-gray-500">Set up weeks & deadlines</p>
-			</div>
-			<span class="text-gray-600">→</span>
-		</a>
-		{#if isSuperAdmin}
-			<a href="/admin/seasons/new"
-				class="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3 transition hover:border-gray-600">
-				<div>
-					<p class="text-sm font-medium text-white">New Season</p>
-					<p class="text-xs text-gray-500">Create next season</p>
-				</div>
-				<span class="text-gray-600">→</span>
-			</a>
-		{/if}
-	</div>
-</div>
 {/if}
 
 </div><!-- end overview card -->
@@ -531,29 +587,36 @@
 </div>
 {/if}
 
-<!-- Pending payment quick list -->
-{#if stats && stats.pendingPayment > 0}
+<!-- Season entries table -->
+{#if stats && tableEntries.length > 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
 		<div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-			<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Awaiting Payment</h2>
-			{#if stats.pendingPayment > 5}
-				<a href="/admin/entries?status=pending_payment" class="text-xs text-[#c9a84c] hover:underline">
+			<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Entries</h2>
+			{#if stats.pendingPayment > 0}
+				<a href={adminEntriesHref('pending_payment')} class="text-xs text-[#c9a84c] hover:underline">
 					View all {stats.pendingPayment} →
 				</a>
 			{/if}
 		</div>
-		<div class="overflow-hidden">
+		<div class="max-h-[28rem] overflow-auto">
+			{#if paymentMessage}
+				<div class="mx-4 mt-3 rounded border border-green-800 bg-green-950/40 px-3 py-2 text-xs text-green-300">{paymentMessage}</div>
+			{/if}
+			{#if paymentError && !pendingApprovalEntry}
+				<div class="mx-4 mt-3 rounded border border-red-800 bg-red-950/40 px-3 py-2 text-xs text-red-300">{paymentError}</div>
+			{/if}
 			<table class="w-full text-sm">
 				<thead>
 					<tr class="border-b border-gray-800 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
 						<th class="px-4 py-2">Entry</th>
 						<th class="px-4 py-2">Player</th>
 						<th class="px-4 py-2">Type</th>
+						<th class="px-4 py-2">Awaiting Payment</th>
 						<th class="px-4 py-2 text-right">Fee</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#each pendingPaymentEntries as entry}
+					{#each tableEntries as entry}
 						{@const e = entry as any}
 						<tr class="border-b border-gray-800/50 hover:bg-white/[0.02]">
 							<td class="px-4 py-2 font-medium text-white">{e.entryName}</td>
@@ -564,6 +627,20 @@
 									{e.entryType === 'lms' ? 'LMS' : '2nd Half'}
 								</span>
 							</td>
+							<td class="px-4 py-2">
+								{#if e.status === 'pending_payment'}
+									<button
+										type="button"
+										onclick={() => openPaymentApproval(e)}
+										class="rounded border border-yellow-800 bg-yellow-950/50 px-1.5 py-0.5 text-xs text-yellow-300 transition hover:bg-yellow-900/50"
+										title="Approve payment"
+									>
+										Yes
+									</button>
+								{:else}
+									<span class="rounded border border-green-800 bg-green-950/50 px-1.5 py-0.5 text-xs text-green-400">No</span>
+								{/if}
+							</td>
 							<td class="px-4 py-2 text-right text-gray-400">
 								${e.entryType === 'lms'
 									? ((selectedSeason as any)?.lmsEntryFee ?? '—')
@@ -573,6 +650,49 @@
 					{/each}
 				</tbody>
 			</table>
+		</div>
+	</div>
+{/if}
+
+{#if pendingApprovalEntry}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+		<div class="w-full max-w-md rounded-xl border border-[rgba(201,168,76,0.4)] bg-[#0d0d0d] p-5">
+			<h3 class="text-sm font-semibold uppercase tracking-wider text-[#c9a84c]">Approve Payment</h3>
+			<p class="mt-2 text-sm text-gray-300">Entry: <span class="font-medium text-white">{pendingApprovalEntry.entryName}</span></p>
+			<p class="mt-1 text-xs text-gray-500">Player: {pendingApprovalEntry.expand?.user?.displayName ?? pendingApprovalEntry.expand?.user?.email ?? 'Unknown'}</p>
+
+			<label for="payment-method" class="mt-4 block text-xs font-medium uppercase tracking-wider text-gray-400">Payment method</label>
+			<select
+				id="payment-method"
+				bind:value={paymentMethodChoice}
+				class="mt-1 w-full rounded border border-gray-700 bg-black px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
+			>
+				{#each paymentMethods as method}
+					<option value={method.value}>{method.label}</option>
+				{/each}
+			</select>
+
+			{#if paymentError}
+				<p class="mt-3 rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-300">{paymentError}</p>
+			{/if}
+
+			<div class="mt-5 flex items-center justify-end gap-2">
+				<button
+					type="button"
+					onclick={closePaymentApproval}
+					class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-900"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					onclick={approvePendingPayment}
+					disabled={paymentBusy}
+					class="rounded border border-green-700 bg-green-950/40 px-3 py-1.5 text-xs font-medium text-green-300 transition hover:bg-green-900/40 disabled:opacity-40"
+				>
+					{paymentBusy ? 'Approving...' : 'Approve Payment'}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}
