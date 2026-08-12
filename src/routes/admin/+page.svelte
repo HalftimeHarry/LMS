@@ -62,7 +62,45 @@
 		if (!season) return 'all';
 		const byFlags = season.lmsEnabled === false && season.secondHalfEnabled !== false;
 		const byName = String(season.name ?? '').toLowerCase().includes('second half');
-		return byFlags || byName ? 'second_half' : 'all';
+		return byFlags || byName ? 'second_half' : 'lms';
+	})();
+
+	const poolTableEntries = $derived((selectedData?.tableEntries as any[] ?? []).filter((entry: any) => {
+		if (!selectedSeason) return true;
+		return selectedPoolType === 'all' ? true : entry.entryType === selectedPoolType;
+	}));
+
+	const poolStats = $derived((() => {
+		const rows = poolTableEntries;
+		if (!selectedSeason || rows.length === 0) return selectedData?.stats ?? null;
+
+		const paidRows = rows.filter((entry: any) => entry.paid && entry.paymentMethod !== 'free');
+		const freeRows = rows.filter((entry: any) => entry.paid && entry.paymentMethod === 'free');
+		const maintenanceFee = Number((selectedSeason as any)?.maintenanceFee ?? 0);
+		const feeFor = (entry: any) => entry.entryType === 'lms'
+			? Number((selectedSeason as any)?.lmsEntryFee ?? 0)
+			: Number((selectedSeason as any)?.secondHalfEntryFee ?? 0);
+		const paidTotal = paidRows.reduce((sum: number, entry: any) => sum + feeFor(entry), 0);
+		const poolTotalEntries = rows.length;
+		const poolLmsEntries = rows.filter((entry: any) => entry.entryType === 'lms').length;
+		const poolShEntries = rows.filter((entry: any) => entry.entryType === 'second_half').length;
+		const poolPending = rows.filter((entry: any) => entry.status === 'pending_payment').length;
+		return {
+			totalUsers: new Set(rows.map((entry: any) => entry.user)).size,
+			totalEntries: poolTotalEntries,
+			lmsEntries: poolLmsEntries,
+			secondHalfEntries: poolShEntries,
+			paidEntries: rows.filter((entry: any) => entry.paid).length,
+			freeEntries: freeRows.length,
+			pendingPayment: poolPending,
+			activeEntries: rows.filter((entry: any) => entry.status === 'active').length,
+			eliminatedEntries: rows.filter((entry: any) => entry.status === 'eliminated').length,
+			lmsPot: selectedPoolType === 'lms' ? paidRows.filter((entry: any) => entry.entryType === 'lms').reduce((sum: number, entry: any) => sum + feeFor(entry), 0) : 0,
+			secondHalfPot: selectedPoolType === 'second_half' ? paidRows.filter((entry: any) => entry.entryType === 'second_half').reduce((sum: number, entry: any) => sum + feeFor(entry), 0) : 0,
+			potEstimate: paidTotal,
+			maintenanceFee,
+			lmsNetPayout: Math.max(0, selectedPoolType === 'lms' ? paidTotal - maintenanceFee : 0),
+		};
 	})());
 
 	function adminEntriesHref(status?: 'pending_payment') {
@@ -96,6 +134,9 @@
 	let paymentBusy = $state(false);
 	let paymentError = $state('');
 	let paymentMessage = $state('');
+	let pendingDeleteEntry = $state<any | null>(null);
+	let deleteBusy = $state(false);
+	let deleteError = $state('');
 
 	function openPaymentApproval(entry: any) {
 		pendingApprovalEntry = entry;
@@ -107,6 +148,17 @@
 		pendingApprovalEntry = null;
 		paymentBusy = false;
 		paymentError = '';
+	}
+
+	function openDeleteEntry(entry: any) {
+		pendingDeleteEntry = entry;
+		deleteError = '';
+	}
+
+	function closeDeleteEntry() {
+		pendingDeleteEntry = null;
+		deleteBusy = false;
+		deleteError = '';
 	}
 
 	async function approvePendingPayment() {
@@ -230,7 +282,7 @@
 		<div class="relative px-6 py-5">
 			<div class="flex flex-wrap items-center justify-between gap-4">
 				<div>
-					<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Current Season</p>
+					<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Selected Pool</p>
 					<p class="mt-1 text-2xl font-bold text-white">{s.name}</p>
 					<p class="mt-1 text-sm text-[#c9a84c]">{dynamicSeasonStatusLabel(s)}</p>
 				</div>
@@ -249,8 +301,8 @@
 	</div>
 {:else}
 	<div class="px-5 py-4">
-		<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Current Season</p>
-		<p class="mt-2 text-sm text-gray-500">Select a season below to view stats and quick actions.</p>
+		<p class="text-xs font-semibold uppercase tracking-widest text-[rgba(201,168,76,0.6)]">Selected Pool</p>
+		<p class="mt-2 text-sm text-gray-500">Select an active LMS or Second Half pool below to view stats and quick actions.</p>
 	</div>
 {/if}
 
@@ -337,7 +389,7 @@
 	</div>
 </div>
 
-{#if stats}
+{#if poolStats}
 <!-- Stats grid -->
 <div class="border-t border-gray-800 p-5">
 	<h2 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -351,11 +403,11 @@
 				<p class="text-xs text-gray-500">Total Pot</p>
 				<InfoTip text="Estimated prize pool based on paid entries × entry fee. LMS and 2nd Half pools are tracked separately." />
 			</div>
-			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${(stats.maintenanceFee > 0 ? stats.lmsNetPayout + stats.secondHalfPot : stats.potEstimate).toLocaleString()}</p>
-			{#if stats.maintenanceFee > 0}
-				<p class="mt-1 text-xs text-gray-600">Gross ${stats.potEstimate.toLocaleString()} − ${stats.maintenanceFee.toLocaleString()} fee</p>
+			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${(poolStats.maintenanceFee > 0 ? poolStats.lmsNetPayout + (selectedPoolType === 'second_half' ? poolStats.secondHalfPot : 0) : poolStats.potEstimate).toLocaleString()}</p>
+			{#if poolStats.maintenanceFee > 0}
+				<p class="mt-1 text-xs text-gray-600">Gross ${poolStats.potEstimate.toLocaleString()} − ${poolStats.maintenanceFee.toLocaleString()} fee</p>
 			{/if}
-			<p class="mt-1 text-xs text-gray-600">{stats.freeEntries} free · {stats.paidEntries - stats.freeEntries} paid</p>
+			<p class="mt-1 text-xs text-gray-600">{poolStats.freeEntries} free · {poolStats.paidEntries - poolStats.freeEntries} paid</p>
 
 		</div>
 
@@ -365,8 +417,8 @@
 				<p class="text-xs text-gray-500">Total Entries</p>
 				<InfoTip text="All entries regardless of payment status. One player can hold multiple entries. LMS and 2nd Half entries are counted separately." />
 			</div>
-			<p class="mt-1 text-2xl font-bold text-white">{stats.totalEntries}</p>
-			<p class="mt-1 text-xs text-gray-600">LMS {stats.lmsEntries} · 2H {stats.secondHalfEntries}</p>
+			<p class="mt-1 text-2xl font-bold text-white">{poolStats.totalEntries}</p>
+			<p class="mt-1 text-xs text-gray-600">LMS {poolStats.lmsEntries} · 2H {poolStats.secondHalfEntries}</p>
 		</div>
 
 		<!-- Payment status -->
@@ -375,8 +427,8 @@
 				<p class="text-xs text-gray-500">Paid</p>
 				<InfoTip text="Entries marked as paid (cash, Venmo, etc.) or complimentary. Pending entries have not yet paid — they can still pick but should be resolved before week 1 locks." />
 			</div>
-			<p class="mt-1 text-2xl font-bold text-green-400">{stats.paidEntries}</p>
-			<p class="mt-1 text-xs text-gray-600">{stats.freeEntries} free · {stats.pendingPayment} pending</p>
+			<p class="mt-1 text-2xl font-bold text-green-400">{poolStats.paidEntries}</p>
+			<p class="mt-1 text-xs text-gray-600">{poolStats.freeEntries} free · {poolStats.pendingPayment} pending</p>
 		</div>
 
 		<!-- Active / eliminated -->
@@ -386,11 +438,11 @@
 				<InfoTip text="Active entries are still in the pool. An entry is eliminated when the player picks a team that wins (LMS) or loses (2nd Half). Eliminated entries remain visible for record-keeping." />
 			</div>
 			<p class="mt-1 text-2xl font-bold text-white">
-				<span class="text-green-400">{stats.activeEntries}</span>
+				<span class="text-green-400">{poolStats.activeEntries}</span>
 				<span class="text-gray-600"> / </span>
-				<span class="text-red-400">{stats.eliminatedEntries}</span>
+				<span class="text-red-400">{poolStats.eliminatedEntries}</span>
 			</p>
-			<p class="mt-1 text-xs text-gray-600">{stats.totalUsers} registered users</p>
+			<p class="mt-1 text-xs text-gray-600">{poolStats.totalUsers} registered users</p>
 		</div>
 
 	</div>
@@ -588,13 +640,18 @@
 {/if}
 
 <!-- Season entries table -->
-{#if stats && tableEntries.length > 0}
+{#if poolStats && poolTableEntries.length > 0}
 	<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
-		<div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-			<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Entries</h2>
-			{#if stats.pendingPayment > 0}
+		<div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-800">
+			<div class="flex items-center gap-2">
+				<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">Entries</h2>
+				<span class="rounded border border-[rgba(201,168,76,0.25)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-medium text-[#c9a84c]">
+					{poolTableEntries.length} total
+				</span>
+			</div>
+			{#if poolStats.pendingPayment > 0}
 				<a href={adminEntriesHref('pending_payment')} class="text-xs text-[#c9a84c] hover:underline">
-					View all {stats.pendingPayment} →
+					View all {poolStats.pendingPayment} →
 				</a>
 			{/if}
 		</div>
@@ -613,10 +670,11 @@
 						<th class="px-4 py-2">Type</th>
 						<th class="px-4 py-2">Awaiting Payment</th>
 						<th class="px-4 py-2 text-right">Fee</th>
+						<th class="px-4 py-2 text-right">Action</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#each tableEntries as entry}
+					{#each poolTableEntries as entry}
 						{@const e = entry as any}
 						<tr class="border-b border-gray-800/50 hover:bg-white/[0.02]">
 							<td class="px-4 py-2 font-medium text-white">{e.entryName}</td>
@@ -646,10 +704,66 @@
 									? ((selectedSeason as any)?.lmsEntryFee ?? '—')
 									: ((selectedSeason as any)?.secondHalfEntryFee ?? '—')}
 							</td>
+							<td class="px-4 py-2 text-right">
+								<button
+									type="button"
+									onclick={() => openDeleteEntry(e)}
+									class="rounded border border-red-900 bg-red-950/30 px-2 py-1 text-xs font-medium text-red-500 transition hover:bg-red-950/60"
+								>
+									Delete
+								</button>
+							</td>
 						</tr>
 					{/each}
 				</tbody>
 			</table>
+		</div>
+	</div>
+{/if}
+
+{#if pendingDeleteEntry}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
+		<div class="w-full max-w-md rounded-xl border border-red-900/80 bg-[#0d0d0d] p-5">
+			<h3 class="text-sm font-semibold uppercase tracking-wider text-red-400">Delete entry</h3>
+			<p class="mt-2 text-sm text-gray-300">Entry: <span class="font-medium text-white">{pendingDeleteEntry.entryName}</span></p>
+			<p class="mt-1 text-xs text-gray-500">Player: {pendingDeleteEntry.expand?.user?.displayName ?? pendingDeleteEntry.expand?.user?.email ?? 'Unknown'}</p>
+
+			{#if deleteError}
+				<p class="mt-3 rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-300">{deleteError}</p>
+			{/if}
+
+			<div class="mt-5 flex items-center justify-end gap-2">
+				<button
+					type="button"
+					onclick={closeDeleteEntry}
+					class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-gray-900"
+				>
+					Cancel
+				</button>
+				<form method="POST" action="?/deleteEntry" use:enhance={() => {
+					deleteBusy = true;
+					deleteError = '';
+					return async ({ update, result }) => {
+						deleteBusy = false;
+						if (result.type === 'error' || result.type === 'failure') {
+							deleteError = result.data?.error ?? 'Failed to delete entry.';
+							return;
+						}
+						closeDeleteEntry();
+						await update();
+						await invalidateAll();
+					};
+				}}>
+					<input type="hidden" name="id" value={pendingDeleteEntry.id} />
+					<button
+						type="submit"
+						disabled={deleteBusy}
+						class="rounded border border-red-700 bg-red-950/40 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-900/40 disabled:opacity-40"
+					>
+						{deleteBusy ? 'Deleting...' : 'Delete'}
+					</button>
+				</form>
+			</div>
 		</div>
 	</div>
 {/if}

@@ -159,6 +159,14 @@
 		}
 	});
 
+	// Local filter state — kept in sync with URL params so selects reflect current state
+	let filterStatus   = $state(data.statusFilter ?? 'all');
+	let filterPoolType = $state(data.poolType     ?? 'all');
+	$effect(() => {
+		filterStatus   = data.statusFilter ?? 'all';
+		filterPoolType = data.poolType     ?? 'all';
+	});
+
 	// Client-side search and pool type filter delegated to controller
 	const visibleEntries = $derived(ctrl.filtered);
 
@@ -238,13 +246,13 @@
 		return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 	}
 
-	// ── Stats (all entries, unfiltered — separate from the filtered list) ───
+	// ── Stats reflect the current visible filter set, not the unfiltered season totals ───
 	const activeSeason    = $derived(data.activeSeason as any);
-	const allEntries      = $derived(data.statsAll as any[]);
+	const filteredEntries = $derived((visibleEntries as any[]) ?? []);
 	const lmsFee          = $derived((activeSeason?.lmsEntryFee        ?? 0) as number);
 	const shFee           = $derived((activeSeason?.secondHalfEntryFee ?? 0) as number);
-	const lmsEntries      = $derived(allEntries.filter((e: any) => e.entryType === 'lms'));
-	const shEntries       = $derived(allEntries.filter((e: any) => e.entryType === 'second_half'));
+	const lmsEntries      = $derived(filteredEntries.filter((e: any) => e.entryType === 'lms'));
+	const shEntries       = $derived(filteredEntries.filter((e: any) => e.entryType === 'second_half'));
 	const lmsCount        = $derived(lmsEntries.length);
 	const shCount         = $derived(shEntries.length);
 	const totalCount      = $derived(lmsCount + shCount);
@@ -255,22 +263,14 @@
 	const lmsNetPayout    = $derived(Math.max(0, lmsRevenue - maintFee));
 	let maintFeeInput     = $state(String(maintFee));
 	$effect(() => { maintFeeInput = String(maintFee); });
-	const paidCount       = $derived(allEntries.filter((e: any) => e.paid).length);
-	const freeCount       = $derived(allEntries.filter((e: any) => e.paymentMethod === 'free').length);
-	const pendingCount    = $derived(allEntries.filter((e: any) => e.status === 'pending_payment').length);
-	const activeCount     = $derived(allEntries.filter((e: any) => e.status === 'active').length);
-	const eliminatedCount = $derived(allEntries.filter((e: any) => e.status === 'eliminated').length);
-	const registeredCount = $derived(new Set(allEntries.map((e: any) => e.user)).size);
+	const paidCount       = $derived(filteredEntries.filter((e: any) => e.paid).length);
+	const freeCount       = $derived(filteredEntries.filter((e: any) => e.paymentMethod === 'free').length);
+	const pendingCount    = $derived(filteredEntries.filter((e: any) => e.status === 'pending_payment').length);
+	const activeCount     = $derived(filteredEntries.filter((e: any) => e.status === 'active').length);
+	const eliminatedCount = $derived(filteredEntries.filter((e: any) => e.status === 'eliminated').length);
+	const registeredCount = $derived(new Set(filteredEntries.map((e: any) => e.user)).size);
 
 	let statsOpen = $state(true);
-
-	// Local filter state — kept in sync with URL params so selects reflect current state
-	let filterStatus   = $state(data.statusFilter ?? 'all');
-	let filterPoolType = $state(data.poolType     ?? 'all');
-	$effect(() => {
-		filterStatus   = data.statusFilter ?? 'all';
-		filterPoolType = data.poolType     ?? 'all';
-	});
 
 	function updateFilter(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -314,12 +314,21 @@
 
 	// Bulk delete
 	let bulkDeleteConfirm = $state(false);
+	let bulkDeleteModal   = $state(false);
 	let deleteConfirmId   = $state<string | null>(null);
+	let deleteModalEntry  = $state<any | null>(null);
 	async function handleBulkDelete() {
 		if (!bulkDeleteConfirm) { bulkDeleteConfirm = true; return; }
 		bulkDeleteConfirm = false;
 		const result = await ctrl.bulkDelete();
 		if (result.success) await invalidateAll();
+	}
+	function confirmBulkDelete() {
+		bulkDeleteModal = true;
+	}
+	function cancelBulkDelete() {
+		bulkDeleteModal = false;
+		bulkDeleteConfirm = false;
 	}
 
 	// Keep old handler alias for eliminated confirm reset
@@ -512,6 +521,143 @@
 {/if}
 {#if form?.error}
 	<div class="mx-4 mt-3 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{form.error}</div>
+{/if}
+
+{#if bulkDeleteModal}
+	<button
+		type="button"
+		class="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm"
+		onclick={cancelBulkDelete}
+		aria-label="Close bulk delete warning"
+	></button>
+
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<div class="w-full max-w-md rounded-2xl border border-red-900/80 bg-[#0a0a0a] shadow-2xl">
+			<div class="flex items-center justify-between border-b border-red-900/60 px-5 py-4">
+				<div>
+					<h2 class="text-lg font-bold text-white">Delete selected entries?</h2>
+					<p class="mt-1 text-xs text-gray-500">This action cannot be undone.</p>
+				</div>
+				<button
+					type="button"
+					onclick={cancelBulkDelete}
+					class="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-white"
+					aria-label="Close bulk delete warning"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+			</div>
+
+			<div class="space-y-4 px-5 py-4 text-sm text-gray-300">
+				<p>
+					You are about to permanently delete <span class="font-semibold text-white">{ctrl.selectedIds.size}</span> selected entries.
+				</p>
+				<div class="rounded-lg border border-red-900/70 bg-red-950/30 p-3 text-red-300">
+					<ul class="space-y-1">
+						<li>• These entries will be removed from the pool immediately.</li>
+						<li>• Any related picks or payment data may be affected.</li>
+						<li>• This action cannot be reversed.</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="flex items-center justify-end gap-3 border-t border-gray-800 px-5 py-4">
+				<button
+					type="button"
+					onclick={cancelBulkDelete}
+					class="rounded border border-gray-700 bg-gray-900 px-4 py-2 text-sm text-gray-300 transition hover:bg-gray-800"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					onclick={async () => {
+						bulkDeleteModal = false;
+						bulkDeleteConfirm = false;
+						const result = await ctrl.bulkDelete();
+						if (result.success) await invalidateAll();
+					}}
+					class="rounded border border-red-700 bg-red-950/50 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950"
+				>
+					Delete selected
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if deleteModalEntry}
+	<button
+		type="button"
+		class="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm"
+		onclick={() => deleteModalEntry = null}
+		aria-label="Close delete warning"
+	></button>
+
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<div class="w-full max-w-md rounded-2xl border border-red-900/80 bg-[#0a0a0a] shadow-2xl">
+			<div class="flex items-center justify-between border-b border-red-900/60 px-5 py-4">
+				<div>
+					<h2 class="text-lg font-bold text-white">Delete entry?</h2>
+					<p class="mt-1 text-xs text-gray-500">This action cannot be undone.</p>
+				</div>
+				<button
+					type="button"
+					onclick={() => deleteModalEntry = null}
+					class="rounded p-1.5 text-gray-500 transition hover:bg-gray-800 hover:text-white"
+					aria-label="Close delete warning"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+			</div>
+
+			<div class="space-y-4 px-5 py-4">
+				<p class="text-sm text-gray-300">
+					You are about to permanently delete <span class="font-semibold text-white">{deleteModalEntry.entryName}</span> for
+					<span class="font-medium text-gray-200">{deleteModalEntry.expand?.user?.displayName ?? deleteModalEntry.expand?.user?.email ?? 'Unknown user'}</span>.
+				</p>
+
+				<div class="rounded-lg border border-red-900/70 bg-red-950/30 p-3 text-sm text-red-300">
+					<ul class="space-y-1">
+						<li>• The entry will be removed from the pool immediately.</li>
+						<li>• Any associated picks or payment data tied to this entry may be affected.</li>
+						<li>• This action cannot be reversed.</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="flex items-center justify-end gap-3 border-t border-gray-800 px-5 py-4">
+				<button
+					type="button"
+					onclick={() => deleteModalEntry = null}
+					class="rounded border border-gray-700 bg-gray-900 px-4 py-2 text-sm text-gray-300 transition hover:bg-gray-800"
+				>
+					Cancel
+				</button>
+				<form
+					method="POST"
+					action="?/deleteEntry"
+					use:enhance={() => async ({ update }) => {
+						deleteModalEntry = null;
+						await update();
+						await invalidateAll();
+					}}
+				>
+					<input type="hidden" name="id" value={deleteModalEntry.id} />
+					<button
+						type="submit"
+						class="rounded border border-red-700 bg-red-950/50 px-4 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-950"
+					>
+						Delete entry
+					</button>
+				</form>
+			</div>
+		</div>
+	</div>
 {/if}
 
 <!-- ── Add Entries Modal ──────────────────────────────────────────────────── -->
@@ -949,8 +1095,8 @@
 				>Cancel</button>
 			{:else}
 				<button
-					onclick={handleBulkDelete}
-					disabled={ctrl.bulkLoading}
+					onclick={confirmBulkDelete}
+					disabled={ctrl.bulkLoading || ctrl.selectedIds.size === 0}
 					class="rounded border border-red-900 bg-red-950/30 px-3 py-1 text-xs font-medium text-red-500 transition hover:bg-red-950/60 disabled:opacity-40"
 				>Delete selected</button>
 			{/if}
@@ -1090,27 +1236,13 @@
 
 						<!-- Delete — only before first-game deadline -->
 						{#if canDelete(entry)}
-							{#if deleteConfirmId === entry.id}
-								<form method="POST" action="?/deleteEntry"
-									use:enhance={() => async ({ update }) => { deleteConfirmId = null; await update(); await invalidateAll(); }}
-								>
-									<input type="hidden" name="id" value={entry.id} />
-									<button type="submit"
-										class="rounded border border-red-500 bg-red-950/40 px-3 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
-									>Confirm</button>
-								</form>
-								<button
-									type="button"
-									onclick={() => deleteConfirmId = null}
-									class="rounded border border-gray-700 px-3 py-1 text-xs text-gray-400 transition hover:bg-gray-800"
-								>Cancel</button>
-							{:else}
-								<button
-									type="button"
-									onclick={() => deleteConfirmId = entry.id}
-									class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
-								>Delete</button>
-							{/if}
+							<button
+								type="button"
+								onclick={() => { deleteConfirmId = entry.id; deleteModalEntry = entry; }}
+								class="rounded border border-red-900 px-3 py-1 text-xs text-red-500 transition hover:bg-red-950/40"
+							>
+								Delete
+							</button>
 						{:else}
 							<span class="rounded border border-gray-800 px-3 py-1 text-xs text-gray-600" title="Delete window closed — deadline passed">
 								Locked

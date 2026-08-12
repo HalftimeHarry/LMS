@@ -180,6 +180,50 @@ export const actions: Actions = {
 		}
 	},
 
+	deleteEntry: async ({ request, locals }) => {
+		if (locals.role !== 'pool_admin' && locals.role !== 'super_admin') {
+			return fail(403, { error: 'Not authorized.' });
+		}
+
+		const pb = await pbAdmin();
+		const formData = await request.formData();
+		const id = String(formData.get('id') ?? '');
+		if (!id) return fail(400, { error: 'Entry id is required.' });
+
+		let entry: any;
+		try {
+			entry = await pb.collection('entries').getOne(id, { expand: 'season,user' });
+		} catch {
+			return fail(404, { error: 'Entry not found.' });
+		}
+
+		const isTestSeason = (entry.expand?.season?.name as string | undefined)?.startsWith('[TEST]');
+		let deadline: string | null = null;
+		const firstOdds = await pb.collection('game_odds').getFirstListItem(
+			`season = "${entry.season}" && week = 1 && isActive = true`,
+			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+		).catch(() => null) as any;
+		const kickoff = firstOdds?.game_time_stamp ?? firstOdds?.gameTime;
+		if (kickoff) {
+			const cutoff = new Date(kickoff);
+			cutoff.setMinutes(cutoff.getMinutes() - 40);
+			deadline = cutoff.toISOString();
+		}
+
+		if (!isTestSeason && deadline && new Date() > new Date(deadline)) {
+			return fail(400, {
+				error: 'The first-game deadline has passed. Entries can no longer be deleted — change the entry status instead.'
+			});
+		}
+
+		try {
+			await pb.collection('entries').delete(id);
+			return { success: true };
+		} catch (e: unknown) {
+			return fail(400, { error: (e as Error)?.message ?? 'Delete failed.' });
+		}
+	},
+
 	// Seed a new test season pair (LMS + Second Half) — super_admin only
 	seedTestSeason: async ({ request, locals }) => {
 		if (locals.role !== 'super_admin') return fail(403, { error: 'Not authorized.' });
