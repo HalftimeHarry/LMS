@@ -355,6 +355,8 @@
 			<p class="mt-1 text-2xl font-bold text-[#c9a84c]">${(stats.maintenanceFee > 0 ? stats.lmsNetPayout + stats.secondHalfPot : stats.potEstimate).toLocaleString()}</p>
 			{#if stats.maintenanceFee > 0}
 				<p class="mt-1 text-xs text-gray-600">Gross ${stats.potEstimate.toLocaleString()} − ${stats.maintenanceFee.toLocaleString()} fee</p>
+			{:else}
+				<p class="mt-1 text-xs text-gray-600">Gross ${stats.potEstimate.toLocaleString()}</p>
 			{/if}
 			<p class="mt-1 text-xs text-gray-600">{stats.freeEntries} free · {stats.paidEntries - stats.freeEntries} paid</p>
 

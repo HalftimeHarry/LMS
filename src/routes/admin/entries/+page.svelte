@@ -255,9 +255,33 @@
 	const totalCount      = $derived(poolEntries.length);
 	const lmsRevenue      = $derived(lmsFee * lmsEntries.filter((e: any) => e.paid && e.paymentMethod !== 'free').length);
 	const shRevenue       = $derived(shFee  * shEntries.filter((e: any)  => e.paid && e.paymentMethod !== 'free').length);
-	const totalPot        = $derived(filterPoolType === 'lms' ? lmsRevenue : filterPoolType === 'second_half' ? shRevenue : lmsRevenue + shRevenue);
+	const grossRevenue    = $derived(lmsRevenue + shRevenue);
 	const maintFee        = $derived((activeSeason?.maintenanceFee ?? 0) as number);
 	const lmsNetPayout    = $derived(Math.max(0, lmsRevenue - maintFee));
+	const totalPot        = $derived(
+		filterPoolType === 'second_half'
+			? shRevenue
+			: filterPoolType === 'lms'
+				? lmsNetPayout
+				: lmsNetPayout + shRevenue
+	);
+	$effect(() => {
+		if (import.meta.env.DEV) {
+			console.debug('DEBUG total pot', {
+				filterPoolType,
+				lmsRevenue: lmsRevenue,
+				shRevenue: shRevenue,
+				grossRevenue: grossRevenue,
+				maintFee: maintFee,
+				lmsNetPayout: lmsNetPayout,
+				totalPot: totalPot,
+				paidCount: paidCount,
+				freeCount: freeCount,
+				lmsCount: lmsCount,
+				shCount: shCount,
+			});
+		}
+	});
 	let maintFeeInput     = $state(String(maintFee));
 	$effect(() => { maintFeeInput = String(maintFee); });
 	const paidCount       = $derived(poolEntries.filter((e: any) => e.paid).length);
@@ -463,12 +487,14 @@
 		<div class="grid grid-cols-2 gap-px border-t border-gray-800 sm:grid-cols-4">
 			<!-- Total Pot -->
 			<div class="bg-black/60 px-5 py-4">
-				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Pot</p>
-				<p class="mt-1 text-2xl font-bold text-white">${(filterPoolType === 'all' && maintFee > 0 ? lmsNetPayout + shRevenue : totalPot).toLocaleString()}</p>
-				{#if filterPoolType === 'all' && maintFee > 0}
-					<p class="mt-0.5 text-xs text-gray-600">Gross ${totalPot.toLocaleString()} − ${maintFee.toLocaleString()} fee</p>
+				<p class="text-xs font-medium uppercase tracking-wider text-gray-500">Total Pot (net)</p>
+				<p class="mt-1 text-2xl font-bold text-white">${totalPot.toLocaleString()}</p>
+				{#if maintFee > 0}
+					<p class="mt-0.5 text-xs text-gray-600">Gross ${grossRevenue.toLocaleString()} − ${maintFee.toLocaleString()} fee</p>
+				{:else}
+					<p class="mt-0.5 text-xs text-gray-600">Gross ${grossRevenue.toLocaleString()}</p>
 				{/if}
-				<p class="mt-0.5 text-xs text-gray-600">{freeCount} free · {paidCount - freeCount} paid</p>
+				<p class="mt-0.5 text-xs text-gray-600">{freeCount} free · {Math.max(0, paidCount - freeCount)} paid (non-free)</p>
 			</div>
 			<!-- Total Entries -->
 			<div class="bg-black/60 px-5 py-4">
