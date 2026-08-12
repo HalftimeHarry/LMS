@@ -190,37 +190,28 @@ export const actions: Actions = {
 		const id = String(formData.get('id') ?? '');
 		if (!id) return fail(400, { error: 'Entry id is required.' });
 
-		let entry: any;
 		try {
-			entry = await pb.collection('entries').getOne(id, { expand: 'season,user' });
-		} catch {
-			return fail(404, { error: 'Entry not found.' });
-		}
-
-		const isTestSeason = (entry.expand?.season?.name as string | undefined)?.startsWith('[TEST]');
-		let deadline: string | null = null;
-		const firstOdds = await pb.collection('game_odds').getFirstListItem(
-			`season = "${entry.season}" && week = 1 && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
-		).catch(() => null) as any;
-		const kickoff = firstOdds?.game_time_stamp ?? firstOdds?.gameTime;
-		if (kickoff) {
-			const cutoff = new Date(kickoff);
-			cutoff.setMinutes(cutoff.getMinutes() - 40);
-			deadline = cutoff.toISOString();
-		}
-
-		if (!isTestSeason && deadline && new Date() > new Date(deadline)) {
-			return fail(400, {
-				error: 'The first-game deadline has passed. Entries can no longer be deleted — change the entry status instead.'
-			});
-		}
-
-		try {
+			const entry = await pb.collection('entries').getOne(id) as any;
+			const season = await pb.collection('seasons').getOne(entry.season).catch(() => null) as any;
+			const pickWeek = entry.entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
+			const odds = await pb.collection('game_odds').getFirstListItem(
+				`season = "${entry.season}" && week = ${pickWeek} && isActive = true`,
+				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			).catch(() => null) as any;
+			const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+			if (kickoff) {
+				const deadline = new Date(kickoff);
+				deadline.setMinutes(deadline.getMinutes() - 40);
+				if (new Date() > deadline) {
+					return fail(400, {
+						error: 'The entry deadline has passed — entries can no longer be deleted.'
+					});
+				}
+			}
 			await pb.collection('entries').delete(id);
 			return { success: true };
 		} catch (e: unknown) {
-			return fail(400, { error: (e as Error)?.message ?? 'Delete failed.' });
+			return fail(400, { error: (e as Error)?.message ?? 'Failed to delete entry.' });
 		}
 	},
 
