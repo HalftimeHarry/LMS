@@ -121,23 +121,46 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		allSeasons.find((s: any) => s.id === id) ?? { id, name: '—', status: 'unknown' }
 	);
 
+	// Determine the "current" pickable week for a season, optionally restricted to
+	// weeks >= minWeek (used for the Second Half pool, which starts at week 6+).
+	const computeCurrentWeek = async (s: any, minWeek: number): Promise<any | null> => {
+		const openWeeks = (await pb.collection('weekly_settings').getFullList({
+			filter: `season = "${s.id}" && status = "open"`,
+			sort: 'week'
+		}).catch(() => []) as any[]).filter(w => w.week >= minWeek);
+
+		let selected: any | null = null;
+		for (const week of openWeeks) {
+			const effectiveWeek = await withEffectiveDeadline(week);
+			const deadline = effectiveWeek?.deadline ? new Date(effectiveWeek.deadline) : null;
+			if (deadline && !Number.isNaN(deadline.getTime()) && deadline > now) {
+				selected = effectiveWeek;
+				break;
+			}
+		}
+
+		if (!selected && openWeeks.length > 0) {
+			selected = await withEffectiveDeadline(openWeeks[openWeeks.length - 1]);
+		}
+
+		if (!selected) {
+			const lockedWeek = await pb.collection('weekly_settings').getFirstListItem(
+				`season = "${s.id}" && status = "locked" && week >= ${minWeek}`,
+				{ sort: 'week' }
+			).catch(() => null);
+			selected = await withEffectiveDeadline(lockedWeek);
+		}
+
+		return selected;
+	};
+
+	// Second Half pool current week — kept separate since its pickable weeks start
+	// at secondHalfStartWeek (default 6), independent of the LMS pool's current week.
+	const currentWeekSHBySeason: Record<string, any> = {};
+
 	await Promise.all(
 		seasonsToEvaluate.map(async (s: any) => {
-			const openWeeks = await pb.collection('weekly_settings').getFullList({
-				filter: `season = "${s.id}" && status = "open"`,
-				sort: 'week'
-			}).catch(() => []) as any[];
-
-			let selected: any | null = null;
-			for (const week of openWeeks) {
-				const effectiveWeek = await withEffectiveDeadline(week);
-				const deadline = effectiveWeek?.deadline ? new Date(effectiveWeek.deadline) : null;
-				if (deadline && !Number.isNaN(deadline.getTime()) && deadline > now) {
-					selected = effectiveWeek;
-					break;
-				}
-			}
-
+			const selected = await computeCurrentWeek(s, 0);
 			if (selected) {
 				console.log('[dashboard debug] selected week', {
 					seasonId: s.id,
@@ -146,21 +169,11 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 					entryDeadline: selected.entryDeadline,
 					pickDeadline: selected.pickDeadline,
 				});
+				currentWeekBySeason[s.id] = selected;
 			}
 
-			if (!selected && openWeeks.length > 0) {
-				selected = await withEffectiveDeadline(openWeeks[openWeeks.length - 1]);
-			}
-
-			if (!selected) {
-				const lockedWeek = await pb.collection('weekly_settings').getFirstListItem(
-					`season = "${s.id}" && status = "locked"`,
-					{ sort: 'week' }
-				).catch(() => null);
-				selected = await withEffectiveDeadline(lockedWeek);
-			}
-
-			if (selected) currentWeekBySeason[s.id] = selected;
+			const shSelected = await computeCurrentWeek(s, s.secondHalfStartWeek ?? 6);
+			if (shSelected) currentWeekSHBySeason[s.id] = shSelected;
 		})
 	);
 
@@ -181,8 +194,11 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 			})
 	);
 
-	// Build a set of all current week IDs for quick lookup
-	const currentWeekIds = new Set(Object.values(currentWeekBySeason).map((w: any) => w.id));
+	// Build a set of all current week IDs for quick lookup (LMS + Second Half)
+	const currentWeekIds = new Set([
+		...Object.values(currentWeekBySeason).map((w: any) => w.id),
+		...Object.values(currentWeekSHBySeason).map((w: any) => w.id),
+	]);
 
 	// Fetch picks for ALL entries (active across all seasons)
 	const pickByEntry: Record<string, any>    = {};
@@ -294,6 +310,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		activeSeasons,
 		allSeasons,
 		currentWeekBySeason,
+		currentWeekSHBySeason,
 		week6BySeason,
 		entriesBySeason,
 		poolStatsBySeason,

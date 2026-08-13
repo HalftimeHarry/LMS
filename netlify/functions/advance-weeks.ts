@@ -1,4 +1,5 @@
 import { schedule } from '@netlify/functions';
+import { selectAutoPickTeamForPool } from '../../src/lib/server/auto-pick';
 
 /**
  * Scheduled function — runs every 2 minutes.
@@ -120,28 +121,15 @@ async function deriveBiggestFavorite(seasonId: string, weekNum: number): Promise
 		`season = "${seasonId}" && week = ${weekNum} && isActive = true`
 	);
 	if (!games.length) return null;
+	return selectAutoPickTeamForPool(games, 'lms');
+}
 
-	let bestTeamId: string | null = null;
-	let bestSpread = 0; // most negative homeSpread = home is biggest favorite
-
-	for (const game of games) {
-		const spread = game.homeSpread as number | null;
-		if (spread == null) continue;
-
-		// Home team is favorite when spread < 0; away team when spread > 0
-		const homeAbs = Math.abs(spread);
-		if (homeAbs > bestSpread) {
-			bestSpread  = homeAbs;
-			bestTeamId  = spread < 0 ? game.homeTeam : game.awayTeam;
-		} else if (homeAbs === bestSpread && bestTeamId) {
-			// Tie — pick randomly between current best and this candidate
-			if (Math.random() < 0.5) {
-				bestTeamId = spread < 0 ? game.homeTeam : game.awayTeam;
-			}
-		}
-	}
-
-	return bestTeamId;
+async function deriveSecondHalfAutoPick(seasonId: string, weekNum: number): Promise<string | null> {
+	const games = await pbGet('game_odds',
+		`season = "${seasonId}" && week = ${weekNum} && isActive = true`
+	);
+	if (!games.length) return null;
+	return selectAutoPickTeamForPool(games, 'second_half');
 }
 
 async function lockWeek(week: any, seasonId: string, log: string[]): Promise<void> {
@@ -149,23 +137,37 @@ async function lockWeek(week: any, seasonId: string, log: string[]): Promise<voi
 	log.push(`Week ${week.week}: locking`);
 	await pbPatch('weekly_settings', week.id, { status: 'locked' });
 
-	// Derive biggest favorite from odds (ignore manually-set field)
-	const autoTeamId = await deriveBiggestFavorite(seasonId, week.week);
-	if (!autoTeamId) {
+	const odds = await pbGet('game_odds',
+		`season = "${seasonId}" && week = ${week.week} && isActive = true`
+	);
+	if (!odds.length) {
 		log.push(`  no active odds found — skipping auto-pick`);
 		return;
 	}
 
-	// Persist it back onto the week record so the UI can display it
-	await pbPatch('weekly_settings', week.id, { biggestFavoriteTeam: autoTeamId }).catch(() => {});
+	const lmsAutoTeamId = selectAutoPickTeamForPool(odds, 'lms');
+	const secondHalfAutoTeamId = selectAutoPickTeamForPool(odds, 'second_half');
+	if (!lmsAutoTeamId && !secondHalfAutoTeamId) {
+		log.push(`  no valid auto-pick candidates — skipping auto-pick`);
+		return;
+	}
 
-	const entries       = await pbGet('entries', `season = "${seasonId}" && status = "active"`);
+	// Persist the LMS favorite for compatibility with legacy UI fields.
+	if (lmsAutoTeamId) {
+		await pbPatch('weekly_settings', week.id, { biggestFavoriteTeam: lmsAutoTeamId }).catch(() => {});
+	}
+
+	const entries = await pbGet('entries', `season = "${seasonId}" && status = "active"`);
 	const existingPicks = await pbGet('picks', `week = "${week.id}"`);
 	const pickedIds     = new Set(existingPicks.map((p: any) => p.entry));
 	let   autoPicked    = 0;
 
 	for (const entry of entries) {
 		if (pickedIds.has(entry.id)) continue;
+		const autoTeamId = entry.entryType === 'second_half'
+			? secondHalfAutoTeamId
+			: lmsAutoTeamId;
+		if (!autoTeamId) continue;
 		try {
 			await pbPost('picks', {
 				entry:       entry.id,
@@ -177,7 +179,7 @@ async function lockWeek(week: any, seasonId: string, log: string[]): Promise<voi
 			autoPicked++;
 		} catch { /* skip individual failures */ }
 	}
-	log.push(`  auto-pick team: ${autoTeamId} — picked for ${autoPicked} entries`);
+	log.push(`  auto-pick team(s): LMS=${lmsAutoTeamId ?? 'n/a'}, 2H=${secondHalfAutoTeamId ?? 'n/a'} — picked for ${autoPicked} entries`);
 }
 
 async function simulateResults(week: any, seasonId: string, log: string[]): Promise<void> {

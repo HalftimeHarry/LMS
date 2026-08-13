@@ -184,7 +184,7 @@ describe('advance-weeks scheduler', () => {
 			expect.objectContaining({
 				entry: 'e2',
 				week: 'w1',
-				pickedTeams: ['team-home'],
+				pickedTeams: ['team-away'],
 				isAutoPick: true,
 			}),
 		]));

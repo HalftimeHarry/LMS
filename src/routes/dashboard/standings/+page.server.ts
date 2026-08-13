@@ -1,4 +1,5 @@
 import { pbAdmin } from '$lib/server/pb-admin';
+import { selectAutoPickTeamForPool } from '$lib/server/auto-pick';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -25,15 +26,52 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	);
 
 	if (!activeSeason) {
-		return { seasons, activeSeason: null, poolType, weeks: [], entries: [], pickGrid: {}, currentWeek: null, userId };
+		return { seasons, activeSeason: null, poolType, weeks: [], entries: [], pickGrid: {}, currentWeek: null, userId, poolAutoPickByWeek: {} };
+	}
+
+	const allTeams = await pb.collection('nfl_teams').getFullList().catch(() => []) as any[];
+	const teamById = Object.fromEntries(allTeams.map((team: any) => [team.id, team]));
+	const poolAutoPickByWeek: Record<number, any> = {};
+	const oddsPool = await pb.collection('game_odds').getFullList({
+		filter: `season = "${activeSeason.id}" && isActive = true && homeSpread != null`,
+		expand: 'homeTeam,awayTeam'
+	}).catch(() => []) as any[];
+	for (const game of oddsPool) {
+		const weekNum = Number(game.week);
+		const gamesForWeek = (poolAutoPickByWeek[weekNum] ?? []) as any[];
+		gamesForWeek.push({
+			homeTeam: game.expand?.homeTeam?.id ?? game.homeTeam ?? null,
+			awayTeam: game.expand?.awayTeam?.id ?? game.awayTeam ?? null,
+			homeSpread: game.homeSpread,
+		});
+		poolAutoPickByWeek[weekNum] = gamesForWeek;
+	}
+	for (const [weekNum, games] of Object.entries(poolAutoPickByWeek)) {
+		const teamId = selectAutoPickTeamForPool(games as any[], poolType);
+		if (!teamId) continue;
+		const team = teamById[teamId];
+		if (!team) continue;
+		poolAutoPickByWeek[Number(weekNum)] = {
+			id: team.id,
+			abbreviation: team.abbreviation,
+			city: team.city,
+			name: team.name,
+			teamId: team.id,
+		};
 	}
 
 	// All weeks for this season, sorted ascending
-	const weeks = await pb.collection('weekly_settings').getFullList({
+	const allWeeks = await pb.collection('weekly_settings').getFullList({
 		filter: `season = "${activeSeason.id}"`,
 		sort:   'week',
 		expand: 'biggestFavoriteTeam'
 	}).catch(() => []) as any[];
+
+	// Second Half pool only ever picks weeks >= secondHalfStartWeek (default 6)
+	const secondHalfStartWeek = activeSeason.secondHalfStartWeek ?? 6;
+	const weeks = poolType === 'second_half'
+		? allWeeks.filter(w => w.week >= secondHalfStartWeek)
+		: allWeeks;
 
 	// Weeks whose picks are public (deadline passed)
 	const visibleWeekIds = new Set(
@@ -61,7 +99,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		null;
 
 	if (entries.length === 0) {
-		return { seasons, activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId };
+		return { seasons, activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId, poolAutoPickByWeek };
 	}
 
 	// pickGrid[entryId][weekId] = { teams, isAutoPick, isOwn }
@@ -163,5 +201,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		hasMissingPick,
 		stillToPickCount,
 		stillToPickList,
+		poolAutoPickByWeek,
 	};
 };

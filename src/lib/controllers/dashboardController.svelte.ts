@@ -10,6 +10,7 @@ interface DashboardControllerInput {
 	seasonGroups: Array<{ season: any; entries: any[] }>;
 	selectedSeasonId: string;
 	currentWeekBySeason: Record<string, any>;
+	currentWeekSHBySeason?: Record<string, any>;
 	week6BySeason: Record<string, any>;
 	entries: any[];
 	now: number;
@@ -26,6 +27,7 @@ export function createDashboardController(input: DashboardControllerInput) {
 	const groups = cardGroups.map((group) => {
 		const season = group.season;
 		const currentWeek = input.currentWeekBySeason[season.id] ?? null;
+		const currentWeekSH = input.currentWeekSHBySeason?.[season.id] ?? currentWeek;
 		const week6Week = input.week6BySeason[season.id] ?? null;
 		const seasonEntries = input.entries.filter((entry: any) => entry.season === season.id);
 		const lmsEntries = seasonEntries.filter((entry: any) => entry.entryType === 'lms');
@@ -51,7 +53,7 @@ export function createDashboardController(input: DashboardControllerInput) {
 			secondHalfCard: season.secondHalfEnabled === false ? null : DashboardProvider.buildPoolCardViewModel({
 				type: 'second_half',
 				season,
-				currentWeek,
+				currentWeek: currentWeekSH,
 				week6Week,
 				now: input.now,
 				entries: secondHalfEntries,

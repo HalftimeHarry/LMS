@@ -29,6 +29,12 @@
 		selected = next;
 	}
 
+	function summarizeEntryCounts(entries: any[] = []) {
+		const lms = entries.filter((e: any) => e.entryType === 'lms').length;
+		const secondHalf = entries.filter((e: any) => e.entryType === 'second_half').length;
+		return { total: entries.length, lms, secondHalf };
+	}
+
 	// ── Confirmation state ────────────────────────────────────────────────────
 	type PendingUser  = { id: string; name: string; entries: any[] };
 	type PendingDelete = { ids: string[]; users: PendingUser[]; totalEntries: number };
@@ -196,6 +202,7 @@
 				<tbody>
 					{#each filtered as user (user.id)}
 						{@const userEntries = entriesByUser[user.id] ?? []}
+						{@const counts = summarizeEntryCounts(userEntries)}
 						{@const isSelected  = selected.has(user.id)}
 						<tr class="border-b border-gray-800/40 transition hover:bg-white/[0.02]
 							{isSelected ? 'bg-red-950/10' : ''}">
@@ -220,8 +227,10 @@
 
 							<!-- Entries -->
 							<td class="px-4 py-3 text-center">
-								{#if userEntries.length > 0}
-									<span class="font-mono text-sm font-semibold text-red-400">{userEntries.length}</span>
+								{#if counts.total > 0}
+									<span class="font-mono text-xs font-semibold text-red-400">
+										{counts.lms} LMS / {counts.secondHalf} 2nd
+									</span>
 								{:else}
 									<span class="font-mono text-sm text-green-500">0</span>
 								{/if}

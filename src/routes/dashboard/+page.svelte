@@ -23,6 +23,7 @@
 	const pickByEntry          = $derived(data.pickByEntry          as Record<string, any>);
 	const usedTeamCountByEntry = $derived(data.usedTeamCountByEntry as Record<string, number>);
 	const currentWeekBySeason  = $derived(data.currentWeekBySeason  as Record<string, any>);
+	const currentWeekSHBySeason = $derived(data.currentWeekSHBySeason as Record<string, any>);
 	const week6BySeason        = $derived(data.week6BySeason        as Record<string, any>);
 	const entriesBySeason      = $derived(data.entriesBySeason      as Record<string, any[]>);
 	const activeSeasons        = $derived(data.activeSeasons        as any[]);
@@ -160,6 +161,7 @@
 			seasonGroups,
 			selectedSeasonId,
 			currentWeekBySeason: currentWeekBySeason as Record<string, any>,
+			currentWeekSHBySeason: currentWeekSHBySeason as Record<string, any>,
 			week6BySeason: week6BySeason as Record<string, any>,
 			entries: data.entries as any[],
 			now,
@@ -478,11 +480,15 @@
 				{@const lmsGroup      = group.entries.filter((e: any) => e.entryType === 'lms')}
 				{@const shGroup       = group.entries.filter((e: any) => e.entryType === 'second_half')}
 				{@const lmsSeasonId2  = lmsGroup[0]?.season ?? group.season.id}
+				{@const shSeasonId2   = shGroup[0]?.season ?? group.season.id}
 				{@const currentWeek   = currentWeekBySeason[lmsSeasonId2] ?? currentWeekBySeason[group.season.id] ?? null}
+				{@const currentWeekSH = currentWeekSHBySeason[shSeasonId2] ?? currentWeekSHBySeason[group.season.id] ?? null}
 				{@const activeCount   = group.entries.filter((e: any) => e.status === 'active').length}
-				{@const missingPicks  = currentWeek?.status === 'open'
-					? group.entries.filter((e: any) => e.status === 'active' && !pickByEntry[e.id]).length
-					: 0}
+				{@const missingPicks  = (currentWeek?.status === 'open'
+					? lmsGroup.filter((e: any) => e.status === 'active' && !pickByEntry[e.id]).length
+					: 0) + (currentWeekSH?.status === 'open'
+					? shGroup.filter((e: any) => e.status === 'active' && !pickByEntry[e.id]).length
+					: 0)}
 				{@const isOpen        = openGroups.has(gi)}
 
 				<!-- Collapsible season card -->
@@ -629,12 +635,12 @@
 							</div>
 							<div class="flex flex-col gap-2 px-5 pb-4 pt-3">
 								{#each (shTab === 'active' ? shActive : shElim) as entry}
-									{@const hasPick   = currentWeek ? !!pickByEntry[entry.id] : false}
+									{@const hasPick   = currentWeekSH ? !!pickByEntry[entry.id] : false}
 									{@const pick      = pickByEntry[entry.id]}
-									{@const isPending = currentWeek?.status === 'open'}
+									{@const isPending = currentWeekSH?.status === 'open'}
 									<a href={pickLink(entry)}
 										class="block rounded-lg border p-4 transition
-											{entry.status === 'active' && currentWeek
+											{entry.status === 'active' && currentWeekSH
 												? hasPick ? 'border-green-900 bg-green-950/60 hover:border-green-700'
 												: 'border-yellow-900 bg-yellow-950/20 hover:border-yellow-700'
 												: 'border-gray-800 bg-gray-950/60 hover:border-gray-600'}">
@@ -654,7 +660,7 @@
 												{#if entry.status === 'active'}
 													<span class="text-xs text-gray-500">{NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)} left</span>
 												{/if}
-												{#if entry.status === 'active' && currentWeek}
+												{#if entry.status === 'active' && currentWeekSH}
 													{#if pick}
 														{@const teams = pick.expand?.pickedTeams ?? []}
 														<span class="flex items-center gap-1 rounded border px-2 py-0.5 text-xs

@@ -15,6 +15,7 @@
 	const poolType        = $derived(data.poolType    as 'lms' | 'second_half');
 	const userId          = $derived(data.userId      as string | null);
 	const isLoggedIn      = $derived(!!userId);
+	const poolAutoPickByWeek = $derived((data as any).poolAutoPickByWeek as Record<number, any> ?? {});
 	// Server-computed — accurate for all viewers including guests
 	const stillToPickCount = $derived((data as any).stillToPickCount as number ?? 0);
 	const stillToPickList  = $derived((data as any).stillToPickList  as { id: string; entryName: string; userId: string }[] ?? []);
@@ -183,17 +184,33 @@
 
 	<div class="flex flex-wrap items-center gap-3">
 		<!-- Pool toggle -->
-		<div class="flex overflow-hidden rounded border border-gray-700">
-			<button type="button" onclick={() => switchPool('lms')}
-				class="px-4 py-1.5 text-sm font-medium transition
-					{poolType === 'lms' ? 'bg-[#c9a84c] text-black' : 'bg-gray-900 text-gray-400 hover:text-white'}">
-				LMS
-			</button>
-			<button type="button" onclick={() => switchPool('second_half')}
-				class="border-l border-gray-700 px-4 py-1.5 text-sm font-medium transition
-					{poolType === 'second_half' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-400 hover:text-white'}">
-				2nd Half
-			</button>
+		<div class="flex items-center gap-2">
+			<div class="group relative rounded border border-gray-700 bg-gray-900/80 px-2 py-1">
+				<button
+					type="button"
+					onclick={() => switchPool('lms')}
+					class="px-2 py-1 text-sm font-medium transition
+						{poolType === 'lms' ? 'standings-pulse bg-[#c9a84c] text-black border-2 border-[#ffe082] shadow-[0_0_18px_rgba(255,214,94,0.9),0_0_36px_rgba(201,168,76,0.6)]' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+					LMS
+				</button>
+				<span class="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-medium text-[#f5d77a] opacity-0 shadow-[0_8px_30px_rgba(15,23,42,0.55)] backdrop-blur-md transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100">
+					View Last Man Standing standings
+					<span class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-white/10"></span>
+				</span>
+			</div>
+			<div class="group relative rounded border border-gray-700 bg-gray-900/80 px-2 py-1">
+				<button
+					type="button"
+					onclick={() => switchPool('second_half')}
+					class="border-l border-gray-700 px-2 py-1 text-sm font-medium transition
+						{poolType === 'second_half' ? 'standings-pulse bg-blue-600 text-white border-2 border-blue-200 shadow-[0_0_18px_rgba(147,197,253,0.9),0_0_36px_rgba(37,99,235,0.7)]' : 'bg-gray-900 text-gray-400 hover:text-white'}">
+					2nd Half
+				</button>
+				<span class="pointer-events-none absolute left-1/2 top-full z-20 mt-2 -translate-x-1/2 whitespace-nowrap rounded-xl border border-white/10 bg-white/10 px-2.5 py-1 text-[10px] font-medium text-blue-200 opacity-0 shadow-[0_8px_30px_rgba(15,23,42,0.55)] backdrop-blur-md transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100">
+					View Second Half standings
+					<span class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-white/10"></span>
+				</span>
+			</div>
 		</div>
 	</div>
 </div>
@@ -247,7 +264,7 @@
 		</div>
 		{#if openWeeks.length > 0}
 			{@const ow       = openWeeks[0]}
-			{@const autoPick = ow.expand?.biggestFavoriteTeam}
+			{@const autoPick = poolType === 'lms' ? (ow.expand?.biggestFavoriteTeam ?? poolAutoPickByWeek[ow.week]) : poolAutoPickByWeek[ow.week]}
 			<div class="ml-auto flex flex-wrap items-center gap-3 rounded-lg border border-blue-900 bg-blue-950/30 px-3 py-2">
 				<div class="flex items-center gap-2 text-sm text-blue-400">
 					<span class="h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse"></span>
@@ -274,7 +291,7 @@
 	<!-- Only shown while the week is open. Entries here haven't picked yet     -->
 	<!-- and will receive the auto-pick if they miss the deadline.              -->
 	{#if currentWeekIsOpen && stillToPickCount > 0}
-		{@const autoPick = currentWeek?.expand?.biggestFavoriteTeam}
+		{@const autoPick = poolType === 'lms' ? (currentWeek?.expand?.biggestFavoriteTeam ?? poolAutoPickByWeek[currentWeek?.week]) : poolAutoPickByWeek[currentWeek?.week]}
 		<div class="border-b border-orange-900/30 bg-orange-950/10 overflow-hidden">
 
 			<!-- Toggle header -->
@@ -413,7 +430,7 @@
 							{/if}
 
 							<!-- Still to pick — show own entries with action links -->
-							{@const autoPick = currentWeek.expand?.biggestFavoriteTeam}
+							{@const autoPick = poolType === 'lms' ? (currentWeek.expand?.biggestFavoriteTeam ?? poolAutoPickByWeek[currentWeek.week]) : poolAutoPickByWeek[currentWeek.week]}
 							{#if stillToPickCount > 0}
 								{#if myStillToPick.length > 0}
 									<div class="mb-3 space-y-1">
