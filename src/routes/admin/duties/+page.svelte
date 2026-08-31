@@ -129,7 +129,7 @@
 							<p class="text-sm leading-relaxed text-gray-400">
 								Players pick a team they expect to <span class="font-medium text-white">lose</span> its game outright.
 								If their picked team <span class="text-red-400">wins</span>, they are eliminated.
-								A <span class="text-gray-300">tie</span> is safe — no eliminations fire on a tied game.
+								A <span class="text-gray-300">tie</span> is not safe — and eliminations fire on a tied game.
 								Each team can only be used once per entry per season.
 							</p>
 						</div>
