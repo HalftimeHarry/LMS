@@ -56,7 +56,7 @@
 			if (a.status === 'winner'   && b.status !== 'winner')   return -1;
 			if (b.status === 'winner'   && a.status !== 'winner')   return 1;
 			if (a.eliminatedWeek && b.eliminatedWeek) return b.eliminatedWeek - a.eliminatedWeek;
-			return a.entryName.localeCompare(b.entryName);
+			return a.entryName.localeCompare(b.entryName, undefined, { numeric: true, sensitivity: 'base' });
 		});
 
 		return list;
