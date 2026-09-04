@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { formatDeadlineShort } from '$lib/time';
 	import { page } from '$app/stores';
 	import type { PageData, ActionData } from './$types';
 
@@ -132,10 +133,7 @@
 	};
 
 	function formatDeadline(d: string) {
-		return new Date(d).toLocaleString('en-US', {
-			weekday: 'short', month: 'short', day: 'numeric',
-			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-		});
+		return formatDeadlineShort(d);
 	}
 
 	// All weeks combined for display — open first, then closed sorted by week number

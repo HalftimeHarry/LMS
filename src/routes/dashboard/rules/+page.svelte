@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { easternInputValueToIso, formatDeadlineLong, formatEasternDateTime, toEasternInputValue } from '$lib/time';
 	import archer from '$lib/assets/lms_images/archer_2_1.png';
 	import type { PageData } from './$types';
 
@@ -14,21 +15,13 @@
 	const canEditRules = $derived(!!(data as any).canEditRules);
 	const isLoggedIn = $derived(!!(data as any).user?.id);
 
-	// Format a date string for display: "Thursday, September 4, 2027 at 3:00 PM PST"
+	// Format a date string for display: "Thursday, September 4, 2027 at 3:00 PM EDT"
 	function fmtDeadline(iso: string | null | undefined): string {
-		if (!iso) return 'TBD';
-		return new Date(iso).toLocaleString('en-US', {
-			weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-		});
+		return formatDeadlineLong(iso);
 	}
 
 	function fmtDate(iso: string | null | undefined): string {
-		if (!iso) return 'TBD';
-		return new Date(iso).toLocaleString('en-US', {
-			month: 'long', day: 'numeric', year: 'numeric',
-			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-		});
+		return formatEasternDateTime(iso);
 	}
 
 	const paymentDeadline = $derived(fmtDate(season?.paymentDeadline));
@@ -96,11 +89,7 @@
 	);
 
 	function toDatetimeLocalValue(iso: string | null | undefined): string {
-		if (!iso) return '';
-		const d = new Date(iso);
-		if (Number.isNaN(d.getTime())) return '';
-		const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-		return local.toISOString().slice(0, 16);
+		return toEasternInputValue(iso);
 	}
 
 	let editingRules = $state(false);

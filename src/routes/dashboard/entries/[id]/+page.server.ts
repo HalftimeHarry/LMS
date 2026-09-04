@@ -1,16 +1,17 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import { submitPickSchema } from '$lib/schemas';
+import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import type { Actions, PageServerLoad } from './$types';
 
 async function fetchWeekCutoffFromOdds(pb: any, seasonId: string, weekNum: number): Promise<Date | null> {
 	const odds = await pb.collection('game_odds').getFirstListItem(
 		`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-		{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+		{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 	).catch(() => null) as any;
 
-	const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+	const kickoff = getKickoffIso(odds);
 	if (!kickoff) return null;
 
 	const cutoff = new Date(kickoff);

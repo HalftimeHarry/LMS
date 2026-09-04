@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
+	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { formatDeadlineShort } from '$lib/time';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -31,9 +33,35 @@
 	// ── Filters (client-side) ─────────────────────────────────────────────────
 	let searchText   = $state('');
 	let statusFilter = $state<'all' | 'active' | 'eliminated'>('active');
+	let mineOnly     = $state(false);
+
+	const myEntries   = $derived(userId ? (entries as any[]).filter(e => e.user === userId) : []);
+	const myEntryCount = $derived(myEntries.length);
+	// Blink until the player narrows the list, so their own entries are easy to find.
+	const highlightSearch = $derived(myEntryCount > 0 && !mineOnly && searchText.trim() === '');
+
+	const MINE_ONLY_KEY = 'lms:standings:mineOnly';
+	let preferenceLoaded = $state(false);
+
+	function setMineOnly(enabled: boolean) {
+		mineOnly = enabled;
+		if (browser) localStorage.setItem(MINE_ONLY_KEY, enabled ? '1' : '0');
+	}
+
+	// Restore the saved choice once, after entries have loaded.
+	$effect(() => {
+		if (preferenceLoaded || !browser || myEntryCount === 0) return;
+		preferenceLoaded = true;
+		if (localStorage.getItem(MINE_ONLY_KEY) === '1') setMineOnly(true);
+	});
 
 	const filteredEntries = $derived(() => {
 		let list = [...entries] as any[];
+
+		// My entries only
+		if (mineOnly && userId) {
+			list = list.filter(e => e.user === userId);
+		}
 
 		// Status filter
 		if (statusFilter !== 'all') {
@@ -365,10 +393,7 @@
 				<span class="text-xs text-gray-500">
 					Wk {currentWeek.week} pick deadline:
 					<span class="text-white">
-						{new Date(currentWeek.deadline).toLocaleString('en-US', {
-							weekday: 'short', month: 'short', day: 'numeric',
-							hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-						})}
+						{formatDeadlineShort(currentWeek.deadline)}
 					</span>
 				</span>
 				{#if tl}
@@ -534,17 +559,42 @@
 			<!-- Filters -->
 			<div class="flex flex-wrap items-center gap-3 border-b border-gray-800 px-4 py-3">
 				<!-- Search -->
-				<div class="relative">
-					<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<div class="relative {highlightSearch ? 'search-pulse rounded' : ''}">
+					<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 {highlightSearch ? 'text-blue-400' : 'text-gray-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
 					</svg>
 					<input
 						type="text"
-						placeholder="Search entry or player…"
+						placeholder="Search entry"
+						aria-label="Search entry"
 						bind:value={searchText}
-						class="rounded border border-gray-700 bg-gray-900 py-1.5 pl-8 pr-3 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none w-52"
+						class="rounded border bg-gray-900 py-1.5 pl-8 pr-3 text-sm text-white focus:border-[#c9a84c] focus:outline-none w-52
+							{highlightSearch ? 'border-blue-500 placeholder-blue-300/70' : 'border-gray-700 placeholder-gray-600'}"
 					/>
 				</div>
+
+				{#if myEntryCount > 0}
+					<div class="flex items-center gap-2">
+						{#if !mineOnly}
+							<button
+								type="button"
+								onclick={() => setMineOnly(true)}
+								class="rounded border border-blue-500/60 bg-blue-950/40 px-2.5 py-1 text-xs font-medium text-blue-300 transition hover:bg-blue-900/60"
+							>
+								Find my entries
+							</button>
+						{/if}
+						<label class="flex cursor-pointer items-center gap-1.5 text-xs {mineOnly ? 'text-blue-300' : 'text-gray-500 hover:text-gray-300'}">
+							<input
+								type="checkbox"
+								checked={mineOnly}
+								onchange={(e) => setMineOnly(e.currentTarget.checked)}
+								class="h-3.5 w-3.5 cursor-pointer accent-blue-500"
+							/>
+							{mineOnly ? 'Uncheck to see all' : 'Active'}
+						</label>
+					</div>
+				{/if}
 
 				<!-- Status filter -->
 				<div class="flex overflow-hidden rounded border border-gray-700 text-xs font-medium">
@@ -572,10 +622,10 @@
 					{/each}
 				</div>
 
-				{#if searchText || statusFilter !== 'all'}
+				{#if searchText || mineOnly || statusFilter !== 'all'}
 					<button
 						type="button"
-						onclick={() => { searchText = ''; statusFilter = 'active'; }}
+						onclick={() => { searchText = ''; setMineOnly(false); statusFilter = 'active'; }}
 						class="text-xs text-gray-600 hover:text-gray-400"
 					>
 						Clear filters

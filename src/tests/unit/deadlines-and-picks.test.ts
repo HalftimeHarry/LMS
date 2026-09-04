@@ -17,7 +17,29 @@
 import { describe, it, expect } from 'vitest';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import { WeekProvider }   from '$lib/providers/WeekProvider';
-import { deriveDeadlineFromKickoff, getDeadlinePairFromKickoff } from '$lib/server/deadlines';
+import { deriveDeadlineFromKickoff, getDeadlinePairFromKickoff, getKickoffIso } from '$lib/server/deadlines';
+
+describe('getKickoffIso — game_time_stamp is the only authoritative kickoff', () => {
+	it('returns game_time_stamp when present', () => {
+		expect(getKickoffIso({ game_time_stamp: '2026-09-10T00:20:00.000Z' })).toBe('2026-09-10T00:20:00.000Z');
+	});
+
+	it('never falls back to gameTime', () => {
+		const odds = { game_time_stamp: '', gameTime: '2026-09-10 00:20:00.000Z' } as any;
+		expect(getKickoffIso(odds)).toBeNull();
+	});
+
+	it('returns null for missing or blank values', () => {
+		expect(getKickoffIso(null)).toBeNull();
+		expect(getKickoffIso(undefined)).toBeNull();
+		expect(getKickoffIso({})).toBeNull();
+		expect(getKickoffIso({ game_time_stamp: '   ' })).toBeNull();
+	});
+
+	it('yields no deadline when the kickoff is missing, rather than a bogus one', () => {
+		expect(deriveDeadlineFromKickoff(getKickoffIso({ gameTime: '2026-09-10 00:20:00.000Z' } as any), 40)).toBeNull();
+	});
+});
 import type { Season }    from '$lib/providers/SeasonProvider';
 import type { Week }      from '$lib/providers/WeekProvider';
 

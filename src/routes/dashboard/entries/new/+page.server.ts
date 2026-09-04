@@ -1,6 +1,8 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { fail, redirect } from '@sveltejs/kit';
 import { entryRequestSchema } from '$lib/schemas';
+import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { formatEasternDate } from '$lib/time';
 import type { Actions, PageServerLoad } from './$types';
 
 function deriveCutoffFromKickoff(kickoffIso: string): string {
@@ -14,11 +16,11 @@ async function fetchWeekKickoff(pb: any, seasonId: string, weekNum: number): Pro
 	const odds = await pb.collection('game_odds')
 		.getFirstListItem(
 			`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 		)
 		.catch(() => null) as any;
 
-	return odds?.game_time_stamp ?? odds?.gameTime ?? null;
+	return getKickoffIso(odds);
 }
 
 /** Fetch the week-6 pick deadline for a season (the canonical 2H entry cutoff). */
@@ -123,7 +125,7 @@ export const actions: Actions = {
 				&& (!!week6Deadline && now < new Date(week6Deadline));
 
 			if (!secondHalfOpen) {
-				const cutoff = week6Deadline ? ` The deadline was ${new Date(week6Deadline).toLocaleDateString()}.` : '';
+				const cutoff = week6Deadline ? ` The deadline was ${formatEasternDate(week6Deadline)}.` : '';
 				return fail(400, { error: `Second Half registration is closed.${cutoff}` });
 			}
 		}

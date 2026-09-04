@@ -1,5 +1,6 @@
 import { pbAdmin } from '$lib/server/pb-admin';
-import { deriveDeadlineFromKickoff } from '$lib/server/deadlines';
+import { deriveDeadlineFromKickoff, getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { easternInputValueToIso } from '$lib/time';
 import { fail } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Actions } from './$types';
@@ -22,11 +23,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const week1Odds = await pb.collection('game_odds')
 			.getFirstListItem(
 				`season = "${season.id}" && week = 1 && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			)
 			.catch(() => null) as any;
 
-		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
+		const kickoff = getKickoffIso(week1Odds);
 		lmsDeadline = deriveDeadlineFromKickoff(kickoff, 30);
 		lmsEntryDeadline = deriveDeadlineFromKickoff(kickoff, 40);
 	}
@@ -40,11 +41,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const week6Odds = await pb.collection('game_odds')
 			.getFirstListItem(
 				`season = "${season.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			)
 			.catch(() => null) as any;
 
-		const week6Kickoff = week6Odds?.game_time_stamp ?? week6Odds?.gameTime;
+		const week6Kickoff = getKickoffIso(week6Odds);
 		week6Deadline = deriveDeadlineFromKickoff(week6Kickoff, 40);
 		week6PickDeadline = deriveDeadlineFromKickoff(week6Kickoff, 30);
 
@@ -91,14 +92,7 @@ export const actions: Actions = {
 			.filter((w) => w.year || w.winner || w.location || w.payout)
 			.filter((w) => w.year && w.winner);
 
-		const parseLocalDateTime = (value: string): string | null => {
-			if (!value) return null;
-			const dt = new Date(value);
-			if (Number.isNaN(dt.getTime())) return null;
-			return dt.toISOString();
-		};
-
-		const secondHalfDeadline = parseLocalDateTime(secondHalfDeadlineRaw);
+		const secondHalfDeadline = easternInputValueToIso(secondHalfDeadlineRaw);
 		if (secondHalfDeadlineRaw && !secondHalfDeadline) {
 			return fail(400, { error: 'Invalid second half deadline value.' });
 		}

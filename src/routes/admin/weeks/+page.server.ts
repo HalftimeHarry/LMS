@@ -1,5 +1,6 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { error, fail } from '@sveltejs/kit';
+import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import { WeekProvider, SeasonProvider, TeamProvider, EntryProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryType } from '$lib/providers';
@@ -101,24 +102,28 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = 1 && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			);
-			const kickoff = odds.game_time_stamp ?? odds.gameTime;
-			firstGameTime = kickoff;
-			const t = new Date(kickoff);
-			t.setMinutes(t.getMinutes() - 40);
-			lmsEntryDeadline = t.toISOString();
+			const kickoff = getKickoffIso(odds);
+			if (kickoff) {
+				firstGameTime = kickoff;
+				const t = new Date(kickoff);
+				t.setMinutes(t.getMinutes() - 40);
+				lmsEntryDeadline = t.toISOString();
+			}
 		} catch { /* no odds yet */ }
 
 		try {
 			const shOdds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${activeSeason.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			);
-			const kickoff = shOdds.game_time_stamp ?? shOdds.gameTime;
-			const t = new Date(kickoff);
-			t.setMinutes(t.getMinutes() - 40);
-			shEntryDeadline = t.toISOString();
+			const kickoff = getKickoffIso(shOdds);
+			if (kickoff) {
+				const t = new Date(kickoff);
+				t.setMinutes(t.getMinutes() - 40);
+				shEntryDeadline = t.toISOString();
+			}
 		} catch { /* no odds yet */ }
 
 		try {
@@ -349,9 +354,11 @@ export const actions: Actions = {
 		try {
 			const odds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${seasonId}" && week = ${week} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			);
-			return { firstGameTime: odds.game_time_stamp ?? odds.gameTime };
+			const kickoff = getKickoffIso(odds);
+			if (!kickoff) return fail(404, { error: `Week ${week} odds have no kickoff timestamp. Enter the deadline manually.` });
+			return { firstGameTime: kickoff };
 		} catch {
 			return fail(404, { error: `No odds found for week ${week}. Enter the deadline manually.` });
 		}

@@ -9,6 +9,7 @@
 </style>
 
 <script lang="ts">
+	import { formatDeadlineLongDual } from '$lib/time';
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
 	import PoolCard from '$lib/components/PoolCard.svelte';
@@ -202,11 +203,7 @@
 	}
 
 	function fmtDeadline(iso: string | null | undefined): string {
-		if (!iso) return 'TBD';
-		return new Date(iso).toLocaleString('en-US', {
-			weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-			hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-		});
+		return formatDeadlineLongDual(iso);
 	}
 </script>
 

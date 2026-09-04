@@ -1,5 +1,6 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { SeasonProvider, EntryProvider, WeekProvider } from '$lib/providers';
+import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import { seedTestSeasonPair, clearTestSeason } from '$lib/server/test-season';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -105,18 +106,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 			entryProvider.getAll({ seasonId: sourceSeason.id, entryType: entryTypeScope as any }),
 			pb.collection('game_odds').getFirstListItem(
 				`season = "${sourceSeason.id}" && week = 1 && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
-			).catch(() => null),
-			pb.collection('game_odds').getFirstListItem(
-				`season = "${sourceSeason.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+					{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
+				).catch(() => null),
+				pb.collection('game_odds').getFirstListItem(
+					`season = "${sourceSeason.id}" && week = ${shStartWeek} && isActive = true`,
+					{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			).catch(() => null),
 		]);
 		const entries = rawEntries.filter((entry: any) => entry.entryType === entryTypeScope);
 		const pendingEntries = scopedEntries.filter((entry: any) => entry.status === 'pending_payment');
 
-		const week1Kickoff = (week1Odds as any)?.game_time_stamp ?? (week1Odds as any)?.gameTime;
-		const shKickoff = (shOdds as any)?.game_time_stamp ?? (shOdds as any)?.gameTime;
+			const week1Kickoff = getKickoffIso(week1Odds as any);
+			const shKickoff = getKickoffIso(shOdds as any);
 		const lmsEntryDeadline = week1Kickoff
 			? new Date(new Date(week1Kickoff).getTime() - 40 * 60_000).toISOString()
 			: null;
@@ -196,9 +197,9 @@ export const actions: Actions = {
 			const pickWeek = entry.entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
 			const odds = await pb.collection('game_odds').getFirstListItem(
 				`season = "${entry.season}" && week = ${pickWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			).catch(() => null) as any;
-			const kickoff = odds?.game_time_stamp ?? odds?.gameTime;
+			const kickoff = getKickoffIso(odds);
 			if (kickoff) {
 				const deadline = new Date(kickoff);
 				deadline.setMinutes(deadline.getMinutes() - 40);

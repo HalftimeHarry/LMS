@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { formatDeadlineLong } from '$lib/time';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -77,10 +78,7 @@
 
 		{#if week}
 			<p class="mt-3 text-xs text-gray-500">
-				Deadline: {new Date(week.deadline).toLocaleString('en-US', {
-					weekday: 'long', month: 'short', day: 'numeric',
-					hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-				})}
+				Deadline: {formatDeadlineLong(week.deadline)}
 			</p>
 		{/if}
 	</div>

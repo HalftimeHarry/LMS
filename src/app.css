@@ -46,3 +46,23 @@
 .standings-pulse {
   animation: goldPulse 0.9s ease-in-out infinite;
 }
+
+@keyframes bluePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45), 0 0 16px rgba(59, 130, 246, 0.65);
+  }
+}
+
+.search-pulse {
+  animation: bluePulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-pulse {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+  }
+}

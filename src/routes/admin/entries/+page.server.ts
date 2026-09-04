@@ -1,6 +1,7 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { fail } from '@sveltejs/kit';
 import { adminCreateEntriesSchema } from '$lib/schemas';
+import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import { EntryProvider, SeasonProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryStatus } from '$lib/providers';
@@ -59,22 +60,22 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		const [week1Odds, shOdds] = await Promise.all([
 			pb.collection('game_odds').getFirstListItem(
 				`season = "${s.id}" && week = 1 && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			).catch(() => null),
 			pb.collection('game_odds').getFirstListItem(
 				`season = "${s.id}" && week = ${shStartWeek} && isActive = true`,
-				{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+				{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 			).catch(() => null),
 		]);
 
-		const week1Kickoff = (week1Odds as any)?.game_time_stamp ?? (week1Odds as any)?.gameTime;
+		const week1Kickoff = getKickoffIso(week1Odds as any);
 		if (week1Kickoff) {
 			const cutoff = new Date(week1Kickoff);
 			cutoff.setMinutes(cutoff.getMinutes() - 40);
 			deadlineMap[s.id] = cutoff.toISOString();
 		}
 
-		const shKickoff = (shOdds as any)?.game_time_stamp ?? (shOdds as any)?.gameTime;
+		const shKickoff = getKickoffIso(shOdds as any);
 		if (shKickoff) {
 			const cutoff = new Date(shKickoff);
 			cutoff.setMinutes(cutoff.getMinutes() - 40);
@@ -122,9 +123,9 @@ export const actions: Actions = {
 		const pickWeek = entryType === 'second_half' ? (season?.secondHalfStartWeek ?? 6) : 1;
 		const firstOdds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${seasonId}" && week = ${pickWeek} && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 		).catch(() => null) as any;
-		const kickoff = firstOdds?.game_time_stamp ?? firstOdds?.gameTime;
+		const kickoff = getKickoffIso(firstOdds);
 		if (kickoff) {
 			const deadline = new Date(kickoff);
 			deadline.setMinutes(deadline.getMinutes() - 40);
@@ -228,9 +229,9 @@ export const actions: Actions = {
 		// Source-of-truth deadline: 40 min before first kickoff from game_odds.
 		const week1Odds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${entry.season}" && week = 1 && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 		).catch(() => null) as any;
-		const kickoff = week1Odds?.game_time_stamp ?? week1Odds?.gameTime;
+		const kickoff = getKickoffIso(week1Odds);
 		if (kickoff) {
 			const cutoff = new Date(kickoff);
 			cutoff.setMinutes(cutoff.getMinutes() - 40);

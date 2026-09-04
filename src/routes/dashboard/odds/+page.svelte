@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { easternAbbreviation } from '$lib/time';
 	import { formatGameTimeForDisplay } from '$lib/utils';
 	import type { PageData } from './$types';
 
@@ -62,7 +63,7 @@
 				Week {week.week} {season?.name ?? '—'}
 			</p>
 		{/if}
-		<p class="mt-2 text-xs font-medium uppercase tracking-[0.2em] text-blue-400">All times are EST</p>
+		<p class="mt-2 text-xs font-medium uppercase tracking-[0.2em] text-blue-400">All times are {easternAbbreviation(games?.[0]?.game_time_stamp)}</p>
 	</div>
 
 	{#if !week || games.length === 0}

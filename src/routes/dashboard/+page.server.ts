@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
-import { getDeadlinePairFromKickoff } from '$lib/server/deadlines';
+import { getDeadlinePairFromKickoff, getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url, depends, cookies }) => {
@@ -96,10 +96,10 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 
 		const odds = await pb.collection('game_odds').getFirstListItem(
 			`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-			{ sort: 'game_time_stamp', fields: 'game_time_stamp,gameTime' }
+			{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
 		).catch(() => null) as any;
 
-		const kickoff = odds?.game_time_stamp ?? odds?.gameTime ?? null;
+		const kickoff = getKickoffIso(odds);
 		const derived = getDeadlinePairFromKickoff(kickoff);
 		derivedDeadlineCache.set(key, derived);
 		return derived;
