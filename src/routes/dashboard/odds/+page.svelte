@@ -12,11 +12,12 @@
 
 	function spreadDisplay(val: number | null): string {
 		if (val == null || val === 0) return '—';
-		return val > 0 ? `+${val}` : `${val}`;
+		const normalized = Number(val);
+		return normalized > 0 ? `+${normalized}` : `${normalized}`;
 	}
 
 	function mlDisplay(val: number | null): string {
-		if (val == null) return '\u2014';
+		if (val == null || Number(val) === 0) return '';
 		return val > 0 ? `+${val}` : `${val}`;
 	}
 </script>

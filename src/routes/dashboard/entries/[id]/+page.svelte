@@ -358,7 +358,7 @@
 								<button
 									type="button"
 									onclick={() => { expandedWeeks = new Set([currentWeek.id]); }}
-									class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)]"
+									class="rounded border border-[rgba(201,168,76,0.4)] px-3 py-1.5 text-xs font-semibold text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.1)] {hasPick ? 'standings-pulse' : ''}"
 								>
 									{hasPick ? 'Change pick ↓' : 'Pick now ↓'}
 								</button>
@@ -622,7 +622,7 @@
 										<details class="mb-4 group">
 											<summary class="cursor-pointer list-none">
 												<div class="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm font-medium text-gray-300 transition hover:border-gray-600 hover:bg-gray-800/60 hover:text-white">
-													<span class="transition group-open:hidden">▶ Show all {weekOdds.length} matchups</span>
+													<span class="transition group-open:hidden">▶ Show all {weekOdds.length} matchups (quick view odds)</span>
 													<span class="hidden transition group-open:inline">▼ Hide matchups</span>
 												</div>
 											</summary>
@@ -632,8 +632,6 @@
 														<tr class="border-b border-gray-800 text-gray-600">
 															<th class="px-3 py-1.5 text-left">Away</th>
 															<th class="px-3 py-1.5 text-left">Home</th>
-															<th class="px-3 py-1.5 text-center">Spread</th>
-															<th class="px-3 py-1.5 text-center">ML</th>
 														</tr>
 													</thead>
 													<tbody>
@@ -659,22 +657,6 @@
 																			<span class="text-[#c9a84c] font-semibold">{hs}</span>
 																		{/if}
 																	</div>
-																</td>
-																<td class="px-3 py-1.5 text-center text-gray-500">
-																	{hs != null ? (hs === 0 ? 'PK' : '') : '—'}
-																</td>
-																<td class="px-3 py-1.5 text-center">
-																	{#if game.homeMoneyline != null}
-																		<span class="{game.homeMoneyline < 0 ? 'text-[#c9a84c]' : 'text-gray-500'}">
-																			{moneylineDisplay(game.homeMoneyline)}
-																		</span>
-																		<span class="text-gray-700"> / </span>
-																		<span class="{game.awayMoneyline > 0 ? 'text-blue-400' : 'text-gray-500'}">
-																			{moneylineDisplay(game.awayMoneyline)}
-																		</span>
-																	{:else}
-																		<span class="text-gray-700">—</span>
-																	{/if}
 																</td>
 															</tr>
 														{/each}

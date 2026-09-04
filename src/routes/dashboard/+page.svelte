@@ -477,8 +477,8 @@
 	{:else}
 		<div class="flex flex-col gap-3">
 			{#each seasonGroups.filter(g => g.season.id === selectedSeasonId || g.entries.some((e: any) => e.season === selectedSeasonId)) as group, gi}
-				{@const lmsGroup      = group.entries.filter((e: any) => e.entryType === 'lms')}
-				{@const shGroup       = group.entries.filter((e: any) => e.entryType === 'second_half')}
+				{@const lmsGroup      = group.entries.filter((e: any) => e.entryType === 'lms').sort((a: any, b: any) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true, sensitivity: 'base' }))}
+				{@const shGroup       = group.entries.filter((e: any) => e.entryType === 'second_half').sort((a: any, b: any) => a.entryName.localeCompare(b.entryName, undefined, { numeric: true, sensitivity: 'base' }))}
 				{@const lmsSeasonId2  = lmsGroup[0]?.season ?? group.season.id}
 				{@const shSeasonId2   = shGroup[0]?.season ?? group.season.id}
 				{@const currentWeek   = currentWeekBySeason[lmsSeasonId2] ?? currentWeekBySeason[group.season.id] ?? null}
@@ -591,7 +591,7 @@
 															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt={t.abbreviation} class="h-4 w-4 object-contain" /><span>{t.abbreviation}</span>{/each}
 															<span class="text-red-400">to lose</span>
 														</span>
-														{#if isPending}<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">Update →</span>{/if}
+														{#if isPending}<span class="standings-pulse rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">Update →</span>{/if}
 													{:else if isPending}
 														<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-xs text-red-400">⚠ Pick needed</span>
 														<span class="rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">
@@ -669,7 +669,7 @@
 															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt={t.abbreviation} class="h-4 w-4 object-contain" /><span>{t.abbreviation}</span>{/each}
 															<span class="text-green-400">to win</span>
 														</span>
-														{#if isPending}<span class="rounded border border-blue-700 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">Update →</span>{/if}
+														{#if isPending}<span class="standings-pulse rounded border border-blue-700 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">Update →</span>{/if}
 													{:else if isPending}
 														<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-xs text-red-400">⚠ Pick needed</span>
 														<span class="rounded border border-blue-700 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">
