@@ -29,6 +29,7 @@
 					{ href: '/admin/results',   label: 'Results', disabled: !resultsUnlocked },
 					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
+					{ href: '/admin/deadlines', label: 'Weekly Deadlines' },
 					{ href: '/admin/users',     label: 'Users' },
 					{ href: '/admin/picks',     label: 'Manage Picks' },
 					{ href: '/admin/duties',    label: 'Admin Duties' },
@@ -39,6 +40,7 @@
 					{ href: '/admin/entries',   label: 'Entries & Payments' },
 					{ href: '/admin/results',   label: 'Results', disabled: !resultsUnlocked },
 					{ href: '/admin/odds',          label: 'Manage Odds' },
+					{ href: '/admin/deadlines',     label: 'Weekly Deadlines' },
 					{ href: '/admin/participants',  label: 'Manage Participants' },
 					{ href: '/admin/duties',        label: 'Admin Duties' },
 			  ]
