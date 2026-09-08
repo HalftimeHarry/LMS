@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { resolveDefaultEntryType } from '$lib/utils';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -66,6 +67,79 @@
 		else { sortCol = col; sortDir = 'asc'; }
 	}
 
+	let addEntryOpen = $state(false);
+	let addEntryUserId = $state('');
+	let addEntrySeasonId = $state('');
+	let addEntryType = $state<'lms' | 'second_half'>('lms');
+	let addEntryCount = $state(1);
+	let addEntryBaseName = $state('LMS');
+	let addEntryReferredBy = $state('');
+	let addEntryComplimentary = $state(false);
+	let addEntryPlayerSearch = $state('');
+	let addEntryDropdownOpen = $state(false);
+
+	const addEntrySeasons = $derived((data.seasons as any[]) ?? []);
+	const addEntryDefaultSeason = $derived(
+		addEntrySeasons.find((s: any) => s.status === 'open' || s.status === 'active')
+		?? addEntrySeasons[0]
+		?? null
+	);
+
+	const addEntrySelectedUser = $derived(users.find((u: any) => u.id === addEntryUserId) ?? null);
+	const addEntrySelectedSeason = $derived(addEntrySeasons.find((s: any) => s.id === addEntrySeasonId) ?? null);
+	const addEntryHasLms = $derived((() => {
+		const season = addEntrySelectedSeason ?? addEntryDefaultSeason;
+		return !season || season.lmsEnabled !== false;
+	})());
+	const addEntryHasSh = $derived((() => {
+		const season = addEntrySelectedSeason ?? addEntryDefaultSeason;
+		return !season || season.secondHalfEnabled !== false;
+	})());
+	const addEntryLmsDeadline = $derived((addEntrySeasonId && (data.deadlineMap as Record<string, string> | undefined)?.[addEntrySeasonId]) || null);
+	const addEntryShDeadline = $derived((addEntrySeasonId && (data.shDeadlineMap as Record<string, string> | undefined)?.[addEntrySeasonId]) || null);
+	const addEntryCanSelectLms = $derived(addEntryHasLms && !(addEntryLmsDeadline && Date.now() > new Date(addEntryLmsDeadline).getTime()));
+	const addEntryCanSelectSh = $derived(addEntryHasSh && !(addEntryShDeadline && Date.now() > new Date(addEntryShDeadline).getTime()));
+
+	function openAddEntryModal(userId?: string) {
+		const chosenUser = userId ? users.find((u: any) => u.id === userId) ?? null : null;
+		const filteredMatch = !userId && search.trim()
+			? filtered.find((u: any) => u.displayName || u.email)
+			: null;
+		addEntryUserId = chosenUser?.id ?? filteredMatch?.id ?? '';
+		addEntrySeasonId = addEntryDefaultSeason?.id ?? '';
+		addEntryType = resolveDefaultEntryType({
+			lmsAvailable: addEntryCanSelectLms,
+			secondHalfAvailable: addEntryCanSelectSh
+		});
+		addEntryCount = 1;
+		addEntryReferredBy = '';
+		addEntryComplimentary = false;
+		const selectedPerson = users.find((u: any) => u.id === addEntryUserId) ?? null;
+		addEntryBaseName = selectedPerson
+			? `${selectedPerson.displayName ?? 'Player'} ${addEntryType === 'second_half' ? '2nd Half' : 'LMS'}`
+			: (addEntryType === 'second_half' ? '2nd Half' : 'LMS');
+		addEntryPlayerSearch = selectedPerson?.displayName ?? selectedPerson?.email ?? '';
+		addEntryDropdownOpen = false;
+		addEntryOpen = true;
+	}
+	function closeAddEntryModal() {
+		addEntryOpen = false;
+	}
+	$effect(() => {
+		if (addEntryDefaultSeason && !addEntrySeasonId) addEntrySeasonId = addEntryDefaultSeason.id;
+		if (addEntrySelectedUser && !addEntryUserId) addEntryUserId = addEntrySelectedUser.id;
+		if (!addEntrySelectedUser && addEntryUserId) addEntryUserId = '';
+		if (addEntryType === 'second_half' && !addEntryCanSelectSh && addEntryCanSelectLms) addEntryType = 'lms';
+		if (addEntryType === 'lms' && !addEntryCanSelectLms && addEntryCanSelectSh) addEntryType = 'second_half';
+		if (!addEntrySelectedUser?.displayName) {
+			addEntryBaseName = addEntryType === 'second_half' ? '2nd Half' : 'LMS';
+		} else if (addEntryUserId && addEntrySelectedUser) {
+			addEntryBaseName = addEntryType === 'second_half'
+				? `${addEntrySelectedUser.displayName} 2nd Half`
+				: `${addEntrySelectedUser.displayName} LMS`;
+		}
+	});
+
 	const filtered = $derived((() => {
 		const q = search.trim().toLowerCase();
 		let result = users.filter((u: any) =>
@@ -110,7 +184,7 @@
 
 <svelte:head><title>Manage Participants — Admin</title></svelte:head>
 
-<div class="relative rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+<div class="relative flex min-h-[calc(100vh-9rem)] flex-col rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
 	<!-- Header -->
 	<div class="px-5 py-4">
@@ -165,11 +239,7 @@
 		</div>
 
 		<!-- Table -->
-		<div
-			bind:this={scrollEl}
-			onscroll={onScroll}
-			class="overflow-x-auto max-h-[60vh] overflow-y-auto"
-		>
+		<div class="flex-1 overflow-x-auto">
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-10 border-b border-gray-800 bg-[#0a0a0a] text-xs font-medium uppercase tracking-wider text-gray-500">
@@ -243,13 +313,22 @@
 
 							<!-- Delete single -->
 							<td class="px-4 py-3 text-right">
-								<button
-									type="button"
-									onclick={() => requestDelete([user.id])}
-									class="rounded border border-red-800 bg-red-950/40 px-2.5 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
-								>
-									Delete
-								</button>
+								<div class="flex items-center justify-end gap-2">
+									<button
+										type="button"
+										onclick={() => openAddEntryModal(user.id)}
+										class="rounded border border-[#c9a84c] bg-[rgba(201,168,76,0.10)] px-2.5 py-1 text-xs font-medium text-[#c9a84c] transition hover:bg-[rgba(201,168,76,0.18)]"
+									>
+										Add Entry
+									</button>
+									<button
+										type="button"
+										onclick={() => requestDelete([user.id])}
+										class="rounded border border-red-800 bg-red-950/40 px-2.5 py-1 text-xs text-red-400 transition hover:bg-red-900/60"
+									>
+										Delete
+									</button>
+								</div>
 							</td>
 						</tr>
 					{:else}
@@ -275,6 +354,118 @@
 			Top
 		</button>
 	{/if}
+
+{#if addEntryOpen}
+	{@const chosenSeason = addEntrySelectedSeason ?? addEntryDefaultSeason}
+	<button type="button" class="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" onclick={closeAddEntryModal} aria-label="Close add entry modal"></button>
+	<div class="fixed inset-0 z-50 flex items-start justify-center p-3 sm:p-6">
+		<div class="flex h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-2xl border border-[rgba(201,168,76,0.3)] bg-[#0a0a0a] shadow-2xl">
+			<div class="flex items-center justify-between border-b border-gray-800 px-6 py-4">
+				<div>
+					<h2 class="text-xl font-bold text-white">Add Entry</h2>
+					<p class="text-sm text-gray-500">Default is LMS; switch to 2nd Half when needed.</p>
+				</div>
+				<button type="button" onclick={closeAddEntryModal} class="rounded p-1 text-gray-500 hover:text-white">✕</button>
+			</div>
+			<div class="flex-1 overflow-y-auto p-6">
+				<form method="POST" action="?/createEntries" use:enhance={() => {
+					return async ({ result, update }) => {
+						await update();
+						if (result.type === 'success') closeAddEntryModal();
+					};
+				}} class="space-y-5">
+					<input type="hidden" name="seasonId" value={addEntrySeasonId} />
+					<input type="hidden" name="userId" value={addEntryUserId} />
+					<input type="hidden" name="entryType" value={addEntryType} />
+					<input type="hidden" name="count" value={addEntryCount} />
+					<input type="hidden" name="baseName" value={addEntryBaseName} />
+					<input type="hidden" name="referredBy" value={addEntryReferredBy} />
+					{#if addEntryComplimentary}
+						<input type="hidden" name="complimentary" value="true" />
+					{/if}
+					<div class="space-y-2">
+						<fieldset class="space-y-2">
+							<legend class="text-sm font-medium text-gray-300">Participant</legend>
+							{#if addEntryUserId}
+								<div class="flex items-center gap-3 rounded-lg border border-green-800 bg-green-950/30 px-4 py-3 text-base text-white">
+									<div class="flex h-9 w-9 items-center justify-center rounded-full bg-green-900 text-sm font-bold text-green-300">
+										{(addEntrySelectedUser?.displayName ?? addEntrySelectedUser?.email ?? 'P')[0].toUpperCase()}
+									</div>
+									<div>
+										<p class="font-semibold">{addEntrySelectedUser?.displayName ?? 'Selected participant'}</p>
+										<p class="text-sm text-green-300">{addEntrySelectedUser?.email ?? ''}</p>
+									</div>
+								</div>
+							{:else}
+								<div class="relative">
+									<label class="sr-only" for="add-entry-player-search">Search participant</label>
+									<input id="add-entry-player-search" type="text" bind:value={addEntryPlayerSearch} onfocus={() => addEntryDropdownOpen = true} oninput={() => { addEntryDropdownOpen = true; addEntryUserId = ''; }} placeholder="Search participant…" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-base text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+									{#if addEntryDropdownOpen && addEntryPlayerSearch.trim()}
+										<ul class="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-700 bg-gray-950 py-1">
+											{#each users.filter((u: any) => `${u.displayName ?? ''} ${u.email ?? ''}`.toLowerCase().includes(addEntryPlayerSearch.toLowerCase())) as user}
+												<li>
+													<button type="button" onclick={() => { addEntryUserId = user.id; addEntryPlayerSearch = user.displayName || user.email; addEntryDropdownOpen = false; }} class="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800">{user.displayName || '—'} <span class="text-xs text-gray-500">{user.email}</span></button>
+												</li>
+											{/each}
+										</ul>
+									{/if}
+								</div>
+							{/if}
+						</fieldset>
+					</div>
+					<div class="space-y-2">
+						<label for="add-entry-season" class="text-sm font-medium text-gray-300">Season</label>
+						<select id="add-entry-season" bind:value={addEntrySeasonId} class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-base text-white focus:border-[#c9a84c] focus:outline-none">
+							{#each addEntrySeasons as season}
+								<option value={season.id}>{season.name}</option>
+							{/each}
+						</select>
+					</div>
+					{#if addEntryHasLms && addEntryHasSh}
+						<div class="space-y-2">
+							<p class="text-sm font-medium text-gray-300">Pool type</p>
+							<div class="grid grid-cols-2 gap-2">
+								<label class="flex items-center gap-2 rounded-lg border px-4 py-3 text-base {addEntryCanSelectLms && addEntryType === 'lms' ? 'border-[#c9a84c] bg-[rgba(201,168,76,0.08)] text-white' : 'border-gray-700 text-gray-400'}">
+									<input type="radio" bind:group={addEntryType} value="lms" disabled={!addEntryCanSelectLms} class="h-4 w-4 accent-[#c9a84c]" />
+									<span>LMS</span>
+								</label>
+								<label class="flex items-center gap-2 rounded-lg border px-4 py-3 text-base {addEntryCanSelectSh && addEntryType === 'second_half' ? 'border-blue-500 bg-blue-950/30 text-white' : 'border-gray-700 text-gray-400'}">
+									<input type="radio" bind:group={addEntryType} value="second_half" disabled={!addEntryCanSelectSh} class="h-4 w-4 accent-blue-400" />
+									<span>2nd Half</span>
+								</label>
+							</div>
+						</div>
+					{/if}
+					<div class="grid grid-cols-2 gap-4">
+						<div class="space-y-2">
+							<label for="add-entry-count" class="text-sm font-medium text-gray-300">Entries</label>
+							<input id="add-entry-count" type="number" min="1" max="20" bind:value={addEntryCount} class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-base text-white focus:border-[#c9a84c] focus:outline-none" />
+						</div>
+						<div class="space-y-2">
+							<label for="add-entry-base-name" class="text-sm font-medium text-gray-300">Base name</label>
+							<input id="add-entry-base-name" type="text" bind:value={addEntryBaseName} class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-base text-white focus:border-[#c9a84c] focus:outline-none" />
+						</div>
+					</div>
+					<div class="space-y-2">
+						<label for="add-entry-referred-by" class="text-sm font-medium text-gray-300">Referred by <span class="text-gray-500">(optional)</span></label>
+						<input id="add-entry-referred-by" type="text" bind:value={addEntryReferredBy} placeholder="Referrer" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-base text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
+					</div>
+					<label class="flex items-center gap-3 rounded-lg border border-gray-700 px-4 py-3">
+						<input type="checkbox" bind:checked={addEntryComplimentary} class="h-4 w-4 accent-green-500" />
+						<div>
+							<p class="text-base font-medium text-white">Complimentary entry</p>
+							<p class="text-sm text-gray-500">Marks as paid immediately.</p>
+						</div>
+					</label>
+					<div class="flex items-center justify-end gap-3 border-t border-gray-800 pt-4">
+						<button type="button" onclick={closeAddEntryModal} class="text-sm text-gray-500 hover:text-white">Cancel</button>
+						<button type="submit" disabled={!addEntryUserId || !addEntrySeasonId || !addEntryBaseName.trim()} class="rounded-lg bg-[#c9a84c] px-5 py-2.5 text-base font-semibold text-black disabled:opacity-40">Create</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+{/if}
 
 </div><!-- end single card -->
 

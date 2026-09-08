@@ -58,3 +58,15 @@ export function isAddEntriesDisabledByPoolFilter({
 	// "All entries" should stay enabled as long as at least one pool is still open.
 	return lmsDeadlinePast && secondHalfDeadlinePast;
 }
+
+export function resolveDefaultEntryType({
+	lmsAvailable,
+	secondHalfAvailable
+}: {
+	lmsAvailable: boolean;
+	secondHalfAvailable: boolean;
+}): 'lms' | 'second_half' {
+	if (lmsAvailable) return 'lms';
+	if (secondHalfAvailable) return 'second_half';
+	return 'lms';
+}

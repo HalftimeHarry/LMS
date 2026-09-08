@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { isAddEntriesDisabledByPoolFilter } from '../../lib/utils';
+import { isAddEntriesDisabledByPoolFilter, resolveDefaultEntryType } from '../../lib/utils';
 
 describe('admin entries UI gating - Add Entries disabled state', () => {
+	it('defaults LMS when both pools are available, and switches to 2nd Half after LMS deadline passes', () => {
+		expect(resolveDefaultEntryType({ lmsAvailable: true, secondHalfAvailable: true })).toBe('lms');
+		expect(resolveDefaultEntryType({ lmsAvailable: false, secondHalfAvailable: true })).toBe('second_half');
+		expect(resolveDefaultEntryType({ lmsAvailable: true, secondHalfAvailable: false })).toBe('lms');
+	});
+
 	it('disables for LMS filter only when LMS deadline has passed', () => {
 		expect(isAddEntriesDisabledByPoolFilter({
 			poolType: 'lms',
