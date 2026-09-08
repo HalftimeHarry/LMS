@@ -197,7 +197,7 @@
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
 
 <!-- ── Single standings card ────────────────────────────────────────────────── -->
-<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
+<div class="relative flex min-h-[calc(100vh-9rem)] flex-col rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm overflow-hidden">
 
 <!-- ── Header ──────────────────────────────────────────────────────────────── -->
 <div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-800 px-5 py-4">
@@ -638,7 +638,7 @@
 			</div>
 
 			<!-- Scrollable table -->
-			<div class="overflow-x-auto overflow-y-auto max-h-[32rem]">
+			<div class="flex-1 overflow-x-auto overflow-y-auto">
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
