@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
 import PocketBase from 'pocketbase';
 
+throw new Error(
+  'This legacy script is disabled because its hardcoded schedule can corrupt game_time_stamp. Use the approved kickoff re-import workflow only when explicitly authorized.'
+);
+
 dotenv.config();
 
 const pb = new PocketBase(process.env.PUBLIC_POCKETBASE_URL);

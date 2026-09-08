@@ -180,3 +180,46 @@ export function easternInputValueToIso(value: string | null | undefined): string
 
 	return new Date(utcMs).toISOString();
 }
+
+/** Renders a UTC instant as the "YYYY-MM-DDTHH:mm" Pacific wall time an admin datetime-local input expects. */
+export function toPacificInputValue(value: DateInput): string {
+	const date = toDate(value);
+	if (!date) return '';
+	const offset = new Intl.DateTimeFormat('en-US', {
+		timeZone: ADMIN_TIME_ZONE,
+		timeZoneName: 'shortOffset'
+	})
+		.formatToParts(date)
+		.find((part) => part.type === 'timeZoneName')?.value;
+	const match = String(offset ?? '').match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+	if (!match) return '';
+	const minutes = (Number(match[2]) * 60 + Number(match[3] ?? 0)) * (match[1] === '+' ? 1 : -1);
+	return new Date(date.getTime() + minutes * 60_000).toISOString().slice(0, 16);
+}
+
+/** Parses a datetime-local value as Pacific wall time and returns the UTC instant. */
+export function pacificInputValueToIso(value: string | null | undefined): string | null {
+	if (!value) return null;
+	const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+	if (!match) return null;
+
+	const [, year, month, day, hour, minute] = match.map(Number) as unknown as number[];
+	let utcMs = Date.UTC(year, month - 1, day, hour, minute);
+
+	for (let i = 0; i < 2; i++) {
+		const offset = new Intl.DateTimeFormat('en-US', {
+			timeZone: ADMIN_TIME_ZONE,
+			timeZoneName: 'shortOffset'
+		})
+			.formatToParts(new Date(utcMs))
+			.find((part) => part.type === 'timeZoneName')?.value;
+		const offsetMatch = String(offset ?? '').match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+		if (!offsetMatch) return null;
+		const minutes = (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] ?? 0)) * (offsetMatch[1] === '+' ? 1 : -1);
+		const nextUtcMs = Date.UTC(year, month - 1, day, hour, minute) - minutes * 60_000;
+		if (nextUtcMs === utcMs) break;
+		utcMs = nextUtcMs;
+	}
+
+	return new Date(utcMs).toISOString();
+}

@@ -5,6 +5,8 @@ import {
 	easternInputValueToIso,
 	formatDeadlineLong,
 	hasPassed,
+	pacificInputValueToIso,
+	toPacificInputValue,
 	toEasternInputValue
 } from '$lib/time';
 
@@ -41,6 +43,12 @@ describe('Eastern Time utilities', () => {
 		const iso = '2026-10-16T00:15:00.000Z'; // 8:15 PM EDT
 		expect(toEasternInputValue(iso)).toBe('2026-10-15T20:15');
 		expect(easternInputValueToIso('2026-10-15T20:15')).toBe(iso);
+	});
+
+	it('round-trips admin datetime-local values through Pacific wall time', () => {
+		const iso = '2026-09-10T00:20:00.000Z'; // 5:20 PM PDT
+		expect(toPacificInputValue(iso)).toBe('2026-09-09T17:20');
+		expect(pacificInputValueToIso('2026-09-09T17:20')).toBe(iso);
 	});
 
 	it('compares deadlines as absolute instants', () => {

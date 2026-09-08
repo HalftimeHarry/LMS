@@ -1,5 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
+import { pacificInputValueToIso } from '$lib/time';
+import { importGameTimesFromCsv } from '../../../../scripts/import-game-times-from-csv.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ url, locals }) => {
@@ -90,6 +92,26 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 };
 
 export const actions: Actions = {
+	restoreKickoffSchedule: async ({ request, locals }) => {
+		if (locals.role !== 'super_admin') {
+			return fail(403, { error: 'Only super admins can restore the kickoff schedule.' });
+		}
+
+		const data = await request.formData();
+		const seasonId = String(data.get('seasonId') ?? '');
+		if (!seasonId) return fail(400, { error: 'Select a season before restoring kickoff times.' });
+
+		try {
+			const result = await importGameTimesFromCsv(seasonId);
+			if (result.failed > 0 || result.missing > 0) {
+				return fail(500, { error: `Schedule restore incomplete: ${result.updated} updated, ${result.missing} missing, ${result.failed} failed.` });
+			}
+			return { success: true, restored: result.updated, restoredSeason: result.season };
+		} catch (error: any) {
+			return fail(500, { error: `Schedule restore failed: ${error.message}` });
+		}
+	},
+
 	/** Save spread + moneylines for one or more games */
 	saveOdds: async ({ request, locals }) => {
 		if (locals.role !== 'pool_admin') {
@@ -118,12 +140,11 @@ export const actions: Actions = {
 
 			let gameTimeStamp: string | null = null;
 			if (gameTimeRaw != null && String(gameTimeRaw).trim() !== '') {
-				const parsed = new Date(String(gameTimeRaw));
-				if (Number.isNaN(parsed.getTime())) {
+				gameTimeStamp = pacificInputValueToIso(String(gameTimeRaw));
+				if (!gameTimeStamp) {
 					errors.push(`${id}: invalid game time`);
 					continue;
 				}
-				gameTimeStamp = parsed.toISOString();
 			}
 
 			try {

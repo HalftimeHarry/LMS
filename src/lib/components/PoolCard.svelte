@@ -63,8 +63,8 @@
 		<div>
 			<p class="text-xl font-bold text-white">{weekLabel}</p>
 			<div class="mt-2 space-y-1 text-xs text-gray-400">
-				<p class="text-white">{entryDeadlineLabel}</p>
-				<p class="text-white">{pickDeadlineLabel}</p>
+				<p>Registration opens <span class="text-white">{entryDeadlineLabel}</span></p>
+				<p>Picks open <span class="text-white">{pickDeadlineLabel}</span></p>
 			</div>
 		</div>
 		<div class="flex items-center gap-3">

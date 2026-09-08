@@ -9,7 +9,7 @@
 </style>
 
 <script lang="ts">
-	import { formatDeadlineLongDual } from '$lib/time';
+	import { formatDeadlineLong } from '$lib/time';
 	import type { PageData } from './$types';
 	import InfoTip from '$lib/components/InfoTip.svelte';
 	import PoolCard from '$lib/components/PoolCard.svelte';
@@ -203,7 +203,7 @@
 	}
 
 	function fmtDeadline(iso: string | null | undefined): string {
-		return formatDeadlineLongDual(iso);
+		return formatDeadlineLong(iso);
 	}
 </script>
 

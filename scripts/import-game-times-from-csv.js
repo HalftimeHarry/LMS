@@ -561,7 +561,7 @@ function parseDateForRow(row, seasonStartYear) {
   return easternLocalToUtcIso(year, monthIndex, day, hour, minute);
 }
 
-async function main() {
+export async function importGameTimesFromCsv(seasonId) {
   if (!PB_URL || !ADMIN_EMAIL || !ADMIN_PASS) {
     throw new Error('Missing PUBLIC_POCKETBASE_URL, POCKETBASE_ADMIN_EMAIL, or POCKETBASE_ADMIN_PASSWORD');
   }
@@ -590,7 +590,9 @@ async function main() {
   }
 
   const seasons = await getAll(token, 'seasons');
-  const season = seasons.find((item) => item.status === 'active' || item.status === 'open') || seasons[0];
+  const season = (seasonId ? seasons.find((item) => item.id === seasonId) : null)
+    || seasons.find((item) => item.status === 'active' || item.status === 'open')
+    || seasons[0];
   if (!season) throw new Error('No season found');
   const seasonStartYear = Number.parseInt((season.name.match(/(\d{4})/) || [])[0] || '2026', 10);
 
@@ -639,14 +641,21 @@ async function main() {
     }
   }
 
-  console.log(`\nDone. Updated: ${updated}, missing: ${missing}, failed: ${failed}`);
+  return { updated, missing, failed, season: season.name, seasonId: season.id };
 }
 
-main().catch((error) => {
-  console.error(error?.message || error);
-  if (error?.status != null) console.error(`status=${error.status}`);
-  if (error?.url) console.error(`url=${error.url}`);
-  if (error?.data) console.error(`data=${JSON.stringify(error.data)}`);
-  if (error?.stack) console.error(error.stack);
-  process.exit(1);
-});
+async function main() {
+  const result = await importGameTimesFromCsv();
+  console.log(`\nDone. Updated: ${result.updated}, missing: ${result.missing}, failed: ${result.failed}`);
+}
+
+if (process.argv[1] && import.meta.url === new URL(process.argv[1], 'file:').href) {
+  main().catch((error) => {
+    console.error(error?.message || error);
+    if (error?.status != null) console.error(`status=${error.status}`);
+    if (error?.url) console.error(`url=${error.url}`);
+    if (error?.data) console.error(`data=${JSON.stringify(error.data)}`);
+    if (error?.stack) console.error(error.stack);
+    process.exit(1);
+  });
+}

@@ -81,7 +81,7 @@ export class DashboardProvider {
 			type: input.type,
 			title: input.type === 'lms' ? 'Last Man Standing' : 'Second Half Pool',
 			subtitle: input.type === 'lms' ? 'Pick the LOSER' : 'Pick the WINNER',
-			weekLabel: input.type === 'lms' ? `Week ${input.currentWeek?.week ?? 1} start` : (beforeStart ? `Week ${shStartWeek} start` : `Week ${input.currentWeek?.week ?? shStartWeek} start`),
+			weekLabel: input.type === 'lms' ? `Week ${input.currentWeek?.week ?? 1}` : (beforeStart ? `Week ${shStartWeek}` : `Week ${input.currentWeek?.week ?? shStartWeek}`),
 			entryDeadline,
 			pickDeadline,
 			registrationLabel,

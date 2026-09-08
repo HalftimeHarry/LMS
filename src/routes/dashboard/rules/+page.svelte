@@ -56,8 +56,8 @@
 	const defaultWinners = [
 		{ year: '2022', winner: 'McLovin', location: 'San Diego, CA', payout: '$20,500' },
 		{ year: '2023', winner: 'JACDAR', location: 'New Orleans, LA', payout: '$25,400' },
-		{ year: '2024', winner: 'PhoebeD, T-Bone & Guillermo', location: 'Split pot', payout: '$28,800 total' },
-		{ year: '2025', winner: 'ereiz03, PaulH, quinn3443 & themilkman805', location: 'Split pot', payout: '$7,000 each' },
+		{ year: '2024', winner: 'PhoebeD (Memphis, TN), T-Bone (Sanford, NC) & Guillermo (Rio Rancho, NM)', location: 'Split pot', payout: '$28,800 total' },
+		{ year: '2025', winner: 'ereiz03 (San Francisco, CA), PaulH (Albuquerque, NM), quinn3443 (Little Elm, TX) & themilkman805 (Denver, CO)', location: 'Split pot', payout: '$7,000 each' },
 	];
 
 	function parsePastWinners(raw: string | null | undefined) {
@@ -315,7 +315,7 @@
 		</div>
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
-				<p class="text-xl font-bold text-white">Week {lmsStartWeek} start</p>
+				<p class="text-xl font-bold text-white">Week {lmsStartWeek}</p>
 				<div class="mt-1 space-y-1 text-xs text-gray-400">
 					<p>
 						Entry deadline:
@@ -389,7 +389,7 @@
 		</div>
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div>
-				<p class="text-xl font-bold text-white">Week {shStartWeek} start</p>
+				<p class="text-xl font-bold text-white">Week {shStartWeek}</p>
 				<div class="mt-1 space-y-1 text-xs text-gray-400">
 					<p>
 						Entry deadline:

@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { teamLogoUrl } from '$lib/teamLogos';
+	import { toPacificInputValue } from '$lib/time';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -66,6 +67,7 @@
 	let activating    = $state(false);
 	let applyingLms   = $state(false);
 	let applying2h    = $state(false);
+	let restoringSchedule = $state(false);
 
 	function switchWeek(w: number) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -92,13 +94,6 @@
 		return ml > 0 ? `+${ml}` : String(ml);
 	}
 
-	function toDatetimeLocalValue(iso: string | null | undefined): string {
-		if (!iso) return '';
-		const d = new Date(iso);
-		if (Number.isNaN(d.getTime())) return '';
-		const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-		return local.toISOString().slice(0, 16);
-	}
 </script>
 
 <svelte:head><title>Manage Odds — Admin</title></svelte:head>
@@ -139,8 +134,28 @@
 	{/if}
 	{#if (form as any)?.success}
 		<div class="mb-4 rounded border border-green-800 bg-green-950/60 px-4 py-2 text-sm text-green-400">
-			{(form as any).saved != null ? `Saved odds for ${(form as any).saved} game(s).` : 'Done.'}
+			{#if (form as any).restored != null}
+				Restored kickoff times for {(form as any).restored} game(s) in {(form as any).restoredSeason}.
+			{:else}
+				{(form as any).saved != null ? `Saved odds for ${(form as any).saved} game(s).` : 'Done.'}
+			{/if}
 		</div>
+	{/if}
+	{#if isSuperAdmin}
+		<form method="POST" action="?/restoreKickoffSchedule" class="mb-4 rounded border border-red-800/70 bg-red-950/30 px-4 py-3" use:enhance={() => {
+			restoringSchedule = true;
+			return async ({ update }) => { await update(); restoringSchedule = false; };
+		}} onsubmit={(event) => {
+			if (!confirm(`Restore all kickoff times for ${activeSeason.name} from the verified NFL schedule? This overwrites game times only.`)) event.preventDefault();
+		}}>
+			<input type="hidden" name="seasonId" value={activeSeason.id} />
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<p class="text-sm text-red-200">Restore all kickoff times from the verified NFL schedule.</p>
+				<button type="submit" disabled={restoringSchedule} class="rounded border border-red-500/70 bg-red-900/50 px-3 py-1.5 text-xs font-semibold text-red-100 transition hover:bg-red-800/70 disabled:opacity-50">
+					{restoringSchedule ? 'Restoring...' : 'Restore Kickoff Schedule'}
+				</button>
+			</div>
+		</form>
 	{/if}
 
 	<!-- Week nav -->
@@ -345,10 +360,12 @@
 
 					<!-- Game time + note editable -->
 					<div class="w-44">
+						<label for="{game.id}_gameTime" class="mb-1 block text-[10px] text-gray-500">Kickoff time (Pacific)</label>
 						<input
+							id="{game.id}_gameTime"
 							type="datetime-local"
 							name="{game.id}_gameTime"
-							value={toDatetimeLocalValue(game.game_time_stamp ?? game.gameTime)}
+							value={toPacificInputValue(game.game_time_stamp ?? game.gameTime)}
 							class="w-full rounded border border-gray-700 bg-gray-900 px-2 py-1 text-center text-xs text-white focus:border-[#c9a84c] focus:outline-none"
 						/>
 						<input
