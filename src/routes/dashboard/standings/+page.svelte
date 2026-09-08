@@ -192,6 +192,7 @@
 	let breakdownOpen    = $state(false);
 	let expandedTeam     = $state<string | null>(null);
 	let pendingListOpen  = $state(false);
+	let weekNoticeOpen   = $state(true);
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
@@ -293,23 +294,40 @@
 		{#if openWeeks.length > 0}
 			{@const ow       = openWeeks[0]}
 			{@const autoPick = poolType === 'lms' ? (ow.expand?.biggestFavoriteTeam ?? poolAutoPickByWeek[ow.week]) : poolAutoPickByWeek[ow.week]}
-			<div class="ml-auto flex flex-wrap items-center gap-3 rounded-lg border border-blue-900 bg-blue-950/30 px-3 py-2">
-				<div class="flex items-center gap-2 text-sm text-blue-400">
-					<span class="h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse"></span>
-					<span>Week {ow.week} open — picks hidden until deadline</span>
-				</div>
-				{#if autoPick}
-					<div class="flex items-center gap-1.5 border-l border-blue-900 pl-3 text-xs text-gray-400">
-						<span class="text-gray-500">Auto-pick:</span>
-						<img
-							src={teamLogoUrl(autoPick.abbreviation)}
-							alt="{autoPick.city} {autoPick.name}"
-							class="h-5 w-5 object-contain"
-						/>
-						<span class="text-gray-300">{autoPick.city} {autoPick.name}</span>
+			{#if weekNoticeOpen}
+				<div class="ml-auto flex flex-wrap items-center gap-3 rounded-lg border border-blue-900 bg-blue-950/30 px-3 py-2">
+					<div class="flex items-center gap-2 text-sm text-blue-400">
+						<span class="h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse"></span>
+						<span>Week {ow.week} open — picks hidden until deadline</span>
 					</div>
-				{/if}
-			</div>
+					{#if autoPick}
+						<div class="flex items-center gap-1.5 border-l border-blue-900 pl-3 text-xs text-gray-400">
+							<span class="text-gray-500">Auto-pick:</span>
+							<img
+								src={teamLogoUrl(autoPick.abbreviation)}
+								alt="{autoPick.city} {autoPick.name}"
+								class="h-5 w-5 object-contain"
+							/>
+							<span class="text-gray-300">{autoPick.city} {autoPick.name}</span>
+						</div>
+					{/if}
+					<button
+						type="button"
+						onclick={() => weekNoticeOpen = false}
+						class="ml-auto rounded border border-blue-800/70 bg-black/20 px-2 py-1 text-[10px] font-medium text-blue-300 hover:bg-blue-900/40"
+					>
+						Hide
+					</button>
+				</div>
+			{:else}
+				<button
+					type="button"
+					onclick={() => weekNoticeOpen = true}
+					class="ml-auto rounded border border-blue-800/70 bg-blue-950/20 px-2.5 py-1 text-[10px] font-medium text-blue-300 hover:bg-blue-900/40"
+				>
+					Show week notice
+				</button>
+			{/if}
 		{/if}
 	</div>
 
