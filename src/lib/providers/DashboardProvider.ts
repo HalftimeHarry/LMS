@@ -39,22 +39,31 @@ interface DashboardPoolCardInput {
 export class DashboardProvider {
 	static buildPoolCardViewModel(input: DashboardPoolCardInput): DashboardPoolCardViewModel {
 		const shStartWeek = input.shStartWeek ?? 6;
+		const seasonAllowsLmsRegistration = input.season.status === 'open';
 		const beforeStart = !input.currentWeek || input.currentWeek.week < shStartWeek;
 		const week = input.type === 'second_half' && input.week6Week ? input.week6Week : input.currentWeek;
-		const entryDeadline = week?.entryDeadline ?? null;
+		const lmsRegistrationClosedBySecondHalf = input.type === 'lms' && (!!input.currentWeek && input.currentWeek.week >= shStartWeek);
+		const lmsRegistrationClosedByStatus = input.type === 'lms' && !seasonAllowsLmsRegistration;
+		const entryDeadline = (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus) ? null : (week?.entryDeadline ?? null);
 		const pickDeadline = week?.pickDeadline ?? null;
 
 		const entryDeadlineTime = entryDeadline ? new Date(entryDeadline).getTime() : NaN;
 		const pickDeadlineTime = pickDeadline ? new Date(pickDeadline).getTime() : NaN;
 		const entryDiffMs = Number.isFinite(entryDeadlineTime) ? entryDeadlineTime - input.now : 0;
 		const pickDiffMs = Number.isFinite(pickDeadlineTime) ? pickDeadlineTime - input.now : 0;
-		const entryLive = !!input.currentWeek && input.currentWeek.status === 'open' && Number.isFinite(entryDeadlineTime) && entryDiffMs > 0;
-		const entryDeadlinePassed = Number.isFinite(entryDeadlineTime) && entryDiffMs <= 0;
+		const entryLive = !(lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
+			&& !!input.currentWeek
+			&& input.currentWeek.status === 'open'
+			&& Number.isFinite(entryDeadlineTime)
+			&& entryDiffMs > 0;
+		const entryDeadlinePassed = lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus || (Number.isFinite(entryDeadlineTime) && entryDiffMs <= 0);
 		const pickLive = input.type === 'lms'
 			? !!input.currentWeek && input.currentWeek.status === 'open' && Number.isFinite(pickDeadlineTime) && pickDiffMs > 0
 			: !beforeStart && input.currentWeek?.status === 'open' && Number.isFinite(pickDeadlineTime) && pickDiffMs > 0;
 		const pickDeadlinePassed = Number.isFinite(pickDeadlineTime) && pickDiffMs <= 0;
-		const registrationLabel = entryDeadline ? (entryDeadlinePassed ? 'Registration closed' : 'Registration open') : 'Registration TBD';
+		const registrationLabel = (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
+			? 'Registration closed'
+			: (entryDeadline ? (entryDeadlinePassed ? 'Registration closed' : 'Registration open') : 'Registration TBD');
 		const picksLabel = input.type === 'lms'
 			? (pickDeadline ? (pickDeadlinePassed ? 'Pick deadline closed' : 'Picks open') : 'Picks TBD')
 			: (beforeStart ? 'Picks pending' : (pickDeadline ? (pickDeadlinePassed ? 'Pick deadline closed' : 'Picks open') : 'Picks TBD'));
@@ -62,11 +71,13 @@ export class DashboardProvider {
 		const picksUrgent = pickLive && pickDiffMs < 3_600_000;
 
 		const footerMessage = input.type === 'lms'
-			? (pickDeadline && !pickDeadlinePassed
-				? (picksUrgent ? '⚠ Deadline closing soon — submit your pick now.' : 'Picks are open. Submit or update your pick from each active entry below before the deadline.')
-				: (pickDeadline && pickDeadlinePassed
-					? 'Deadline passed. Picks are locked — no changes until results are posted.'
-					: 'Picks are open. Submit or update your pick from each active entry below before the deadline.'))
+			? ((lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
+				? 'LMS registration is closed for this season. Picks remain open until the current deadline.'
+				: (pickDeadline && !pickDeadlinePassed
+					? (picksUrgent ? '⚠ Deadline closing soon — submit your pick now.' : 'Picks are open. Submit or update your pick from each active entry below before the deadline.')
+					: (pickDeadline && pickDeadlinePassed
+						? 'Deadline passed. Picks are locked — no changes until results are posted.'
+						: 'Picks are open. Submit or update your pick from each active entry below before the deadline.')))
 			: (beforeStart && entryLive && input.myEntryCount === 0
 				? 'Registration is open. Register now to join the pool.'
 				: beforeStart && entryLive && input.userHasEntry

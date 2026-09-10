@@ -7,7 +7,7 @@ describe('DashboardProvider', () => {
 	it('builds LMS card state with registration and pick deadlines', () => {
 		const card = DashboardProvider.buildPoolCardViewModel({
 			type: 'lms',
-			season: { id: 'season-1', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			season: { id: 'season-1', status: 'open', secondHalfEnabled: true, secondHalfStartWeek: 6 },
 			currentWeek: {
 				week: 1,
 				status: 'open',
@@ -27,10 +27,39 @@ describe('DashboardProvider', () => {
 		expect(card.footerMessage).toContain('Picks are open');
 	});
 
+	it('marks LMS registration closed once the season reaches the second-half start week', () => {
+		const card = DashboardProvider.buildPoolCardViewModel({
+			type: 'lms',
+			season: { id: 'season-1', status: 'active', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			currentWeek: {
+				week: 6,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:40:00.000Z',
+				pickDeadline: '2026-10-15T20:50:00.000Z'
+			},
+			week6Week: {
+				week: 6,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:35:00.000Z',
+				pickDeadline: '2026-10-15T20:45:00.000Z'
+			},
+			now: new Date('2026-10-01T00:00:00.000Z').getTime(),
+			entries: [],
+			myEntryCount: 0,
+			userHasEntry: false,
+			shStartWeek: 6
+		});
+
+		expect(card.registrationLabel).toBe('Registration closed');
+		expect(card.registrationLive).toBe(false);
+		expect(card.picksLive).toBe(true);
+		expect(card.footerMessage).toContain('LMS registration is closed');
+	});
+
 	it('builds Second Half card state before Week 6 as registration-only', () => {
 		const card = DashboardProvider.buildPoolCardViewModel({
 			type: 'second_half',
-			season: { id: 'season-1', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			season: { id: 'season-1', status: 'open', secondHalfEnabled: true, secondHalfStartWeek: 6 },
 			currentWeek: {
 				week: 1,
 				status: 'open',
