@@ -184,15 +184,42 @@
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
+	const previousWeek = $derived((() => {
+		if (!currentWeek) return null as any;
+		return [...weeks]
+			.filter((w: any) => w.status !== 'open' && Number(w.week) < Number(currentWeek.week))
+			.sort((a: any, b: any) => Number(b.week) - Number(a.week))[0] ?? null;
+	})());
+
+	const previousWeekBreakdown = $derived((() => {
+		if (!previousWeek) return [] as { abbr: string; count: number }[];
+		const map: Record<string, number> = {};
+		for (const weekMap of Object.values(pickGrid)) {
+			const cell = weekMap[previousWeek.id];
+			if (!cell) continue;
+			for (const abbr of cell.teams) {
+				map[abbr] = (map[abbr] ?? 0) + 1;
+			}
+		}
+		return Object.entries(map)
+			.map(([abbr, count]) => ({ abbr, count }))
+			.sort((a, b) => b.count - a.count);
+	})());
+
+	const totalPicksPreviousWeek = $derived(
+		previousWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
+	);
+
 	// Own entries in the still-to-pick list — used for "Pick now →" links
 	const myStillToPick = $derived(
 		stillToPickList.filter(e => e.userId === userId)
 	);
 
-	let breakdownOpen    = $state(false);
-	let expandedTeam     = $state<string | null>(null);
-	let pendingListOpen  = $state(false);
-	let weekNoticeOpen   = $state(true);
+	let breakdownOpen            = $state(false);
+	let previousWeekBreakdownOpen = $state(true);
+	let expandedTeam             = $state<string | null>(null);
+	let pendingListOpen          = $state(false);
+	let weekNoticeOpen           = $state(true);
 </script>
 
 <svelte:head><title>Standings — LMS Pool</title></svelte:head>
@@ -422,6 +449,49 @@
 					<span class="ml-auto text-xs text-gray-600">Deadline passed</span>
 				{/if}
 			</div>
+
+			{#if previousWeek && previousWeekBreakdown.length > 0}
+				<div class="border-t border-gray-800/60">
+					<button
+						type="button"
+						onclick={() => previousWeekBreakdownOpen = !previousWeekBreakdownOpen}
+						class="flex w-full items-center justify-between bg-green-900/30 px-4 py-2.5 text-left transition hover:bg-green-900/40"
+					>
+						<span class="text-[10px] font-semibold uppercase tracking-[0.18em] text-green-200">
+							{previousWeekBreakdownOpen ? `CLOSE WK ${previousWeek.week} BREAKDOWN` : `VIEW WK ${previousWeek.week} BREAKDOWN`}
+						</span>
+						<svg
+							class="h-3.5 w-3.5 text-green-200 transition-transform {previousWeekBreakdownOpen ? 'rotate-180' : ''}"
+							fill="none" stroke="currentColor" viewBox="0 0 24 24"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+						</svg>
+					</button>
+
+					{#if previousWeekBreakdownOpen}
+						<div class="border-t border-gray-800/60 px-4 py-3">
+							<div class="space-y-2">
+								{#each previousWeekBreakdown as { abbr, count }}
+									{@const pct = totalPicksPreviousWeek > 0 ? Math.round((count / totalPicksPreviousWeek) * 100) : 0}
+									<div class="flex items-center gap-3">
+										<img src={teamLogoUrl(abbr)} alt={abbr} class="h-6 w-6 rounded-full bg-white p-0.5 object-contain" />
+										<div class="min-w-0 flex-1">
+											<div class="mb-1 flex items-center justify-between gap-2 text-xs text-gray-300">
+												<span>{abbr}</span>
+												<span class="font-mono text-gray-200">{count}</span>
+											</div>
+											<div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+												<div class="h-full rounded-full bg-blue-600" style="width: {pct}%"></div>
+											</div>
+										</div>
+										<span class="w-9 text-right text-[10px] text-gray-500">{pct}%</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- Collapsible breakdown toggle -->
 			{#if currentWeekBreakdown.length > 0 || myStillToPick.length > 0}
