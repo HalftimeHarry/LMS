@@ -277,7 +277,8 @@ export const actions: Actions = {
 
 			for (const pick of picks) {
 				const teams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
-				const isLms = pick.entryType === 'lms';
+				const resolvedEntryType = pick.entryType ?? pick.expand?.entry?.entryType ?? null;
+				const isLms = resolvedEntryType === 'lms';
 				let shouldEliminate = false;
 
 				for (const teamId of teams) {

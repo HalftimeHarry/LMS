@@ -190,6 +190,25 @@ describe('recordResults — Save Draft (draft=1)', () => {
 		expect(collections.entries.update).not.toHaveBeenCalled();
 	});
 
+	it('falls back to entry.entryType when pick.entryType is missing', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id:          PICK_ID,
+			entryType:   undefined,
+			pickedTeams: [HOME_TEAM],
+			expand:      { entry: { id: ENTRY_ID, status: 'active', entryType: 'lms' } },
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect(collections.entries.update).toHaveBeenCalledWith(ENTRY_ID, expect.objectContaining({
+			status: 'eliminated',
+			eliminatedWeek: 1,
+		}));
+		expect((result as any).eliminated).toBe(1);
+	});
+
 	it('standings update: eliminated count reflects draft save', async () => {
 		collections.picks.getFullList = vi.fn().mockResolvedValue([
 			{

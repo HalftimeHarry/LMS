@@ -31,9 +31,12 @@
 	const openWeeks = $derived(weeks.filter(w => w.status === 'open'));
 
 	// ── Filters (client-side) ─────────────────────────────────────────────────
-	let searchText   = $state('');
-	let statusFilter = $state<'all' | 'active' | 'eliminated'>('active');
-	let mineOnly     = $state(false);
+	let searchText          = $state('');
+	let statusFilter        = $state<'all' | 'active' | 'eliminated'>('active');
+	let mineOnly            = $state(false);
+	let advancedFilterOpen  = $state(false);
+	let advancedFilterTeam  = $state<string | null>(null);
+	let showScrollTop       = $state(false);
 
 	const myEntries   = $derived(userId ? (entries as any[]).filter(e => e.user === userId) : []);
 	const myEntryCount = $derived(myEntries.length);
@@ -68,6 +71,14 @@
 			list = list.filter(e => e.status === statusFilter);
 		}
 
+		// Advanced team filter across all exposed weeks
+		if (advancedFilterTeam) {
+			const team = advancedFilterTeam;
+			list = list.filter((e: any) =>
+				visibleWeeks.some((week: any) => pickGrid[e.id]?.[week.id]?.teams.includes(team))
+			);
+		}
+
 		// Search — match entry name or player display name
 		const q = searchText.trim().toLowerCase();
 		if (q) {
@@ -90,13 +101,53 @@
 		return list;
 	});
 
+	const advancedFilterOptionsByWeek = $derived.by(() => {
+		const map: Record<string, { abbr: string; count: number }[]> = {};
+		for (const week of visibleWeeks) {
+			const counts = weekTeamCounts[week.id] ?? {};
+			map[week.id] = Object.entries(counts)
+				.map(([abbr, count]) => ({ abbr, count: Number(count) }))
+				.sort((a, b) => b.count - a.count || a.abbr.localeCompare(b.abbr));
+		}
+		return map;
+	});
+
 	const activeCount = $derived(entries.filter((e: any) => e.status === 'active').length);
+
+	const rowCountForEntry = (entry: any) => {
+		const index = filteredEntries().findIndex((e: any) => e.id === entry.id);
+		return index >= 0 ? index + 1 : 0;
+	};
+
+	const weekTeamCounts = $derived((() => {
+		const totals: Record<string, Record<string, number>> = {};
+		for (const week of visibleWeeks) {
+			const counts: Record<string, number> = {};
+			for (const entry of entries) {
+				const cell = pickGrid[entry.id]?.[week.id];
+				if (!cell) continue;
+				for (const abbr of cell.teams) {
+					counts[abbr] = (counts[abbr] ?? 0) + 1;
+				}
+			}
+			totals[week.id] = counts;
+		}
+		return totals;
+	})());
 
 	// ── Countdown timer ───────────────────────────────────────────────────────
 	let now = $state(Date.now());
 	$effect(() => {
 		const t = setInterval(() => { now = Date.now(); }, 1000);
 		return () => clearInterval(t);
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const updateScrollState = () => { showScrollTop = window.scrollY > 300; };
+		updateScrollState();
+		window.addEventListener('scroll', updateScrollState, { passive: true });
+		return () => window.removeEventListener('scroll', updateScrollState);
 	});
 
 	// ── Live refresh — re-runs server load every 30s while a week is open ────
@@ -216,7 +267,7 @@
 	);
 
 	let breakdownOpen            = $state(false);
-	let previousWeekBreakdownOpen = $state(true);
+	let previousWeekBreakdownOpen = $state(false);
 	let expandedTeam             = $state<string | null>(null);
 	let pendingListOpen          = $state(false);
 	let weekNoticeOpen           = $state(true);
@@ -646,6 +697,28 @@
 
 			<!-- Filters -->
 			<div class="flex flex-wrap items-center gap-3 border-b border-gray-800 px-4 py-3">
+				{#if myEntryCount > 0}
+					<div class="flex items-center gap-2">
+						{#if !mineOnly}
+							<button
+								type="button"
+								onclick={() => setMineOnly(true)}
+								class="rounded border border-blue-500/60 bg-blue-950/40 px-2.5 py-1 text-xs font-medium text-blue-300 transition hover:bg-blue-900/60"
+							>
+								Find my entries
+							</button>
+						{:else}
+							<button
+								type="button"
+								onclick={() => setMineOnly(false)}
+								class="rounded border border-gray-700 bg-gray-900 px-2.5 py-1 text-xs font-medium text-gray-300 transition hover:text-white"
+							>
+								Show all entries
+							</button>
+						{/if}
+					</div>
+				{/if}
+
 				<!-- Search -->
 				<div class="relative {highlightSearch ? 'search-pulse rounded' : ''}">
 					<svg class="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 {highlightSearch ? 'text-blue-400' : 'text-gray-600'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -660,29 +733,6 @@
 							{highlightSearch ? 'border-blue-500 placeholder-blue-300/70' : 'border-gray-700 placeholder-gray-600'}"
 					/>
 				</div>
-
-				{#if myEntryCount > 0}
-					<div class="flex items-center gap-2">
-						{#if !mineOnly}
-							<button
-								type="button"
-								onclick={() => setMineOnly(true)}
-								class="rounded border border-blue-500/60 bg-blue-950/40 px-2.5 py-1 text-xs font-medium text-blue-300 transition hover:bg-blue-900/60"
-							>
-								Find my entries
-							</button>
-						{/if}
-						<label class="flex cursor-pointer items-center gap-1.5 text-xs {mineOnly ? 'text-blue-300' : 'text-gray-500 hover:text-gray-300'}">
-							<input
-								type="checkbox"
-								checked={mineOnly}
-								onchange={(e) => setMineOnly(e.currentTarget.checked)}
-								class="h-3.5 w-3.5 cursor-pointer accent-blue-500"
-							/>
-							{mineOnly ? 'Uncheck to see all' : 'Active'}
-						</label>
-					</div>
-				{/if}
 
 				<!-- Status filter -->
 				<div class="flex overflow-hidden rounded border border-gray-700 text-xs font-medium">
@@ -710,10 +760,10 @@
 					{/each}
 				</div>
 
-				{#if searchText || mineOnly || statusFilter !== 'all'}
+				{#if searchText || mineOnly || statusFilter !== 'all' || advancedFilterTeam}
 					<button
 						type="button"
-						onclick={() => { searchText = ''; setMineOnly(false); statusFilter = 'active'; }}
+						onclick={() => { searchText = ''; setMineOnly(false); statusFilter = 'active'; advancedFilterTeam = null; }}
 						class="text-xs text-gray-600 hover:text-gray-400"
 					>
 						Clear filters
@@ -725,11 +775,88 @@
 				</span>
 			</div>
 
+			<div class="border-b border-gray-800 bg-[#1a1200]/90">
+				<button
+					type="button"
+					onclick={() => advancedFilterOpen = !advancedFilterOpen}
+					class="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition hover:bg-[#2a1d04]"
+				>
+					<span class="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f7d980]">
+						{advancedFilterOpen ? 'CLOSE ADVANCED FILTER' : 'ADVANCED FILTER'}
+					</span>
+					<svg
+						class="h-3.5 w-3.5 text-[#f7d980] transition-transform {advancedFilterOpen ? 'rotate-180' : ''}"
+						fill="none" stroke="currentColor" viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+					</svg>
+				</button>
+
+				{#if advancedFilterOpen}
+					<div class="space-y-4 border-t border-[#c9a84c]/20 bg-[#100d08]/80 px-4 py-3">
+						<div class="flex items-center justify-between gap-3">
+							<p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">Past picks · all exposed weeks</p>
+							{#if advancedFilterTeam}
+								<button
+									type="button"
+									onclick={() => advancedFilterTeam = null}
+									class="text-xs text-[#f7d980] hover:text-[#f1c75b]"
+								>
+									Clear team
+								</button>
+							{/if}
+						</div>
+
+						<div class="space-y-3">
+							{#each visibleWeeks as week}
+								{@const options = advancedFilterOptionsByWeek[week.id] ?? []}
+								<div class="rounded border border-gray-800 bg-black/20 p-2.5">
+									<div class="mb-2 flex items-center justify-between gap-2">
+										<span class="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">Wk {week.week}</span>
+										{#if options.length > 0}
+											<span class="text-[10px] text-gray-600">{options.length} teams</span>
+										{/if}
+									</div>
+
+									{#if options.length > 0}
+										<div class="flex flex-wrap gap-2">
+											{#each options as { abbr, count }}
+												<button
+													type="button"
+													onclick={() => advancedFilterTeam = advancedFilterTeam === abbr ? null : abbr}
+													class="flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs font-medium transition
+														{advancedFilterTeam === abbr
+															? 'border-[#c9a84c] bg-[#c9a84c]/15 text-[#f7d980]'
+															: 'border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-500 hover:text-white'}"
+												>
+													<img src={teamLogoUrl(abbr)} alt={abbr} class="h-4 w-4 rounded-full bg-white p-0.5 object-contain" />
+													<span>{abbr}</span>
+													<span class="rounded-full border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] text-gray-300">{count}</span>
+												</button>
+											{/each}
+										</div>
+									{:else}
+										<p class="text-xs text-gray-600">No picks recorded for this week yet.</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+
+						{#if advancedFilterTeam}
+							<p class="text-xs text-gray-300">
+								Showing only entries that picked <span class="font-semibold text-[#f7d980]">{advancedFilterTeam}</span> in any exposed week.
+							</p>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
 			<!-- Scrollable table -->
 			<div class="flex-1 overflow-x-auto overflow-y-auto">
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
+						<th class="px-2 py-3 text-center text-[10px] font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">Rows</th>
 						<!-- Sticky entry column -->
 						<th class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-3 text-left w-44">Entry</th>
 
@@ -763,33 +890,39 @@
 							{isElim ? 'opacity-50' : ''}
 							{isMe   ? 'bg-[rgba(201,168,76,0.03)]' : ''}">
 
-							<!-- Entry name (sticky) -->
-							<td class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-2.5
-								{isMe ? 'border-l-2 border-[#c9a84c]/40' : ''}">
-								<div class="flex items-center gap-2">
-									<div>
-										<p class="font-medium leading-tight {isMe ? 'text-[#c9a84c]' : 'text-white'}">
-											{entry.entryName}
-											{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
-										</p>
-										<p class="text-xs text-gray-500">
-											{entry.expand?.user?.displayName ?? ''}
-											<span class="ml-2 {statusColors[entry.status] ?? 'text-gray-400'}">
-												{entry.status === 'active'
-													? 'Active'
-													: entry.status === 'winner'
-														? 'Winner'
-														: `Out Wk ${entry.eliminatedWeek ?? '?'}`}
-											</span>
-										</p>
-									</div>
-									{#if needsPick}
-										<a href="/dashboard/entries/{entry.id}"
-											class="ml-1 shrink-0 rounded border border-yellow-700 bg-yellow-950/50 px-2 py-0.5 text-[10px] font-semibold text-yellow-400 transition hover:bg-yellow-900/60 whitespace-nowrap">
-											⚠ Pick →
-										</a>
-									{/if}
-								</div>
+<td class="px-2 py-2 text-center align-middle">
+										<span class="inline-flex min-w-7 items-center justify-center rounded-full border border-gray-700 bg-gray-900 px-2 py-1 font-mono text-xs text-gray-300">
+											{rowCountForEntry(entry)}
+										</span>
+									</td>
+
+									<!-- Entry name (sticky) -->
+									<td class="sticky left-0 z-10 bg-[#0a0a0a] px-4 py-2.5
+										{isMe ? 'border-l-2 border-[#c9a84c]/40' : ''}">
+										<div class="flex items-center gap-2">
+											<div>
+												<p class="font-medium leading-tight {isMe ? 'text-[#c9a84c]' : 'text-white'}">
+													{entry.entryName}
+													{#if isMe}<span class="ml-1 text-[10px] text-[#c9a84c]/60">you</span>{/if}
+												</p>
+												<p class="text-xs text-gray-500">
+													{entry.expand?.user?.displayName ?? ''}
+													<span class="ml-2 {statusColors[entry.status] ?? 'text-gray-400'}">
+														{entry.status === 'active'
+															? 'Active'
+															: entry.status === 'winner'
+																? 'Winner'
+																: `Out Wk ${entry.eliminatedWeek ?? '?'}`}
+													</span>
+												</p>
+											</div>
+											{#if needsPick}
+												<a href="/dashboard/entries/{entry.id}"
+													class="ml-1 shrink-0 rounded border border-yellow-700 bg-yellow-950/50 px-2 py-0.5 text-[10px] font-semibold text-yellow-400 transition hover:bg-yellow-900/60 whitespace-nowrap">
+														⚠ Pick →
+												</a>
+											{/if}
+										</div>
 							</td>
 
 							<!-- Past-deadline pick cells (visible to everyone) -->
@@ -799,13 +932,18 @@
 									{#if cell}
 										<div class="flex flex-col items-center gap-0.5">
 											{#each cell.teams as abbr}
+											{@const teamCount = weekTeamCounts[week.id]?.[abbr] ?? 0}
+											<div class="relative flex flex-col items-center gap-0.5">
 												<img
 													src={teamLogoUrl(abbr)}
 													alt={abbr}
-													title="{abbr}{cell.isAutoPick ? ' (auto-pick)' : ''}"
+													title="{abbr}{cell.isAutoPick ? ' (auto-pick)' : ''} · {teamCount} {teamCount === 1 ? 'entry' : 'entries'}"
 													class="h-6 w-6 rounded-full bg-white p-0.5 object-contain {cell.isAutoPick ? 'opacity-40 grayscale' : ''}"
 												/>
-												<span class="text-[9px] leading-none {cell.isAutoPick ? 'text-gray-600' : 'text-gray-400'}">{abbr}</span>
+												<span class="absolute -bottom-1 -right-1 min-w-[1.1rem] rounded-full border border-black bg-[#c9a84c] px-1 text-[8px] font-bold text-black leading-none shadow-sm">
+													{teamCount}
+												</span>
+											</div>
 											{/each}
 	
 										</div>
@@ -869,7 +1007,7 @@
 
 					{#if filteredEntries().length === 0}
 						<tr>
-							<td colspan={1 + visibleWeeks.length + openWeeks.length}
+							<td colspan={1 + 1 + visibleWeeks.length + openWeeks.length}
 								class="px-4 py-8 text-center text-sm text-gray-600">
 								No entries match your filters.
 							</td>
@@ -879,6 +1017,15 @@
 			</table>
 			</div><!-- end scrollable table -->
 
+		{#if showScrollTop}
+			<button
+				type="button"
+				onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+				class="fixed bottom-5 right-5 z-50 rounded-full border border-[#c9a84c]/60 bg-[#1a1200] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f7d980] shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition hover:bg-[#2a1d04]"
+			>
+				Top
+			</button>
+		{/if}
 
 		<!-- ── Legend ────────────────────────────────────────────────────────── -->
 		<div class="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-gray-800/60 px-4 py-3 text-xs text-gray-600">
