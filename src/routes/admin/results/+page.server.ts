@@ -1,12 +1,11 @@
 import { fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
+import {
+	clearResultsDraftOutcomes,
+	loadResultsDraftOutcomes,
+	saveResultsDraftOutcomes,
+} from '$lib/server/adminResultsDraftStore';
 import type { Actions, PageServerLoad } from './$types';
-
-const RESULTS_UNLOCK_AT_ISO = '2026-09-09T23:50:00.000Z';
-
-function canUseResults(nowMs: number) {
-	return nowMs >= new Date(RESULTS_UNLOCK_AT_ISO).getTime();
-}
 
 async function getWeekDeadlineMs(pb: any, weekId: string): Promise<number | null> {
 	const week = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
@@ -17,11 +16,6 @@ async function getWeekDeadlineMs(pb: any, weekId: string): Promise<number | null
 
 async function validateResultsActionWindow(pb: any, weekIds: string[]) {
 	const nowMs = Date.now();
-	if (!canUseResults(nowMs)) {
-		return fail(403, {
-			error: `Results are locked until ${new Date(RESULTS_UNLOCK_AT_ISO).toISOString()}.`
-		});
-	}
 
 	for (const weekId of weekIds.filter(Boolean)) {
 		const deadlineMs = await getWeekDeadlineMs(pb, weekId);
@@ -66,9 +60,7 @@ async function fetchPicksAndResults(pb: any, weekId: string) {
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const pb        = await pbAdmin();
 	const isSuperAdmin = locals.role === 'super_admin';
-	const resultsUnlockAt = RESULTS_UNLOCK_AT_ISO;
 	const serverNow = Date.now();
-	const resultsUnlocked = serverNow >= new Date(resultsUnlockAt).getTime();
 	const yearParam = url.searchParams.get('year') ?? '';
 	const weekParam = url.searchParams.get('week');
 
@@ -109,9 +101,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			lmsPickResults: [],
 			shPickResults: [],
 			allWeeks: [],
-			resultsUnlockAt,
-			resultsUnlocked,
 			serverNow,
+			draftOutcomes: {},
 		};
 	}
 
@@ -173,6 +164,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
 	// 2H start week from season config
 	const shStartWeek = activePair.sh?.secondHalfStartWeek ?? 6;
+	const draftOutcomes = loadResultsDraftOutcomes(activePair.year, weekNum);
 
 	return {
 		seasons,
@@ -188,9 +180,8 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		shPickResults:  shData.pickResults,
 		allWeeks,
 		shStartWeek,
-		resultsUnlockAt,
-		resultsUnlocked,
 		serverNow,
+		draftOutcomes,
 	};
 };
 
@@ -224,6 +215,7 @@ export const actions: Actions = {
 		const shSeasonId  = (data.get('shSeasonId')  as string) || null;
 		const weekNum    = Number(data.get('weekNum'));
 		const isDraft    = data.get('draft') === '1';
+		const draftYear  = data.get('year');
 
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
@@ -237,6 +229,10 @@ export const actions: Actions = {
 			}
 		}
 		if (!Object.keys(outcomes).length) return fail(400, { error: 'No game outcomes provided.' });
+		if (draftYear && String(draftYear).trim()) {
+			if (isDraft) saveResultsDraftOutcomes(String(draftYear), weekNum, outcomes);
+			else        clearResultsDraftOutcomes(String(draftYear), weekNum);
+		}
 
 		// Load games from whichever season has them (same schedule for both)
 		const anchorSeasonId = lmsSeasonId ?? shSeasonId!;
@@ -357,6 +353,7 @@ export const actions: Actions = {
 		const lmsSeasonId = (data.get('lmsSeasonId') as string) || null;
 		const shSeasonId  = (data.get('shSeasonId')  as string) || null;
 		const weekNum     = Number(data.get('weekNum'));
+		const draftYear   = data.get('year');
 
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
@@ -398,6 +395,9 @@ export const actions: Actions = {
 			lmsWeekId ? resetWeek(lmsWeekId, lmsSeasonId!) : Promise.resolve(),
 			shWeekId  ? resetWeek(shWeekId,  shSeasonId!)  : Promise.resolve(),
 		]);
+		if (draftYear && String(draftYear).trim()) {
+			clearResultsDraftOutcomes(String(draftYear), weekNum);
+		}
 
 		return { resetDone: true, deletedResults, reinstated };
 	},
@@ -408,6 +408,8 @@ export const actions: Actions = {
 		const data       = await request.formData();
 		const lmsWeekId  = (data.get('lmsWeekId') as string) || null;
 		const shWeekId   = (data.get('shWeekId')  as string) || null;
+		const weekNum    = Number(data.get('weekNum'));
+		const draftYear  = data.get('year');
 		if (!lmsWeekId && !shWeekId) return fail(400, { error: 'At least one week ID is required.' });
 		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
 		if (windowError) return windowError;
@@ -416,6 +418,9 @@ export const actions: Actions = {
 				lmsWeekId ? pb.collection('weekly_settings').update(lmsWeekId, { status: 'complete' }) : Promise.resolve(),
 				shWeekId  ? pb.collection('weekly_settings').update(shWeekId,  { status: 'complete' }) : Promise.resolve(),
 			]);
+			if (draftYear && String(draftYear).trim()) {
+				clearResultsDraftOutcomes(String(draftYear), weekNum);
+			}
 		} catch (e: any) {
 			return fail(400, { error: e?.message ?? 'Failed.' });
 		}

@@ -1,28 +1,31 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
+	import { teamLogoUrl } from '$lib/teamLogos';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	const pageData = $derived(data);
+	const pageForm = $derived(form);
 
-	const yearPairs   = $derived(data.yearPairs      as any[]);
-	const activePair  = $derived(data.activePair     as any);
-	const lmsWeek     = $derived(data.lmsWeek        as any);
-	const shWeek      = $derived(data.shWeek         as any);
-	const games       = $derived(data.games          as any[]);
-	const lmsPicks    = $derived(data.lmsPicks       as any[]);
-	const shPicks     = $derived(data.shPicks        as any[]);
-	const lmsResults  = $derived(data.lmsPickResults as any[]);
-	const shResults   = $derived(data.shPickResults  as any[]);
-	const allWeeks    = $derived(data.allWeeks       as any[]);
-	const shStartWeek = $derived((data.shStartWeek   as number) ?? 6);
-	const weekNum     = $derived(data.weekNum        as number);
+	const yearPairs   = $derived(pageData.yearPairs      as any[]);
+	const activePair  = $derived(pageData.activePair     as any);
+	const lmsWeek     = $derived(pageData.lmsWeek        as any);
+	const shWeek      = $derived(pageData.shWeek         as any);
+	const games       = $derived(pageData.games          as any[]);
+	const lmsPicks    = $derived(pageData.lmsPicks       as any[]);
+	const shPicks     = $derived(pageData.shPicks        as any[]);
+	const lmsResults  = $derived(pageData.lmsPickResults as any[]);
+	const shResults   = $derived(pageData.shPickResults  as any[]);
+	const allWeeks    = $derived(pageData.allWeeks       as any[]);
+	const shStartWeek = $derived((pageData.shStartWeek   as number) ?? 6);
+	const weekNum     = $derived(pageData.weekNum        as number);
 	const show2H      = $derived(!!activePair?.sh && weekNum >= shStartWeek);
-	const resultsUnlockAtMs = $derived(new Date(String(data.resultsUnlockAt)).getTime());
-	const resultsUnlockedByDate = $derived(Boolean(data.resultsUnlocked));
 
-	let now = $state((data.serverNow as number) ?? Date.now());
+	const serverNow = $derived((pageData.serverNow as number) ?? Date.now());
+	let now = $state(0);
 	$effect(() => {
+		now = serverNow;
 		const id = setInterval(() => { now = Date.now(); }, 1_000);
 		return () => clearInterval(id);
 	});
@@ -31,8 +34,9 @@
 	const shResultMap  = $derived(Object.fromEntries(shResults.map( (r: any) => [`${r.pick}__${r.team}`, r.result as string])));
 
 	let outcomes = $state<Record<string, string>>({});
+	const savedDraftOutcomes = $derived((pageData.draftOutcomes as Record<string, string>) ?? {});
 
-	const resolvedGames = $derived((() => {
+	const resolvedGames = $derived.by(() => {
 		const map: Record<string, string> = {};
 		for (const game of games) {
 			const homeId = game.expand?.homeTeam?.id ?? game.homeTeam;
@@ -45,11 +49,48 @@
 			else if (hr?.result === 'correct'   && ar?.result === 'correct')   map[game.id] = 'tie';
 		}
 		return map;
-	})());
+	});
+	const sourceOutcomes = $derived.by(() => ({ ...savedDraftOutcomes, ...resolvedGames }));
+	let lastSourceKey = $state('');
 
-	$effect(() => { outcomes = { ...resolvedGames }; });
+	$effect(() => {
+		if (!activePair || !weekNum) return;
+		const nextKey = `${activePair.year}:${weekNum}:${Object.keys(sourceOutcomes).sort().join(',')}:${JSON.stringify(sourceOutcomes)}`;
+		if (nextKey !== lastSourceKey) {
+			outcomes = { ...sourceOutcomes };
+			lastSourceKey = nextKey;
+		}
+	});
+
+	$effect(() => {
+		if (!activePair || !weekNum) return;
+		if (Object.keys(savedDraftOutcomes).length > 0 && Object.keys(outcomes).length === 0) {
+			outcomes = { ...savedDraftOutcomes };
+		}
+	});
+
+	$effect(() => {
+		if (!import.meta.env.PROD) return;
+		const id = setInterval(() => { invalidateAll(); }, 30_000);
+		return () => clearInterval(id);
+	});
+
+	function resetDraftOutcomes() {
+		if (!activePair || !weekNum) return;
+		outcomes = {};
+	}
 
 	const weekStatus = $derived(lmsWeek?.status ?? shWeek?.status ?? 'open');
+
+	function parsePocketBaseDeadline(value: unknown): number | null {
+		if (value == null || value === '') return null;
+		const raw = String(value).trim();
+		if (!raw) return null;
+		const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
+		const ms = new Date(normalized).getTime();
+		if (!Number.isFinite(ms)) return null;
+		return ms;
+	}
 
 	function buildPanel(picks: any[], rmap: Record<string, string>) {
 		const map: Record<string, { entry: any; teams: any[]; results: string[] }> = {};
@@ -80,32 +121,67 @@
 		results_pending: 'border-blue-800 bg-blue-950/60 text-blue-400',
 		complete:        'border-gray-700 bg-gray-900 text-gray-500',
 	};
+	const statusLabels: Record<string, string> = {
+		open: 'Open for result entry',
+		locked: 'Locked until deadline',
+		results_pending: 'Results pending review',
+		complete: 'Completed',
+	};
 	const resultColor: Record<string, string> = { correct: 'text-green-400', incorrect: 'text-red-400', pending: 'text-gray-500' };
 	const resultIcon:  Record<string, string> = { correct: '✓', incorrect: '✗', pending: '·' };
+
+	function formatAdminDateTime(value: unknown): string {
+		const ms = parsePocketBaseDeadline(value);
+		if (ms == null) return '';
+		return new Date(ms).toLocaleString('en-US', {
+			timeZone: 'America/Los_Angeles',
+			month: 'numeric',
+			day: 'numeric',
+			year: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: true,
+		});
+	}
 
 	function updateYear(y: string) { goto(`?year=${y}`); }
 	function updateWeek(w: number) { goto(`?year=${activePair?.year}&week=${w}`); }
 
 	function isWeekResultsEnabled(week: any): boolean {
 		if (!week) return false;
-		if (now < resultsUnlockAtMs) return false;
-		if (!week.deadline) return false;
-		return now >= new Date(week.deadline).getTime();
+		const ms = parsePocketBaseDeadline(week.deadline);
+		if (ms == null) return false;
+		return now >= ms;
 	}
 
 	const selectedWeekFromNav = $derived(allWeeks.find((w: any) => w.week === weekNum) ?? null);
-	const selectedWeekResultsEnabled = $derived(isWeekResultsEnabled(selectedWeekFromNav));
+	const selectedWeekDeadlineMs = $derived.by(() => parsePocketBaseDeadline(selectedWeekFromNav?.deadline));
+	const selectedWeekResultsEnabled = $derived.by(() => {
+		if (selectedWeekDeadlineMs == null) return false;
+		return now >= selectedWeekDeadlineMs;
+	});
 	const selectedWeekDeadlineLabel = $derived(
 		selectedWeekFromNav?.deadline
-			? new Date(selectedWeekFromNav.deadline).toLocaleString('en-US', {
+			? new Date(selectedWeekDeadlineMs ?? 0).toLocaleString('en-US', {
 				timeZone: 'America/Los_Angeles',
 				weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
 				hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
 			})
 			: ''
 	);
+	const lmsStatusDisplay = $derived.by(() => {
+		if (!lmsWeek) return 'locked';
+		return selectedWeekResultsEnabled ? 'open' : 'locked';
+	});
+	const shStatusDisplay = $derived.by(() => {
+		if (!shWeek || !show2H) return 'locked';
+		return selectedWeekResultsEnabled ? 'open' : 'locked';
+	});
 
 	const gamesEntered = $derived(Object.values(outcomes).filter(Boolean).length);
+	const allGamesEntered = $derived(games.length > 0 && gamesEntered >= games.length);
+	const showResetActions = $derived(Boolean(lmsWeek || shWeek));
 </script>
 
 <svelte:head><title>Results — Admin</title></svelte:head>
@@ -116,24 +192,10 @@
 		<div>
 			<h1 class="text-2xl font-bold text-white">Week Results</h1>
 			<p class="mt-1 text-sm text-gray-500">Enter game outcomes once — results apply to both LMS and Second Half simultaneously.</p>
-			{#if !resultsUnlockedByDate}
-				<p class="mt-2 inline-block rounded border border-yellow-900/60 bg-yellow-950/30 px-2 py-1 text-xs text-yellow-300">
-					Results unlock on {new Date(resultsUnlockAtMs).toLocaleString('en-US', {
-						timeZone: 'America/Los_Angeles',
-						weekday: 'long',
-						month: 'long',
-						day: 'numeric',
-						year: 'numeric',
-						hour: 'numeric',
-						minute: '2-digit',
-						timeZoneName: 'short'
-					})}
-				</p>
-			{/if}
 		</div>
 		<div class="flex items-center gap-2">
-			<label class="text-xs text-gray-500">Season</label>
-			<select
+			<label for="results-season" class="text-xs text-gray-500">Season</label>
+			<select id="results-season"
 				value={activePair?.year ?? ''}
 				onchange={(e) => updateYear((e.target as HTMLSelectElement).value)}
 				class="rounded border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
@@ -163,7 +225,7 @@
 					title={weekEnabled ? '' : `Results Week ${w.week} unlocks after deadline`}
 				>
 					Results Week {w.week}
-					{#if w.status === 'complete'}✓{:else if w.status === 'locked'}🔒{:else if w.status === 'results_pending'}📋{/if}
+					{#if w.status === 'complete'}✓{:else if w.status === 'locked' && !weekEnabled}🔒{:else if w.status === 'results_pending'}📋{/if}
 				</button>
 			{/each}
 		</div>
@@ -177,31 +239,28 @@
 {:else}
 
 <!-- ── Feedback ──────────────────────────────────────────────────────────── -->
-{#if form?.success || (form as any)?.resetDone}
+{#if pageForm?.success || (pageForm as any)?.resetDone}
 	<div class="mb-4 rounded border border-green-800 bg-green-950/60 px-4 py-3 text-sm text-green-400">
-		{#if (form as any).resetDone}
-			Reset complete — {(form as any).deletedResults} pick results deleted, {(form as any).reinstated} entries reinstated.
-		{:else if (form as any).isDraft}
-			Draft saved — {(form as any).resultsWritten} results written, {(form as any).eliminated} entries eliminated. Weeks remain locked.
-		{:else if (form as any).resultsWritten !== undefined}
-			Results saved — {(form as any).resultsWritten} results written, {(form as any).eliminated} entries eliminated.
-		{:else if (form as any).autoPicked !== undefined}
-			Weeks locked — {(form as any).autoPicked} auto-picks assigned.
+		{#if (pageForm as any).resetDone}
+			Reset complete — {(pageForm as any).deletedResults} pick results deleted, {(pageForm as any).reinstated} entries reinstated.
+		{:else if (pageForm as any).isDraft}
+			Draft saved — {(pageForm as any).resultsWritten} results written, {(pageForm as any).eliminated} entries eliminated. Weeks remain locked.
+		{:else if (pageForm as any).resultsWritten !== undefined}
+			Results saved — {(pageForm as any).resultsWritten} results written, {(pageForm as any).eliminated} entries eliminated.
+		{:else if (pageForm as any).autoPicked !== undefined}
+			Weeks locked — {(pageForm as any).autoPicked} auto-picks assigned.
 		{:else}
 			Weeks marked complete.
 		{/if}
 	</div>
 {/if}
-{#if (form as any)?.error}
-	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{(form as any).error}</div>
+{#if (pageForm as any)?.error}
+	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{(pageForm as any).error}</div>
 {/if}
 
 {#if !selectedWeekResultsEnabled}
 	<div class="mb-4 rounded-xl border border-yellow-900/60 bg-black/85 px-5 py-4 text-sm text-yellow-200">
 		<p class="font-semibold">Results Week {weekNum} is not active yet.</p>
-		{#if !resultsUnlockedByDate}
-			<p class="mt-1 text-yellow-300/80">Global unlock is {new Date(resultsUnlockAtMs).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}.</p>
-		{/if}
 		{#if selectedWeekDeadlineLabel}
 			<p class="mt-1 text-yellow-300/80">This week becomes active after its deadline: {selectedWeekDeadlineLabel}.</p>
 		{/if}
@@ -217,20 +276,20 @@
 		</p>
 		<div class="mt-1 flex flex-wrap gap-4 text-xs text-gray-500">
 			{#if lmsWeek}
-				<span>LMS deadline: {new Date(lmsWeek.deadline).toLocaleString()}</span>
+				<span>LMS deadline: {formatAdminDateTime(lmsWeek.deadline)}</span>
 			{/if}
 			{#if shWeek && show2H}
-				<span>2H deadline: {new Date(shWeek.deadline).toLocaleString()}</span>
+				<span>2H deadline: {formatAdminDateTime(shWeek.deadline)}</span>
 			{/if}
 		</div>
 	</div>
 	<div class="flex flex-wrap items-center gap-3">
 		<!-- Status badges -->
 		{#if lmsWeek}
-			<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[lmsWeek.status] ?? ''}">LMS: {lmsWeek.status.replace('_',' ')}</span>
+			<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[lmsStatusDisplay] ?? ''}">LMS: {statusLabels[lmsStatusDisplay] ?? lmsStatusDisplay.replace('_',' ')}</span>
 		{/if}
 		{#if shWeek && show2H}
-			<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[shWeek.status] ?? ''}">2H: {shWeek.status.replace('_',' ')}</span>
+			<span class="rounded border px-2.5 py-1 text-xs font-medium {statusColors[shStatusDisplay] ?? ''}">2H: {statusLabels[shStatusDisplay] ?? shStatusDisplay.replace('_',' ')}</span>
 		{/if}
 
 		<!-- Lock both weeks -->
@@ -243,6 +302,7 @@
 				<input type="hidden" name="shWeekId"    value={show2H ? (shWeek?.id ?? '') : ''} />
 				<input type="hidden" name="lmsSeasonId" value={activePair.lms?.id ?? ''} />
 				<input type="hidden" name="shSeasonId"  value={activePair.sh?.id ?? ''} />
+				<input type="hidden" name="year"       value={activePair.year ?? ''} />
 				<input type="hidden" name="weekNum"     value={weekNum} />
 				<button type="submit" disabled={lockLoading || !selectedWeekResultsEnabled}
 					class="rounded border border-yellow-700 bg-yellow-950/60 px-4 py-1.5 text-sm font-medium text-yellow-400 transition hover:bg-yellow-950 disabled:opacity-50">
@@ -259,6 +319,8 @@
 			}}>
 				<input type="hidden" name="lmsWeekId" value={lmsWeek?.id ?? ''} />
 				<input type="hidden" name="shWeekId"  value={show2H ? (shWeek?.id ?? '') : ''} />
+				<input type="hidden" name="year"     value={activePair.year ?? ''} />
+				<input type="hidden" name="weekNum"  value={weekNum} />
 				<button type="submit" disabled={completeLoading || !selectedWeekResultsEnabled}
 					class="rounded border border-green-700 bg-green-950/60 px-4 py-1.5 text-sm font-medium text-green-400 transition hover:bg-green-950 disabled:opacity-50">
 					{completeLoading ? 'Completing…' : '✓ Mark Week Complete'}
@@ -270,72 +332,133 @@
 {/if}
 
 <!-- ── Main grid ─────────────────────────────────────────────────────────── -->
-<div class="grid gap-6 lg:grid-cols-3">
+<div class="grid gap-6 {activePair.lms && lmsEntries.length && (show2H && shEntries.length) ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}">
 
 	<!-- Game outcomes form -->
-	<div class="lg:col-span-2">
+	<div class="{activePair.lms && lmsEntries.length && (show2H && shEntries.length) ? 'lg:col-span-2' : 'lg:col-span-1'}">
 		{#if !games.length}
 			<div class="rounded-xl border border-gray-800 bg-black/75 p-6 text-sm text-gray-500">
 				No games found for week {weekNum}. Add odds first via Manage Odds.
 			</div>
 		{:else}
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 backdrop-blur-sm">
-			<div class="border-b border-[rgba(201,168,76,0.15)] px-5 py-3">
+			<div class="flex items-center justify-between gap-3 border-b border-[rgba(201,168,76,0.15)] px-5 py-3">
 				<h2 class="text-xs font-semibold uppercase tracking-wider text-gray-500">
 					Game Outcomes — Week {weekNum}
 					<span class="ml-2 text-gray-600">({games.length} games · {gamesEntered} entered)</span>
 				</h2>
+
+				{#if showResetActions}
+					<div class="flex items-center gap-2">
+						{#if resetConfirm}
+							<div class="flex items-center gap-2">
+								<form method="POST" action="?/resetWeekResults" use:enhance={() => {
+									resetConfirm = false; resetLoading = true;
+									return async ({ update, result }) => {
+											await update();
+											resetLoading = false;
+											if ((result as any)?.type === 'success') {
+												resetDraftOutcomes();
+											}
+											await invalidateAll();
+										};
+								}}>
+									<input type="hidden" name="lmsWeekId"   value={lmsWeek?.id ?? ''} />
+									<input type="hidden" name="shWeekId"    value={show2H ? (shWeek?.id ?? '') : ''} />
+									<input type="hidden" name="lmsSeasonId" value={activePair.lms?.id ?? ''} />
+									<input type="hidden" name="shSeasonId"  value={activePair.sh?.id ?? ''} />
+									<input type="hidden" name="weekNum"     value={weekNum} />
+									<button type="submit" disabled={resetLoading || !selectedWeekResultsEnabled}
+										class="rounded border border-red-500 bg-red-950/40 px-4 py-1.5 text-xs text-red-400 transition hover:bg-red-900/60 disabled:opacity-50">
+										{resetLoading ? 'Resetting…' : 'Confirm Reset'}
+									</button>
+								</form>
+								<button type="button" onclick={() => resetConfirm = false}
+									class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-800">Cancel</button>
+							</div>
+						{:else}
+							<button type="button" onclick={() => resetConfirm = true} disabled={resetLoading || !selectedWeekResultsEnabled}
+									class="rounded border border-red-700 bg-red-950/50 px-4 py-1.5 text-xs font-semibold text-red-200 transition hover:border-red-500 hover:bg-red-900/70 disabled:opacity-50">
+								↺ Reset Week Results
+							</button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 
 			<form method="POST" action="?/recordResults" use:enhance={() => {
 				recordLoading = true;
-				return async ({ update }) => { await update(); recordLoading = false; await invalidateAll(); };
+				return async ({ update, result }) => {
+					await update();
+					recordLoading = false;
+					if ((result as any)?.type === 'success' && !(result as any)?.data?.isDraft) {
+						resetDraftOutcomes();
+					}
+					await invalidateAll();
+				};
 			}}>
 				<input type="hidden" name="lmsWeekId"   value={lmsWeek?.id ?? ''} />
 				<input type="hidden" name="shWeekId"    value={show2H ? (shWeek?.id ?? '') : ''} />
 				<input type="hidden" name="lmsSeasonId" value={activePair.lms?.id ?? ''} />
 				<input type="hidden" name="shSeasonId"  value={activePair.sh?.id ?? ''} />
+				<input type="hidden" name="year"       value={activePair.year ?? ''} />
 				<input type="hidden" name="weekNum"     value={weekNum} />
-
 				<div class="flex flex-col gap-2 px-5 pt-4">
 					{#each games as game}
 						{@const home    = game.expand?.homeTeam}
 						{@const away    = game.expand?.awayTeam}
 						{@const current = outcomes[game.id] ?? ''}
 						{@const saved   = !!resolvedGames[game.id]}
+							{@const winnerTeam = current === 'home' ? home : current === 'away' ? away : null}
 
-						<div class="rounded-lg border {saved ? 'border-[rgba(201,168,76,0.25)]' : 'border-gray-800'} bg-black/75 px-4 py-3">
-							<div class="flex flex-wrap items-center gap-3">
-								<div class="flex min-w-0 flex-1 items-center gap-2 text-sm">
-									<span class="font-mono font-bold text-white">{away?.abbreviation ?? '?'}</span>
-									<span class="text-gray-600">@</span>
-									<span class="font-mono font-bold text-white">{home?.abbreviation ?? '?'}</span>
-									{#if game.homeSpread != null}
-										<span class="text-xs text-gray-600">({game.homeSpread > 0 ? '+' : ''}{game.homeSpread})</span>
-									{/if}
-									<span class="text-xs text-gray-700">
-										{new Date(game.game_time_stamp ?? game.gameTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-									</span>
-								</div>
-								<div class="flex gap-1.5">
-									{#each [['away', `${away?.abbreviation} Win`], ['home', `${home?.abbreviation} Win`], ['tie', 'Tie']] as [val, lbl]}
-										<label class="cursor-pointer">
-											<input type="radio" name="gameId_{game.id}" value={val}
-												checked={current === val}
-												disabled={!selectedWeekResultsEnabled}
-												onchange={() => outcomes[game.id] = val as string}
-												class="sr-only" />
-											<span class="inline-block rounded border px-2.5 py-1 text-xs font-medium transition
-												{current === val
-													? val === 'away' ? 'border-blue-600 bg-blue-900/60 text-blue-300'
-													: val === 'home' ? 'border-green-600 bg-green-900/60 text-green-300'
-													: 'border-gray-500 bg-gray-800 text-gray-300'
-													: 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-500 hover:text-gray-300'}
-												cursor-pointer">{lbl}</span>
-										</label>
-									{/each}
-								</div>
-								{#if saved}<span class="text-xs text-[#c9a84c]">saved</span>{/if}
+							<div class="rounded-lg border {saved ? 'border-[rgba(201,168,76,0.25)]' : 'border-gray-800'} bg-black/75 px-4 py-3">
+								<div class="flex flex-wrap items-center gap-3">
+									<div class="flex min-w-0 flex-1 items-center gap-2 text-sm">
+										{#if winnerTeam}
+											<img src={teamLogoUrl(winnerTeam.abbreviation)} alt={winnerTeam.abbreviation} class="h-8 w-8 rounded-full border border-emerald-500/60 bg-emerald-950/40 p-1 object-contain" />
+											<span class="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300">Won</span>
+										{/if}
+										<span class={`font-mono font-bold ${current === 'away' ? 'text-blue-200' : 'text-white'} ${current === 'home' ? 'opacity-80' : ''}`}>
+											{away?.abbreviation ?? '?'}
+										</span>
+										<span class="text-gray-600">@</span>
+										<span class={`font-mono font-bold ${current === 'home' ? 'text-green-200' : 'text-white'} ${current === 'away' ? 'opacity-80' : ''}`}>
+											{home?.abbreviation ?? '?'}
+										</span>
+										{#if game.homeSpread != null}
+											<span class="text-xs text-gray-600">({game.homeSpread > 0 ? '+' : ''}{game.homeSpread})</span>
+										{/if}
+										<span class="text-xs text-gray-700">
+											{new Date(game.game_time_stamp ?? game.gameTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+										</span>
+									</div>
+<div class="flex flex-wrap gap-1.5">
+											{#each [
+												{ val: 'away', text: `${away?.abbreviation ?? 'AWAY'} WINS` },
+												{ val: 'home', text: `${home?.abbreviation ?? 'HOME'} WINS` },
+												{ val: 'tie', text: 'TIE' }
+											] as option}
+												{@const optionId = `${game.id}-${option.val}`}
+												<label for={optionId} class="cursor-pointer">
+													<input id={optionId} type="radio" name="gameId_{game.id}" value={option.val}
+														checked={current === option.val}
+														disabled={!selectedWeekResultsEnabled}
+														onchange={() => outcomes[game.id] = option.val as string}
+														class="sr-only" />
+													<span class="inline-flex items-center justify-center rounded border px-3 py-1.5 text-sm font-black uppercase tracking-wide transition
+														{current === option.val
+															? option.val === 'away' ? 'border-blue-600 bg-blue-900/60 text-blue-200 shadow-[0_0_0_1px_rgba(96,165,250,0.35)]'
+															: option.val === 'home' ? 'border-green-600 bg-green-900/60 text-green-200 shadow-[0_0_0_1px_rgba(74,222,128,0.35)]'
+															: 'border-gray-500 bg-gray-800 text-gray-200 shadow-[0_0_0_1px_rgba(156,163,175,0.35)]'
+															: 'border-gray-700 bg-gray-900 text-gray-500 hover:border-gray-500 hover:text-gray-300'}
+														{selectedWeekResultsEnabled ? 'cursor-pointer' : 'cursor-not-allowed'}"
+														title={`game=${game.id} value=${option.val} current=${current || 'none'} selected=${current === option.val ? 'true' : 'false'}`}>
+														{option.text}
+													</span>
+												</label>
+											{/each}
+										</div>
+										{#if saved}<span class="text-xs text-[#c9a84c]">saved</span>{/if}
 							</div>
 						</div>
 					{/each}
@@ -351,47 +474,14 @@
 					</button>
 					<!-- Finalize — advances weeks to results_pending -->
 					<button type="submit"
-						disabled={recordLoading || gamesEntered === 0 || !selectedWeekResultsEnabled}
-						class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:opacity-50">
+						disabled={recordLoading || !selectedWeekResultsEnabled || !allGamesEntered}
+						class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-500">
 						{recordLoading ? 'Saving…' : 'Save & Finalize'}
 					</button>
 					<p class="text-xs text-gray-600 self-center">
-						{gamesEntered}/{games.length} games · Draft keeps weeks open for corrections · Finalize advances to results_pending
+						{gamesEntered}/{games.length} games · Draft keeps weeks open for corrections · Finalize requires all games entered
 					</p>
 				</div>
-
-				<!-- Reset -->
-				{#if (lmsWeek || shWeek) && (lmsResults.length > 0 || shResults.length > 0 || weekStatus === 'results_pending' || weekStatus === 'complete')}
-					<div class="mx-5 mb-4 border-t border-gray-800 pt-3">
-						{#if resetConfirm}
-							<div class="flex items-center gap-2">
-								<form method="POST" action="?/resetWeekResults" use:enhance={() => {
-									resetConfirm = false; resetLoading = true;
-									return async ({ update }) => { await update(); resetLoading = false; await invalidateAll(); };
-								}}>
-									<input type="hidden" name="lmsWeekId"   value={lmsWeek?.id ?? ''} />
-									<input type="hidden" name="shWeekId"    value={show2H ? (shWeek?.id ?? '') : ''} />
-									<input type="hidden" name="lmsSeasonId" value={activePair.lms?.id ?? ''} />
-									<input type="hidden" name="shSeasonId"  value={activePair.sh?.id ?? ''} />
-									<input type="hidden" name="weekNum"     value={weekNum} />
-									<button type="submit" disabled={resetLoading || !selectedWeekResultsEnabled}
-										class="rounded border border-red-500 bg-red-950/40 px-4 py-1.5 text-xs text-red-400 transition hover:bg-red-900/60 disabled:opacity-50">
-										{resetLoading ? 'Resetting…' : 'Confirm Reset'}
-									</button>
-								</form>
-								<button type="button" onclick={() => resetConfirm = false}
-									class="rounded border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-800">Cancel</button>
-								<span class="text-xs text-gray-600">Clears all results for both pools, reinstates eliminated entries, returns weeks to locked.</span>
-							</div>
-						{:else}
-							<button type="button" onclick={() => resetConfirm = true} disabled={resetLoading || !selectedWeekResultsEnabled}
-								class="rounded border border-gray-700 bg-gray-900 px-4 py-1.5 text-xs text-gray-400 transition hover:border-red-800 hover:text-red-400 disabled:opacity-50">
-								↺ Reset Week Results
-							</button>
-							<span class="ml-2 text-xs text-gray-600">Clears results for both LMS and 2H, reinstates eliminated entries.</span>
-						{/if}
-					</div>
-				{/if}
 			</form>
 		</div>
 		{/if}
@@ -401,96 +491,88 @@
 	<div class="flex flex-col gap-6">
 
 		<!-- LMS panel -->
-		{#if activePair.lms}
+		{#if activePair.lms && lmsEntries.length}
 		<div>
 			<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
 				LMS Entries
-				{#if lmsEntries.length}<span class="ml-1 text-gray-600">({lmsEntries.length})</span>{/if}
+				<span class="ml-1 text-gray-600">({lmsEntries.length})</span>
 			</h2>
-			{#if lmsEntries.length}
-				<div class="mb-2 flex gap-2 text-xs">
-					<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-green-400">
-						{lmsEntries.filter(e => e.results.length > 0 && e.results.every(r => r === 'correct')).length} safe
-					</span>
-					<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-red-400">
-						{lmsEntries.filter(e => e.results.some(r => r === 'incorrect')).length} out
-					</span>
-					<span class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-500">
-						{lmsEntries.filter(e => e.results.every(r => r === 'pending')).length} pending
-					</span>
-				</div>
-				<div class="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
-					{#each lmsEntries as { entry, teams, results }}
-						{@const isOut  = results.some(r => r === 'incorrect')}
-						{@const isSafe = results.length > 0 && results.every(r => r === 'correct')}
-						<div class="rounded-lg border px-3 py-2 text-xs
-							{isOut  ? 'border-red-900 bg-red-950/30'
-							: isSafe ? 'border-green-900 bg-green-950/30'
-							: 'border-gray-800 bg-black/50'}">
-							<div class="flex items-center justify-between gap-2">
-								<span class="truncate font-medium text-white">{entry.entryName}</span>
-								<div class="flex shrink-0 items-center gap-1.5">
-									{#each teams as team, i}
-										<span class="font-mono {resultColor[results[i] ?? 'pending']}">
-											{resultIcon[results[i] ?? 'pending']} {team.abbreviation}
-										</span>
-									{/each}
-								</div>
+			<div class="mb-2 flex gap-2 text-xs">
+				<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-green-400">
+					{lmsEntries.filter(e => e.results.length > 0 && e.results.every(r => r === 'correct')).length} safe
+				</span>
+				<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-red-400">
+					{lmsEntries.filter(e => e.results.some(r => r === 'incorrect')).length} out
+				</span>
+				<span class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-500">
+					{lmsEntries.filter(e => e.results.every(r => r === 'pending')).length} pending
+				</span>
+			</div>
+			<div class="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
+				{#each lmsEntries as { entry, teams, results }}
+					{@const isOut  = results.some(r => r === 'incorrect')}
+					{@const isSafe = results.length > 0 && results.every(r => r === 'correct')}
+					<div class="rounded-lg border px-3 py-2 text-xs
+						{isOut  ? 'border-red-900 bg-red-950/30'
+						: isSafe ? 'border-green-900 bg-green-950/30'
+						: 'border-gray-800 bg-black/50'}">
+						<div class="flex items-center justify-between gap-2">
+							<span class="truncate font-medium text-white">{entry.entryName}</span>
+							<div class="flex shrink-0 items-center gap-1.5">
+								{#each teams as team, i}
+									<span class="font-mono {resultColor[results[i] ?? 'pending']}">
+										{resultIcon[results[i] ?? 'pending']} {team.abbreviation}
+									</span>
+								{/each}
 							</div>
-							<p class="mt-0.5 truncate text-gray-600">{entry.expand?.user?.displayName ?? ''}</p>
 						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-xs text-gray-600">No picks for this week.</p>
-			{/if}
+						<p class="mt-0.5 truncate text-gray-600">{entry.expand?.user?.displayName ?? ''}</p>
+					</div>
+				{/each}
+			</div>
 		</div>
 		{/if}
 
 		<!-- 2H panel — only shown from week 6 onward -->
-		{#if show2H}
+		{#if show2H && shEntries.length}
 		<div>
 			<h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
 				2nd Half Entries
-				{#if shEntries.length}<span class="ml-1 text-gray-600">({shEntries.length})</span>{/if}
+				<span class="ml-1 text-gray-600">({shEntries.length})</span>
 			</h2>
-			{#if shEntries.length}
-				<div class="mb-2 flex gap-2 text-xs">
-					<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-green-400">
-						{shEntries.filter(e => e.results.length > 0 && e.results.every(r => r === 'correct')).length} safe
-					</span>
-					<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-red-400">
-						{shEntries.filter(e => e.results.some(r => r === 'incorrect')).length} out
-					</span>
-					<span class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-500">
-						{shEntries.filter(e => e.results.every(r => r === 'pending')).length} pending
-					</span>
-				</div>
-				<div class="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
-					{#each shEntries as { entry, teams, results }}
-						{@const isOut  = results.some(r => r === 'incorrect')}
-						{@const isSafe = results.length > 0 && results.every(r => r === 'correct')}
-						<div class="rounded-lg border px-3 py-2 text-xs
-							{isOut  ? 'border-red-900 bg-red-950/30'
-							: isSafe ? 'border-green-900 bg-green-950/30'
-							: 'border-gray-800 bg-black/50'}">
-							<div class="flex items-center justify-between gap-2">
-								<span class="truncate font-medium text-white">{entry.entryName}</span>
-								<div class="flex shrink-0 items-center gap-1.5">
-									{#each teams as team, i}
-										<span class="font-mono {resultColor[results[i] ?? 'pending']}">
-											{resultIcon[results[i] ?? 'pending']} {team.abbreviation}
-										</span>
-									{/each}
-								</div>
+			<div class="mb-2 flex gap-2 text-xs">
+				<span class="rounded border border-green-800 bg-green-950/60 px-2 py-0.5 text-green-400">
+					{shEntries.filter(e => e.results.length > 0 && e.results.every(r => r === 'correct')).length} safe
+				</span>
+				<span class="rounded border border-red-800 bg-red-950/60 px-2 py-0.5 text-red-400">
+					{shEntries.filter(e => e.results.some(r => r === 'incorrect')).length} out
+				</span>
+				<span class="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-gray-500">
+					{shEntries.filter(e => e.results.every(r => r === 'pending')).length} pending
+				</span>
+			</div>
+			<div class="flex max-h-72 flex-col gap-1 overflow-y-auto pr-1">
+				{#each shEntries as { entry, teams, results }}
+					{@const isOut  = results.some(r => r === 'incorrect')}
+					{@const isSafe = results.length > 0 && results.every(r => r === 'correct')}
+					<div class="rounded-lg border px-3 py-2 text-xs
+						{isOut  ? 'border-red-900 bg-red-950/30'
+						: isSafe ? 'border-green-900 bg-green-950/30'
+						: 'border-gray-800 bg-black/50'}">
+						<div class="flex items-center justify-between gap-2">
+							<span class="truncate font-medium text-white">{entry.entryName}</span>
+							<div class="flex shrink-0 items-center gap-1.5">
+								{#each teams as team, i}
+									<span class="font-mono {resultColor[results[i] ?? 'pending']}">
+										{resultIcon[results[i] ?? 'pending']} {team.abbreviation}
+									</span>
+								{/each}
 							</div>
-							<p class="mt-0.5 truncate text-gray-600">{entry.expand?.user?.displayName ?? ''}</p>
 						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="text-xs text-gray-600">No 2H picks for this week.</p>
-			{/if}
+						<p class="mt-0.5 truncate text-gray-600">{entry.expand?.user?.displayName ?? ''}</p>
+					</div>
+				{/each}
+			</div>
 		</div>
 		{/if}
 

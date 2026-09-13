@@ -37,6 +37,7 @@
 	let advancedFilterOpen  = $state(false);
 	let advancedFilterTeam  = $state<string | null>(null);
 	let showScrollTop       = $state(false);
+	let standingsViewport   = $state<HTMLDivElement | null>(null);
 
 	const myEntries   = $derived(userId ? (entries as any[]).filter(e => e.user === userId) : []);
 	const myEntryCount = $derived(myEntries.length);
@@ -142,12 +143,28 @@
 		return () => clearInterval(t);
 	});
 
+	function scrollStandingsToTop() {
+		standingsViewport?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+		if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
 	$effect(() => {
 		if (!browser) return;
-		const updateScrollState = () => { showScrollTop = window.scrollY > 300; };
+		const updateScrollState = () => {
+			const viewportScrolled = standingsViewport
+				? (standingsViewport.scrollTop > 0 || standingsViewport.scrollLeft > 0)
+				: false;
+			showScrollTop = window.scrollY > 0 || viewportScrolled;
+		};
 		updateScrollState();
 		window.addEventListener('scroll', updateScrollState, { passive: true });
-		return () => window.removeEventListener('scroll', updateScrollState);
+		if (standingsViewport) {
+			standingsViewport.addEventListener('scroll', updateScrollState, { passive: true });
+		}
+		return () => {
+			window.removeEventListener('scroll', updateScrollState);
+			if (standingsViewport) standingsViewport.removeEventListener('scroll', updateScrollState);
+		};
 	});
 
 	// ── Live refresh — re-runs server load every 30s while a week is open ────
@@ -360,10 +377,12 @@
 		<div class="text-center">
 			<p class="text-xl font-bold text-white">{activeCount}</p>
 			<p class="text-xs text-gray-500">Still alive</p>
+			<p class="mt-0.5 text-[10px] text-gray-600">across all players</p>
 		</div>
 		<div class="text-center">
 			<p class="text-xl font-bold text-gray-400">{entries.length}</p>
 			<p class="text-xs text-gray-500">Total entries</p>
+			<p class="mt-0.5 text-[10px] text-gray-600">in this pool</p>
 		</div>
 		<div class="text-center">
 			<p class="text-xl font-bold text-[#c9a84c]">{visibleWeeks.length}</p>
@@ -852,7 +871,7 @@
 			</div>
 
 			<!-- Scrollable table -->
-			<div class="flex-1 overflow-x-auto overflow-y-auto">
+			<div bind:this={standingsViewport} class="flex-1 overflow-x-auto overflow-y-auto">
 			<table class="min-w-full text-sm">
 				<thead>
 					<tr class="sticky top-0 z-20 border-b border-gray-800 text-xs font-medium uppercase tracking-wider text-gray-500 bg-[#0a0a0a]">
@@ -1020,7 +1039,7 @@
 		{#if showScrollTop}
 			<button
 				type="button"
-				onclick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+				onclick={scrollStandingsToTop}
 				class="fixed bottom-5 right-5 z-50 rounded-full border border-[#c9a84c]/60 bg-[#1a1200] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f7d980] shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition hover:bg-[#2a1d04]"
 			>
 				Top

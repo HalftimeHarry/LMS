@@ -5,19 +5,6 @@
 	let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
 	const isSuperAdmin = $derived(data.role === 'super_admin');
-	const resultsUnlocked = $derived(Boolean(data.resultsUnlocked));
-	const resultsUnlockAtLabel = $derived(
-		new Date(String(data.resultsUnlockAt)).toLocaleString('en-US', {
-			timeZone: 'America/Los_Angeles',
-			weekday: 'short',
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-			hour: 'numeric',
-			minute: '2-digit',
-			timeZoneName: 'short'
-		})
-	);
 
 	const navItems = $derived(
 		isSuperAdmin
@@ -26,7 +13,7 @@
 					{ href: '/admin/seasons',   label: 'Seasons' },
 					{ href: '/admin/entries',   label: 'Entries' },
 					{ href: '/admin/weeks',     label: 'Season Settings' },
-					{ href: '/admin/results',   label: 'Results', disabled: !resultsUnlocked },
+					{ href: '/admin/results',   label: 'Results' },
 					{ href: '/admin/pools',     label: 'Manage Pools' },
 					{ href: '/admin/odds',      label: 'Manage Odds' },
 					{ href: '/admin/deadlines', label: 'Weekly Deadlines' },
@@ -38,7 +25,7 @@
 			: [
 					{ href: '/admin',           label: 'Overview' },
 					{ href: '/admin/entries',   label: 'Entries & Payments' },
-					{ href: '/admin/results',   label: 'Results', disabled: !resultsUnlocked },
+					{ href: '/admin/results',   label: 'Results' },
 					{ href: '/admin/odds',          label: 'Manage Odds' },
 					{ href: '/admin/deadlines',     label: 'Weekly Deadlines' },
 					{ href: '/admin/participants',  label: 'Manage Participants' },
@@ -61,11 +48,6 @@
 		<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 backdrop-blur-sm">
 			<p class="mb-1 text-xs font-semibold uppercase tracking-widest text-[#c9a84c]">Admin</p>
 			<p class="mb-3 text-xs text-gray-600">{isSuperAdmin ? 'Super Admin' : 'Pool Admin'}</p>
-			{#if !resultsUnlocked}
-				<p class="mb-3 rounded border border-yellow-900/60 bg-yellow-950/30 px-2 py-1 text-[10px] text-yellow-300">
-					Results unlock {resultsUnlockAtLabel}
-				</p>
-			{/if}
 			<nav class="flex flex-col gap-1">
 				{#each navItems as item}
 					<a href={item.href}
@@ -115,11 +97,6 @@
 				<div class="relative z-30 mt-1 rounded-xl border border-[rgba(201,168,76,0.3)] shadow-2xl"
 					style="background: radial-gradient(ellipse at 50% 0%, rgba(201,168,76,0.06) 0%, transparent 60%), #0a0a0a;">
 					<p class="px-4 pb-1 pt-3 text-xs text-gray-600">{isSuperAdmin ? 'Super Admin' : 'Pool Admin'}</p>
-					{#if !resultsUnlocked}
-						<p class="mx-4 mb-1 rounded border border-yellow-900/60 bg-yellow-950/30 px-2 py-1 text-[10px] text-yellow-300">
-							Results unlock {resultsUnlockAtLabel}
-						</p>
-					{/if}
 					<nav class="flex flex-col py-1">
 						{#each navItems as item}
 							<a href={item.href} onclick={(e) => { if (item.disabled) { e.preventDefault(); return; } closeMenu(); }}

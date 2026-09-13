@@ -17,8 +17,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { actions } from '../../routes/admin/results/+page.server';
+import { actions, load } from '../../routes/admin/results/+page.server';
 import { pbAdmin } from '$lib/server/pb-admin';
+import { clearResultsDraftOutcomes, saveResultsDraftOutcomes } from '$lib/server/adminResultsDraftStore';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,8 +84,71 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
+describe('shared draft store', () => {
+	it('exposes the in-progress draft state during page load', async () => {
+		clearResultsDraftOutcomes('2027', 1);
+		saveResultsDraftOutcomes('2027', 1, { game1: 'home', game2: 'away' });
+
+		collections.seasons = {
+			getFullList: vi.fn().mockResolvedValue([
+				{ id: 'season1', year: 2027, name: 'LMS 2027', lmsEnabled: true, secondHalfEnabled: false }
+			])
+		};
+		collections.weekly_settings.getFullList = vi.fn().mockResolvedValue([
+			{ id: LMS_WEEK, week: 1, status: 'locked', deadline: '2026-09-10T23:50:00.000Z' }
+		]);
+		collections.weekly_settings.getFirstListItem = vi.fn().mockResolvedValue({
+			id: LMS_WEEK,
+			week: 1,
+			status: 'locked',
+			deadline: '2026-09-10T23:50:00.000Z'
+		});
+		collections.picks.getFullList = vi.fn().mockResolvedValue([]);
+		collections.game_odds.getFullList = vi.fn().mockResolvedValue([GAME]);
+
+		const page = await load({
+			url: new URL('http://localhost/admin/results?year=2027&week=1'),
+			locals: { role: 'super_admin' }
+		} as any);
+
+		expect((page as any).draftOutcomes).toEqual({ game1: 'home', game2: 'away' });
+	});
+
+	it('persists a save-draft outcome for the active year/week after reload', async () => {
+		clearResultsDraftOutcomes('2027', 1);
+		collections.picks.getFullList = vi.fn().mockResolvedValue([]);
+
+		await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1', year: '2027' })) }
+		} as any);
+
+		collections.seasons = {
+			getFullList: vi.fn().mockResolvedValue([
+				{ id: 'season1', year: 2027, name: 'LMS 2027', lmsEnabled: true, secondHalfEnabled: false }
+			])
+		};
+		collections.weekly_settings.getFullList = vi.fn().mockResolvedValue([
+			{ id: LMS_WEEK, week: 1, status: 'locked', deadline: '2026-09-10T23:50:00.000Z' }
+		]);
+		collections.weekly_settings.getFirstListItem = vi.fn().mockResolvedValue({
+			id: LMS_WEEK,
+			week: 1,
+			status: 'locked',
+			deadline: '2026-09-10T23:50:00.000Z'
+		});
+		collections.game_odds.getFullList = vi.fn().mockResolvedValue([GAME]);
+
+		const page = await load({
+			url: new URL('http://localhost/admin/results?year=2027&week=1'),
+			locals: { role: 'super_admin' }
+		} as any);
+
+		expect((page as any).draftOutcomes).toEqual({ [GAME_ID]: 'home' });
+	});
+});
+
 describe('recordResults — server-side results window gating', () => {
-	it('blocks direct POST before global results unlock', async () => {
+	it('blocks direct POST before the week deadline', async () => {
 		vi.setSystemTime(new Date('2026-09-09T20:00:00.000Z'));
 		collections.picks.getFullList = vi.fn().mockResolvedValue([]);
 
@@ -93,7 +157,7 @@ describe('recordResults — server-side results window gating', () => {
 		} as any);
 
 		expect((result as any).status).toBe(403);
-		expect((result as any).data?.error ?? '').toMatch(/locked until/i);
+		expect((result as any).data?.error ?? '').toMatch(/not active for this week|locked until/i);
 	});
 
 	it('blocks direct POST before the selected week deadline', async () => {
