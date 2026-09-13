@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
+	import {
+		clearResultsDraftOutcomes as clearClientDraftOutcomes,
+		getResultsDraftKey,
+		loadResultsDraftOutcomes,
+		saveResultsDraftOutcomes,
+	} from '$lib/adminResultsDraft';
 	import { teamLogoUrl } from '$lib/teamLogos';
 	import type { PageData, ActionData } from './$types';
 
@@ -34,7 +40,17 @@
 	const shResultMap  = $derived(Object.fromEntries(shResults.map( (r: any) => [`${r.pick}__${r.team}`, r.result as string])));
 
 	let outcomes = $state<Record<string, string>>({});
+	let draftHydrated = $state(false);
 	const savedDraftOutcomes = $derived((pageData.draftOutcomes as Record<string, string>) ?? {});
+	const localDraftOutcomes = $derived.by(() => {
+		if (!activePair || !weekNum) return {} as Record<string, string>;
+		try {
+			return loadResultsDraftOutcomes(activePair.year, weekNum);
+		} catch {
+			return {} as Record<string, string>;
+		}
+	});
+	const hasSavedDraft = $derived(Object.keys(savedDraftOutcomes).length > 0 || Object.keys(localDraftOutcomes).length > 0);
 
 	const resolvedGames = $derived.by(() => {
 		const map: Record<string, string> = {};
@@ -50,7 +66,7 @@
 		}
 		return map;
 	});
-	const sourceOutcomes = $derived.by(() => ({ ...savedDraftOutcomes, ...resolvedGames }));
+	const sourceOutcomes = $derived.by(() => ({ ...savedDraftOutcomes, ...localDraftOutcomes, ...resolvedGames }));
 	let lastSourceKey = $state('');
 
 	$effect(() => {
@@ -59,6 +75,7 @@
 		if (nextKey !== lastSourceKey) {
 			outcomes = { ...sourceOutcomes };
 			lastSourceKey = nextKey;
+			draftHydrated = true;
 		}
 	});
 
@@ -66,6 +83,25 @@
 		if (!activePair || !weekNum) return;
 		if (Object.keys(savedDraftOutcomes).length > 0 && Object.keys(outcomes).length === 0) {
 			outcomes = { ...savedDraftOutcomes };
+			draftHydrated = true;
+		}
+		if (Object.keys(localDraftOutcomes).length > 0 && Object.keys(outcomes).length === 0) {
+			outcomes = { ...localDraftOutcomes };
+			draftHydrated = true;
+		}
+	});
+
+	$effect(() => {
+		if (!activePair || !weekNum) return;
+		const key = getResultsDraftKey(activePair.year, weekNum);
+		if (typeof window === 'undefined') return;
+		if (Object.keys(outcomes).length > 0) {
+			saveResultsDraftOutcomes(activePair.year, weekNum, outcomes);
+			if (window.localStorage.getItem(key) !== JSON.stringify(outcomes)) {
+				window.localStorage.setItem(key, JSON.stringify(outcomes));
+			}
+		} else {
+			clearClientDraftOutcomes(activePair.year, weekNum);
 		}
 	});
 
@@ -78,6 +114,9 @@
 	function resetDraftOutcomes() {
 		if (!activePair || !weekNum) return;
 		outcomes = {};
+		if (typeof window !== 'undefined' && activePair && weekNum) {
+			clearClientDraftOutcomes(activePair.year, weekNum);
+		}
 	}
 
 	const weekStatus = $derived(lmsWeek?.status ?? shWeek?.status ?? 'open');
@@ -181,6 +220,20 @@
 
 	const gamesEntered = $derived(Object.values(outcomes).filter(Boolean).length);
 	const allGamesEntered = $derived(games.length > 0 && gamesEntered >= games.length);
+	const isRestoringSavedDraft = $derived(!draftHydrated && hasSavedDraft);
+	const progressDisplayGames = $derived.by(() => isRestoringSavedDraft ? 0 : gamesEntered);
+	const saveProgressPercent = $derived.by(() => {
+		if (!games.length) return 0;
+		if (isRestoringSavedDraft) return 0;
+		return (progressDisplayGames / games.length) * 100;
+	});
+	const draftStatusText = $derived.by(() => {
+		if (recordLoading) return 'Saving draft…';
+		if (isRestoringSavedDraft) return 'Restoring saved draft…';
+		if (hasSavedDraft && !allGamesEntered) return 'Draft saved locally';
+		if (allGamesEntered) return 'Ready to finalize';
+		return 'Draft in progress';
+	});
 	const showResetActions = $derived(Boolean(lmsWeek || shWeek));
 </script>
 
@@ -465,22 +518,34 @@
 				</div>
 
 				<!-- Submit buttons -->
-				<div class="flex flex-wrap items-center gap-3 px-5 py-4">
-					<!-- Draft save — keeps weeks locked, updates standings live -->
-					<button type="submit" name="draft" value="1"
-						disabled={recordLoading || gamesEntered === 0 || !selectedWeekResultsEnabled}
-						class="rounded border border-blue-700 bg-blue-950/60 px-5 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-950 disabled:opacity-50">
-						{recordLoading ? 'Saving…' : '💾 Save Draft'}
-					</button>
-					<!-- Finalize — advances weeks to results_pending -->
-					<button type="submit"
-						disabled={recordLoading || !selectedWeekResultsEnabled || !allGamesEntered}
-						class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-500">
-						{recordLoading ? 'Saving…' : 'Save & Finalize'}
-					</button>
-					<p class="text-xs text-gray-600 self-center">
-						{gamesEntered}/{games.length} games · Draft keeps weeks open for corrections · Finalize requires all games entered
-					</p>
+				<div class="space-y-3 px-5 py-4">
+					<div class="flex items-center justify-between gap-3">
+						<span class="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">
+							{draftStatusText}
+						</span>
+						<span class="text-xs font-medium text-[#c9a84c]">{progressDisplayGames}/{games.length} games</span>
+					</div>
+					<div class="h-2.5 overflow-hidden rounded-full bg-gray-800">
+						<div class="h-full rounded-full bg-gradient-to-r from-[#c9a84c] via-yellow-400 to-amber-300 transition-all duration-200"
+							style={`width: ${saveProgressPercent}%`}></div>
+					</div>
+					<div class="flex flex-wrap items-center gap-3">
+						<!-- Draft save — keeps weeks locked, updates standings live -->
+						<button type="submit" name="draft" value="1"
+							disabled={recordLoading || gamesEntered === 0 || !selectedWeekResultsEnabled}
+							class="rounded border border-blue-700 bg-blue-950/60 px-5 py-2 text-sm font-semibold text-blue-300 transition hover:bg-blue-950 disabled:opacity-50">
+							{recordLoading ? 'Saving draft…' : hasSavedDraft && !allGamesEntered ? 'Draft saved locally' : '💾 Save Draft'}
+						</button>
+						<!-- Finalize — advances weeks to results_pending -->
+						<button type="submit"
+							disabled={recordLoading || !selectedWeekResultsEnabled || !allGamesEntered}
+							class="rounded bg-[#c9a84c] px-5 py-2 text-sm font-semibold text-black transition hover:bg-[#e8c96a] disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-500">
+							{recordLoading ? 'Finalizing…' : 'Save & Finalize'}
+						</button>
+						<p class="self-center text-xs text-gray-600">
+							{progressDisplayGames}/{games.length} games · {draftStatusText} · Draft keeps weeks open for corrections · Finalize requires all games entered
+						</p>
+					</div>
 				</div>
 			</form>
 		</div>
