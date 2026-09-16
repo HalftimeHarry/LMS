@@ -206,7 +206,18 @@ export const actions: Actions = {
 	 * standings update live, but leaves week status as 'locked'.
 	 */
 	recordResults: async ({ request }) => {
-		const pb   = await pbAdmin();
+		let pb;
+		try {
+			pb = await pbAdmin();
+		} catch (error) {
+			console.error(
+				'[admin/results] PocketBase admin connection failed',
+				error instanceof Error ? error.message : error
+			);
+			return fail(503, {
+				error: 'Unable to connect to the results database. Check the PocketBase service and Netlify environment variables, then try again.'
+			});
+		}
 		const data = await request.formData();
 
 		const lmsWeekId  = (data.get('lmsWeekId')  as string) || null;

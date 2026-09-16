@@ -148,6 +148,17 @@ describe('shared draft store', () => {
 });
 
 describe('recordResults — server-side results window gating', () => {
+	it('returns a service error when PocketBase admin access is unavailable', async () => {
+		vi.mocked(pbAdmin).mockRejectedValueOnce(new Error('fetch failed'));
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect((result as any).status).toBe(503);
+		expect((result as any).data?.error).toMatch(/connect to the results database/i);
+	});
+
 	it('blocks direct POST before the week deadline', async () => {
 		vi.setSystemTime(new Date('2026-09-09T20:00:00.000Z'));
 		collections.picks.getFullList = vi.fn().mockResolvedValue([]);

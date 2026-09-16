@@ -547,7 +547,7 @@
 
 <!-- ── Add Entries Modal ──────────────────────────────────────────────────── -->
 {#if showCreateForm}
-{@const createDeadline = deadlineMap[selectedSeasonId]}
+{@const createDeadline = entryType === 'second_half' ? modalShDeadline : modalLmsDeadline}
 {@const createDeadlinePast = createDeadline ? now > new Date(createDeadline).getTime() : false}
 {@const selectedSeason = (data.seasons as any[]).find((s: any) => s.id === selectedSeasonId)}
 
