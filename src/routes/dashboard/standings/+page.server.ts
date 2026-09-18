@@ -2,6 +2,14 @@ import { pbAdmin } from '$lib/server/pb-admin';
 import { selectAutoPickTeamForPool } from '$lib/server/auto-pick';
 import type { PageServerLoad } from './$types';
 
+export function _getActiveEntryIdsForPickBreakdown(entries: Array<{ id: string; status?: string }>) {
+	return new Set(
+		entries
+			.filter((entry) => entry.status === 'active')
+			.map((entry) => entry.id)
+	);
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const pb       = await pbAdmin();
 	const poolType = (url.searchParams.get('pool') ?? 'lms') as 'lms' | 'second_half';
@@ -106,8 +114,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	// isOwn = true means this pick belongs to the current user (shown even on open weeks)
 	const pickGrid: Record<string, Record<string, { teams: string[]; isAutoPick: boolean; isOwn: boolean }>> = {};
 
-	const entryIds    = entries.map((e: any) => e.id);
-	const myEntryIds  = new Set(entries.filter((e: any) => e.user === userId).map((e: any) => e.id));
+	const activeEntryIds = _getActiveEntryIdsForPickBreakdown(entries);
+	const entryIds       = [...activeEntryIds];
+	const myEntryIds     = new Set(entries.filter((e: any) => e.user === userId && e.status === 'active').map((e: any) => e.id));
 
 	// Fetch all picks for visible weeks (public) in batches
 	if (visibleWeekIds.size > 0) {
