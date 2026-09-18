@@ -252,6 +252,30 @@
 		currentWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
 
+	function balancedPercentages(breakdown: { abbr: string; count: number }[]) {
+		const total = breakdown.reduce((sum, item) => sum + item.count, 0);
+		if (total === 0) return {} as Record<string, number>;
+
+		const percentages = breakdown.map(item => {
+			const exact = (item.count / total) * 100;
+			return { abbr: item.abbr, whole: Math.floor(exact), remainder: exact - Math.floor(exact) };
+		});
+		let pointsLeft = 100 - percentages.reduce((sum, item) => sum + item.whole, 0);
+
+		percentages
+			.sort((a, b) => b.remainder - a.remainder || a.abbr.localeCompare(b.abbr))
+			.forEach(item => {
+				if (pointsLeft > 0) {
+					item.whole += 1;
+					pointsLeft -= 1;
+				}
+			});
+
+		return Object.fromEntries(percentages.map(item => [item.abbr, item.whole]));
+	}
+
+	const currentWeekPercentages = $derived(balancedPercentages(currentWeekBreakdown));
+
 	const previousWeek = $derived((() => {
 		if (!currentWeek) return null as any;
 		return [...weeks]
@@ -277,6 +301,7 @@
 	const totalPicksPreviousWeek = $derived(
 		previousWeekBreakdown.reduce((sum, t) => sum + t.count, 0)
 	);
+	const previousWeekPercentages = $derived(balancedPercentages(previousWeekBreakdown));
 
 	// Own entries in the still-to-pick list — used for "Pick now →" links
 	const myStillToPick = $derived(
@@ -542,7 +567,7 @@
 						<div class="border-t border-gray-800/60 px-4 py-3">
 							<div class="space-y-2">
 								{#each previousWeekBreakdown as { abbr, count }}
-									{@const pct = totalPicksPreviousWeek > 0 ? Math.round((count / totalPicksPreviousWeek) * 100) : 0}
+									{@const pct = previousWeekPercentages[abbr] ?? 0}
 									<div class="flex items-center gap-3">
 										<img src={teamLogoUrl(abbr)} alt={abbr} class="h-6 w-6 rounded-full bg-white p-0.5 object-contain" />
 										<div class="min-w-0 flex-1">
@@ -649,7 +674,7 @@
 							<!-- ── Post-deadline: full breakdown ─────────────────────── -->
 							<div class="max-h-80 overflow-y-auto space-y-1 pr-1">
 								{#each currentWeekBreakdown as { abbr, count }}
-									{@const pct = totalPicksThisWeek > 0 ? Math.round((count / totalPicksThisWeek) * 100) : 0}
+											{@const pct = currentWeekPercentages[abbr] ?? 0}
 									{@const isMyPick = Object.values(pickGrid).some(wm => wm[currentWeek.id]?.isOwn && wm[currentWeek.id]?.teams.includes(abbr))}
 									<button
 										type="button"
