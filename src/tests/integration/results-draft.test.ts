@@ -398,6 +398,28 @@ describe('recordResults — 2H elimination rule (picked team LOSES)', () => {
 		expect(collections.entries.update).not.toHaveBeenCalled();
 		expect((result as any).eliminated).toBe(0);
 	});
+
+	it('does not eliminate 2H entries before the pool start week', async () => {
+		collections.picks.getFullList = vi.fn().mockResolvedValue([{
+			id:          'pick_sh_early',
+			entryType:   'second_half',
+			pickedTeams: [AWAY_TEAM], // away loses, but week 5 is before 2H start week 6
+			expand:      { entry: { id: 'entry_sh_early', status: 'active' } },
+		}]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData({
+				shWeekId: SH_WEEK,
+				shSeasonId: SEASON_ID,
+				weekNum: '5',
+				draft: '1',
+				[`gameId_${GAME_ID}`]: 'home',
+			}) }
+		} as any);
+
+		expect(collections.entries.update).not.toHaveBeenCalled();
+		expect((result as any).eliminated).toBe(0);
+	});
 });
 
 // ── Upsert behaviour ──────────────────────────────────────────────────────────

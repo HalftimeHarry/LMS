@@ -247,6 +247,11 @@ export const actions: Actions = {
 
 		// Load games from whichever season has them (same schedule for both)
 		const anchorSeasonId = lmsSeasonId ?? shSeasonId!;
+		let shStartWeek = 6;
+		if (shSeasonId && pb.collection('seasons')) {
+			const shSeason = await pb.collection('seasons').getOne(shSeasonId).catch(() => null) as any;
+			shStartWeek = shSeason?.secondHalfStartWeek ?? 6;
+		}
 		const games = await pb.collection('game_odds').getFullList({
 			filter: `season = "${anchorSeasonId}" && week = ${weekNum}`,
 			expand: 'homeTeam,awayTeam'
@@ -276,7 +281,11 @@ export const actions: Actions = {
 		let eliminated     = 0;
 
 		// Process picks for a single week record
-		async function processWeek(weekId: string, seasonId: string) {
+		async function processWeek(weekId: string, seasonId: string, poolType?: 'lms' | 'second_half') {
+			if (poolType === 'second_half' && weekNum < shStartWeek) {
+				return;
+			}
+
 			const picks = await pb.collection('picks').getFullList({
 				filter: `week = "${weekId}"`,
 				expand: 'entry'
@@ -344,8 +353,8 @@ export const actions: Actions = {
 
 		// Run both pools in parallel
 		await Promise.all([
-			lmsWeekId ? processWeek(lmsWeekId, lmsSeasonId!) : Promise.resolve(),
-			shWeekId  ? processWeek(shWeekId,  shSeasonId!)  : Promise.resolve(),
+			lmsWeekId ? processWeek(lmsWeekId, lmsSeasonId!, 'lms') : Promise.resolve(),
+			shWeekId  ? processWeek(shWeekId,  shSeasonId!, 'second_half') : Promise.resolve(),
 		]);
 
 		return { success: true, resultsWritten, eliminated, isDraft };
