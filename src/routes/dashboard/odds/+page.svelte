@@ -97,12 +97,12 @@
 						<!-- Away -->
 						<div class="flex items-center gap-3">
 							<img src={teamLogoUrl(away?.abbreviation)} alt={away?.abbreviation}
-								class="h-9 w-9 shrink-0 object-contain {awayFav ? '' : 'opacity-40'}" />
-							<span class="flex-1 text-sm font-medium {awayFav ? 'text-white' : 'text-gray-500'}">
+								class="h-9 w-9 shrink-0 object-contain" />
+							<span class="flex-1 text-sm font-medium {awayFav ? 'text-white' : 'text-gray-300'}">
 								{away?.city} {away?.name}
-								<span class="ml-1 text-xs opacity-50">({away?.abbreviation})</span>
+								<span class="ml-1 text-xs text-gray-400">({away?.abbreviation})</span>
 							</span>
-							<span class="w-14 text-right text-sm font-semibold tabular-nums {awayFav ? 'text-[#c9a84c]' : 'text-gray-600'}">
+							<span class="w-14 text-right text-sm font-semibold tabular-nums {awayFav ? 'text-[#c9a84c]' : 'text-gray-300'}">
 								{spreadDisplay(awaySpreadVal)}
 							</span>
 							<span class="w-14 text-right text-sm tabular-nums text-gray-400">
@@ -112,12 +112,12 @@
 						<!-- Home -->
 						<div class="flex items-center gap-3">
 							<img src={teamLogoUrl(home?.abbreviation)} alt={home?.abbreviation}
-								class="h-9 w-9 shrink-0 object-contain {homeFav ? '' : 'opacity-40'}" />
-							<span class="flex-1 text-sm font-medium {homeFav ? 'text-white' : 'text-gray-500'}">
+								class="h-9 w-9 shrink-0 object-contain" />
+							<span class="flex-1 text-sm font-medium {homeFav ? 'text-white' : 'text-gray-300'}">
 								{home?.city} {home?.name}
-								<span class="ml-1 text-xs opacity-50">({home?.abbreviation})</span>
+								<span class="ml-1 text-xs text-gray-400">({home?.abbreviation})</span>
 							</span>
-							<span class="w-14 text-right text-sm font-semibold tabular-nums {homeFav ? 'text-[#c9a84c]' : 'text-gray-600'}">
+							<span class="w-14 text-right text-sm font-semibold tabular-nums {homeFav ? 'text-[#c9a84c]' : 'text-gray-300'}">
 								{spreadDisplay(homeSpreadVal)}
 							</span>
 							<span class="w-14 text-right text-sm tabular-nums text-gray-400">

@@ -275,36 +275,36 @@
 				<!-- Still alive -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-green-400">{lms.active}</div>
-					<div class="mt-1 text-xs text-gray-500">Still Alive</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">across all players</div>
+					<div class="mt-1 text-xs text-gray-300">Still Alive</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">across all players</div>
 				</div>
 				<!-- Eliminated -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-red-400">{lms.eliminated}</div>
-					<div class="mt-1 text-xs text-gray-500">Eliminated</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">knocked out so far</div>
+					<div class="mt-1 text-xs text-gray-300">Eliminated</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">knocked out so far</div>
 				</div>
 				<!-- Total -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-white">{lms.total}</div>
-					<div class="mt-1 text-xs text-gray-500">Total Entries</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">in the LMS pool</div>
+					<div class="mt-1 text-xs text-gray-300">Total Entries</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">in the LMS pool</div>
 				</div>
 				<!-- Pot -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-[#c9a84c]">${lms.pot.toLocaleString()}</div>
-					<div class="mt-1 text-xs text-gray-500">Prize Pot</div>
+					<div class="mt-1 text-xs text-gray-300">Prize Pot</div>
 					{#if lmsMaintFee > 0}
-						<div class="mt-0.5 text-[10px] text-gray-700">${(lms.pot + lmsMaintFee).toLocaleString()} gross − ${lmsMaintFee.toLocaleString()} maintenance fee</div>
+						<div class="mt-0.5 text-[10px] text-gray-400">${(lms.pot + lmsMaintFee).toLocaleString()} gross − ${lmsMaintFee.toLocaleString()} maintenance fee</div>
 					{/if}
-					<div class="mt-0.5 text-[10px] text-gray-700">{lms.paid ?? 0} paid · {lms.free ?? 0} free</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">{lms.paid ?? 0} paid · {lms.free ?? 0} free</div>
 					
 				</div>
 				<!-- My entries -->
 				<div class="rounded-xl border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.05)] p-4 text-center backdrop-blur-sm">
-					<div class="text-2xl font-bold text-[#c9a84c]">{myLmsAlive}<span class="text-sm text-gray-600">/{myLmsEntries.length}</span></div>
-					<div class="mt-1 text-xs text-gray-500">My Entries Alive</div>
-					<div class="mt-0.5 text-[10px] {myLmsOut > 0 ? 'text-red-500' : 'text-gray-700'}">
+					<div class="text-2xl font-bold text-[#c9a84c]">{myLmsAlive}<span class="text-sm text-gray-400">/{myLmsEntries.length}</span></div>
+					<div class="mt-1 text-xs text-gray-300">My Entries Alive</div>
+					<div class="mt-0.5 text-[10px] {myLmsOut > 0 ? 'text-red-500' : 'text-gray-400'}">
 						{myLmsOut > 0 ? `${myLmsOut} eliminated` : 'none eliminated'}
 					</div>
 				</div>
@@ -322,28 +322,28 @@
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
 				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-green-400">{sh.active}</div>
-					<div class="mt-1 text-xs text-gray-500">Still Alive</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">across all players</div>
+					<div class="mt-1 text-xs text-gray-300">Still Alive</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">across all players</div>
 				</div>
 				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-red-400">{sh.eliminated}</div>
-					<div class="mt-1 text-xs text-gray-500">Eliminated</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">knocked out so far</div>
+					<div class="mt-1 text-xs text-gray-300">Eliminated</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">knocked out so far</div>
 				</div>
 				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-white">{sh.total}</div>
-					<div class="mt-1 text-xs text-gray-500">Total Entries</div>
-					<div class="mt-0.5 text-[10px] text-gray-700">in the 2H pool</div>
+					<div class="mt-1 text-xs text-gray-300">Total Entries</div>
+					<div class="mt-0.5 text-[10px] text-gray-400">in the 2H pool</div>
 				</div>
 				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
 					<div class="text-2xl font-bold text-[#c9a84c]">${sh.pot.toLocaleString()}</div>
-					<div class="mt-1 text-xs text-gray-500">Prize Pot</div>
+					<div class="mt-1 text-xs text-gray-300">Prize Pot</div>
 					
 				</div>
 				<div class="rounded-xl border border-blue-700/40 bg-blue-950/10 p-4 text-center backdrop-blur-sm">
-					<div class="text-2xl font-bold text-blue-400">{myShAlive}<span class="text-sm text-gray-600">/{myShEntries.length}</span></div>
-					<div class="mt-1 text-xs text-gray-500">My Entries Alive</div>
-					<div class="mt-0.5 text-[10px] {myShOut > 0 ? 'text-red-500' : 'text-gray-700'}">
+					<div class="text-2xl font-bold text-blue-400">{myShAlive}<span class="text-sm text-gray-400">/{myShEntries.length}</span></div>
+					<div class="mt-1 text-xs text-gray-300">My Entries Alive</div>
+					<div class="mt-0.5 text-[10px] {myShOut > 0 ? 'text-red-500' : 'text-gray-400'}">
 						{myShOut > 0 ? `${myShOut} eliminated` : 'none eliminated'}
 					</div>
 				</div>
