@@ -535,6 +535,7 @@ export const actions: Actions = {
 		const now    = Date.now();
 		const season = await pb.collection('seasons').getOne(seasonId);
 		const isTest = (season as any).name?.includes('[TEST]');
+		const shStartWeek = (season as any).secondHalfStartWeek ?? 6;
 		const weeks  = await pb.collection('weekly_settings').getFullList({
 			filter: `season = "${seasonId}"`, sort: '+week'
 		});
@@ -558,6 +559,8 @@ export const actions: Actions = {
 					const pickedIds = new Set(existing.map((p: any) => p.entry));
 					for (const entry of entries as any[]) {
 						if (pickedIds.has(entry.id)) continue;
+						// 2H pool hasn't started yet — don't auto-pick for 2H entries
+						if (entry.entryType === 'second_half' && week.week < shStartWeek) continue;
 						await pb.collection('picks').create({
 							entry: entry.id, week: week.id,
 							pickedTeams: [week.biggestFavoriteTeam],
@@ -593,6 +596,8 @@ export const actions: Actions = {
 				const picks = await pb.collection('picks').getFullList({ filter: `week = "${week.id}"` });
 				let eliminated = 0;
 				for (const pick of picks as any[]) {
+					// 2H pool hasn't started yet — never eliminate 2H picks
+					if (pick.entryType === 'second_half' && week.week < shStartWeek) continue;
 					const results = await pb.collection('pick_results').getFullList({ filter: `pick = "${pick.id}"` });
 					if (!results.length || results.some((r: any) => r.result === 'incorrect')) {
 						const entry = await pb.collection('entries').getOne(pick.entry).catch(() => null);

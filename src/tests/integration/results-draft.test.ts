@@ -420,6 +420,41 @@ describe('recordResults — 2H elimination rule (picked team LOSES)', () => {
 		expect(collections.entries.update).not.toHaveBeenCalled();
 		expect((result as any).eliminated).toBe(0);
 	});
+
+	it('does not process 2H picks attached to the LMS week before the 2H start week', async () => {
+		// Regression: 2H entries pick on the LMS season's week records. Processing
+		// the LMS week must skip their picks entirely (no pick_results, no
+		// elimination) when the week is before secondHalfStartWeek.
+		collections.picks.getFullList = vi.fn().mockResolvedValue([
+			{
+				id:          'pick_lms',
+				entryType:   'lms',
+				pickedTeams: [HOME_TEAM], // home wins → LMS elimination
+				expand:      { entry: { id: 'entry_lms', status: 'active' } },
+			},
+			{
+				id:          'pick_sh_on_lms_week',
+				entryType:   'second_half',
+				pickedTeams: [AWAY_TEAM], // away loses → would eliminate under 2H rule
+				expand:      { entry: { id: 'entry_sh', status: 'active' } },
+			},
+		]);
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ weekNum: '3', draft: '1' })) }
+		} as any);
+
+		// LMS entry processed; 2H entry untouched
+		expect(collections.entries.update).toHaveBeenCalledTimes(1);
+		expect(collections.entries.update).toHaveBeenCalledWith('entry_lms', expect.objectContaining({
+			status:         'eliminated',
+			eliminatedWeek: 3,
+		}));
+		// No pick_result written for the 2H pick
+		expect(collections.pick_results.create).toHaveBeenCalledTimes(1);
+		expect(collections.pick_results.create).toHaveBeenCalledWith(expect.objectContaining({ pick: 'pick_lms' }));
+		expect((result as any).eliminated).toBe(1);
+	});
 });
 
 // ── Upsert behaviour ──────────────────────────────────────────────────────────

@@ -247,10 +247,12 @@ export const actions: Actions = {
 
 		// Load games from whichever season has them (same schedule for both)
 		const anchorSeasonId = lmsSeasonId ?? shSeasonId!;
+		// 2H start week — read from the 2H season when present, else the LMS season
 		let shStartWeek = 6;
-		if (shSeasonId && pb.collection('seasons')) {
-			const shSeason = await pb.collection('seasons').getOne(shSeasonId).catch(() => null) as any;
-			shStartWeek = shSeason?.secondHalfStartWeek ?? 6;
+		const configSeasonId = shSeasonId ?? lmsSeasonId;
+		if (configSeasonId) {
+			const cfgSeason = await pb.collection('seasons')?.getOne(configSeasonId).catch(() => null) as any;
+			shStartWeek = cfgSeason?.secondHalfStartWeek ?? 6;
 		}
 		const games = await pb.collection('game_odds').getFullList({
 			filter: `season = "${anchorSeasonId}" && week = ${weekNum}`,
@@ -295,6 +297,10 @@ export const actions: Actions = {
 				const teams: string[] = Array.isArray(pick.pickedTeams) ? pick.pickedTeams : [pick.pickedTeams];
 				const resolvedEntryType = pick.entryType ?? pick.expand?.entry?.entryType ?? null;
 				const isLms = resolvedEntryType === 'lms';
+				// 2H pool hasn't started yet — never write results or eliminate 2H picks.
+				// (2H entries pick on this same week record, so the week-level guard above
+				//  is not enough on its own.)
+				if (resolvedEntryType === 'second_half' && weekNum < shStartWeek) continue;
 				let shouldEliminate = false;
 
 				for (const teamId of teams) {
@@ -466,6 +472,14 @@ export const actions: Actions = {
 		const windowError = await validateResultsActionWindow(pb, [lmsWeekId, shWeekId].filter(Boolean) as string[]);
 		if (windowError) return windowError;
 
+		// 2H start week gates auto-picks for 2H entries
+		let shStartWeek = 6;
+		const configSeasonId = shSeasonId ?? lmsSeasonId;
+		if (configSeasonId) {
+			const cfgSeason = await pb.collection('seasons')?.getOne(configSeasonId).catch(() => null) as any;
+			shStartWeek = cfgSeason?.secondHalfStartWeek ?? 6;
+		}
+
 		let autoPicked = 0;
 
 		async function lockOne(weekId: string, seasonId: string) {
@@ -486,6 +500,8 @@ export const actions: Actions = {
 
 			for (const entry of entries) {
 				if (pickedEntryIds.has(entry.id)) continue;
+				// 2H pool hasn't started yet — don't auto-pick for 2H entries
+				if (entry.entryType === 'second_half' && weekNum < shStartWeek) continue;
 				try {
 					await pb.collection('picks').create({
 						entry:       entry.id,

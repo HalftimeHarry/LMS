@@ -132,7 +132,7 @@ async function deriveSecondHalfAutoPick(seasonId: string, weekNum: number): Prom
 	return selectAutoPickTeamForPool(games, 'second_half');
 }
 
-async function lockWeek(week: any, seasonId: string, log: string[]): Promise<void> {
+async function lockWeek(week: any, seasonId: string, shStartWeek: number, log: string[]): Promise<void> {
 	if (week.status !== 'open') return;
 	log.push(`Week ${week.week}: locking`);
 	await pbPatch('weekly_settings', week.id, { status: 'locked' });
@@ -164,6 +164,8 @@ async function lockWeek(week: any, seasonId: string, log: string[]): Promise<voi
 
 	for (const entry of entries) {
 		if (pickedIds.has(entry.id)) continue;
+		// 2H pool hasn't started yet — don't auto-pick for 2H entries
+		if (entry.entryType === 'second_half' && week.week < shStartWeek) continue;
 		const autoTeamId = entry.entryType === 'second_half'
 			? secondHalfAutoTeamId
 			: lmsAutoTeamId;
@@ -221,7 +223,7 @@ async function simulateResults(week: any, seasonId: string, log: string[]): Prom
 	await pbPatch('weekly_settings', week.id, { status: 'results_pending' });
 }
 
-async function completeWeek(week: any, seasonId: string, log: string[]): Promise<void> {
+async function completeWeek(week: any, seasonId: string, shStartWeek: number, log: string[]): Promise<void> {
 	if (week.status !== 'results_pending') return;
 	log.push(`Week ${week.week}: completing`);
 
@@ -229,6 +231,8 @@ async function completeWeek(week: any, seasonId: string, log: string[]): Promise
 	let eliminated = 0;
 
 	for (const pick of picks) {
+		// 2H pool hasn't started yet — never eliminate 2H picks
+		if (pick.entryType === 'second_half' && week.week < shStartWeek) continue;
 		const results = await pbGet('pick_results', `pick = "${pick.id}"`);
 		if (!results.length) continue;
 		const isLms = pick.entryType === 'lms';
@@ -283,6 +287,7 @@ async function advanceWeeks(): Promise<void> {
 
 	for (const season of seasons) {
 		const isTest = season.name?.includes('[TEST]');
+		const shStartWeek = season.secondHalfStartWeek ?? 6;
 		const weeks  = await pbGet('weekly_settings', `season = "${season.id}"`, '+week');
 
 		for (let i = 0; i < weeks.length; i++) {
@@ -294,7 +299,7 @@ async function advanceWeeks(): Promise<void> {
 
 			// Lock: deadline has passed and week is still open
 			if (now >= deadline && week.status === 'open') {
-				await lockWeek(week, season.id, log);
+				await lockWeek(week, season.id, shStartWeek, log);
 			}
 
 			// ── Test season result simulation ──────────────────────────────────
@@ -335,7 +340,7 @@ async function advanceWeeks(): Promise<void> {
 
 			// Complete: results_pending → complete
 			if (now >= completeAt && week.status === 'results_pending') {
-				await completeWeek(week, season.id, log);
+				await completeWeek(week, season.id, shStartWeek, log);
 			}
 		}
 	}
