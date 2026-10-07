@@ -190,6 +190,105 @@ describe('advance-weeks scheduler', () => {
 		]));
 	});
 
+	it('assigns the next-best favourite when an entry already used the top favourite', async () => {
+		vi.doMock('@netlify/functions', () => ({
+			schedule: (_cron: string, fn: any) => fn,
+		}));
+
+		const pastDeadline = new Date(Date.now() - 60_000).toISOString();
+		const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			const method = init?.method ?? 'GET';
+
+			if (url.endsWith('/api/collections/_superusers/auth-with-password') && method === 'POST') {
+				return jsonResponse({ token: 'token-123' });
+			}
+
+			if (url.includes('/api/collections/seasons/records?') && method === 'GET') {
+				return jsonResponse({
+					items: [{ id: 's1', name: '2027 LMS', status: 'active' }],
+				});
+			}
+
+			if (url.includes('/api/collections/weekly_settings/records?') && method === 'GET') {
+				return jsonResponse({
+					items: [{
+						id: 'w1',
+						season: 's1',
+						week: 6,
+						status: 'open',
+						deadline: pastDeadline,
+					}],
+				});
+			}
+
+			if (url.includes('/api/collections/weekly_settings/records/w1') && method === 'PATCH') {
+				return jsonResponse({ id: 'w1' });
+			}
+
+			if (url.includes('/api/collections/game_odds/records?') && method === 'GET') {
+				const u = new URL(url);
+				const filter = decodeURIComponent(u.searchParams.get('filter') ?? '');
+				if (filter.includes('isActive = true')) {
+					return jsonResponse({
+						items: [
+							{ id: 'g1', homeSpread: -7, homeTeam: 'team-home', awayTeam: 'team-away' },
+							{ id: 'g2', homeSpread: -3, homeTeam: 'team-h2',   awayTeam: 'team-a2' },
+						],
+					});
+				}
+				return jsonResponse({ items: [] });
+			}
+
+			if (url.includes('/api/collections/entries/records?') && method === 'GET') {
+				return jsonResponse({
+					items: [{ id: 'e1', season: 's1', status: 'active', entryType: 'lms' }],
+				});
+			}
+
+			if (url.includes('/api/collections/picks/records?') && method === 'GET') {
+				const u = new URL(url);
+				const filter = decodeURIComponent(u.searchParams.get('filter') ?? '');
+				// Season-wide pick history: e1 already used the top favourite
+				if (filter.includes('week.season')) {
+					return jsonResponse({
+						items: [{ id: 'p0', entry: 'e1', week: 'w0', pickedTeams: ['team-home'] }],
+					});
+				}
+				return jsonResponse({ items: [] });
+			}
+
+			if (url.includes('/api/collections/picks/records') && method === 'POST') {
+				return jsonResponse({ id: 'new-pick' });
+			}
+
+			throw new Error(`Unexpected fetch: ${method} ${url}`);
+		});
+
+		vi.stubGlobal('fetch', fetchMock as any);
+
+		const { handler } = await import('../../../netlify/functions/advance-weeks');
+		const result = await (handler as any)();
+
+		expect(result.statusCode).toBe(200);
+
+		const pickPosts = fetchMock.mock.calls
+			.filter(([input, init]) => {
+				const url = String(input);
+				const method = init?.method ?? 'GET';
+				return method === 'POST' && url.includes('/api/collections/picks/records');
+			})
+			.map(([, init]) => JSON.parse(String(init?.body ?? '{}')));
+
+		expect(pickPosts).toHaveLength(1);
+		expect(pickPosts[0]).toEqual(expect.objectContaining({
+			entry: 'e1',
+			week: 'w1',
+			pickedTeams: ['team-h2'], // next-best favourite — team-home was already used
+			isAutoPick: true,
+		}));
+	});
+
 	it('skips second_half entries when locking weeks before the 2H start week', async () => {
 		vi.doMock('@netlify/functions', () => ({
 			schedule: (_cron: string, fn: any) => fn,

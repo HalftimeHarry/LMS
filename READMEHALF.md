@@ -86,6 +86,10 @@ At the pick deadline the scheduled function (`netlify/functions/advance-weeks.ts
 - **LMS entries** → biggest favorite (most negative spread) from active odds
 - **Second Half entries** → biggest underdog (most positive spread) from active odds
 
+Each entry receives the best-ranked candidate it has **not already used** this season
+(`selectAutoPickForEntry` in `src/lib/server/auto-pick.ts`). If every candidate on the
+board has already been used by that entry, the top candidate is assigned as a fallback.
+
 The auto-pick team is derived from `game_odds` where `isActive = true`. If no active odds exist for the week, no auto-picks fire.
 
 The `weekly_settings.biggestFavoriteTeam` field stores the committed auto-pick team once the scheduler runs. The admin UI shows **locked in** when this field is set, or **preview** when it's still derived from current odds.

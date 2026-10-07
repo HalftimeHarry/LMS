@@ -1,5 +1,5 @@
 import { schedule } from '@netlify/functions';
-import { selectAutoPickTeamForPool } from '../../src/lib/server/auto-pick';
+import { rankAutoPickTeamsForPool, selectAutoPickForEntry, selectAutoPickTeamForPool } from '../../src/lib/server/auto-pick';
 
 /**
  * Scheduled function — runs every 2 minutes.
@@ -151,6 +151,8 @@ async function lockWeek(week: any, seasonId: string, shStartWeek: number, log: s
 		log.push(`  no valid auto-pick candidates — skipping auto-pick`);
 		return;
 	}
+	const lmsRanked        = rankAutoPickTeamsForPool(odds, 'lms');
+	const secondHalfRanked = rankAutoPickTeamsForPool(odds, 'second_half');
 
 	// Persist the LMS favorite for compatibility with legacy UI fields.
 	if (lmsAutoTeamId) {
@@ -160,15 +162,24 @@ async function lockWeek(week: any, seasonId: string, shStartWeek: number, log: s
 	const entries = await pbGet('entries', `season = "${seasonId}" && status = "active"`);
 	const existingPicks = await pbGet('picks', `week = "${week.id}"`);
 	const pickedIds     = new Set(existingPicks.map((p: any) => p.entry));
+
+	// Teams each entry has already used this season — auto-picks must skip them
+	const seasonPicks = await pbGet('picks', `week.season = "${seasonId}"`);
+	const usedByEntry = new Map<string, Set<string>>();
+	for (const p of seasonPicks) {
+		const teams: string[] = Array.isArray(p.pickedTeams) ? p.pickedTeams : [p.pickedTeams];
+		const used = usedByEntry.get(p.entry) ?? new Set<string>();
+		for (const t of teams) if (t) used.add(t);
+		usedByEntry.set(p.entry, used);
+	}
 	let   autoPicked    = 0;
 
 	for (const entry of entries) {
 		if (pickedIds.has(entry.id)) continue;
 		// 2H pool hasn't started yet — don't auto-pick for 2H entries
 		if (entry.entryType === 'second_half' && week.week < shStartWeek) continue;
-		const autoTeamId = entry.entryType === 'second_half'
-			? secondHalfAutoTeamId
-			: lmsAutoTeamId;
+		const ranked     = entry.entryType === 'second_half' ? secondHalfRanked : lmsRanked;
+		const autoTeamId = selectAutoPickForEntry(ranked, usedByEntry.get(entry.id));
 		if (!autoTeamId) continue;
 		try {
 			await pbPost('picks', {

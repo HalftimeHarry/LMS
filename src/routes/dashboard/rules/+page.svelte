@@ -365,7 +365,7 @@
 			{ rule: 'If the team you picked <strong class="text-white">WINS</strong> its game, you are eliminated.' },
 			{ rule: '<strong class="text-white">TIES:</strong> Rare in the NFL, but if a tie occurs both teams are eliminated.' },
 			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. After the deadline you can view everyone's picks.` },
-			{ rule: 'If you miss the deadline, you automatically receive the <strong class="text-white">biggest favourite on the board</strong> as your pick. If you\'ve already used that team, you are eliminated.' },
+			{ rule: 'If you miss the deadline, you automatically receive the <strong class="text-white">biggest favourite available to you</strong> as your pick. Teams you\'ve already used are skipped.' },
 			{ rule: 'This pool applies to the <strong class="text-white">NFL regular season only</strong>.' },
 			{ rule: 'If <strong class="text-white">5 or fewer players remain</strong>, all may agree to split the pot. All active entries must agree — if not, picks continue as normal.' },
 		] as item, i}
@@ -450,7 +450,7 @@
 			{ rule: 'Once you use a team you <strong class="text-white">cannot use that team again</strong> for the rest of the season.' },
 			{ rule: 'If the team you picked <strong class="text-white">LOSES</strong> its game, you are eliminated.' },
 			{ rule: '<strong class="text-white">Weeks 6–9:</strong> pick <strong class="text-white">1 team</strong> per week. From <strong class="text-white">Week 10 onward:</strong> pick <strong class="text-white">2 teams</strong> per week — both must win.' },
-			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. Missed picks receive the biggest favourite automatically. ${rulesDeadlineNote}` },
+			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. Missed picks receive the biggest underdog available to you automatically. Teams you've already used are skipped. ${rulesDeadlineNote}` },
 			{ rule: 'Pool runs through the <strong class="text-white">NFL regular season only</strong>.' },
 		] as item, i}
 			<li class="flex gap-4 text-sm text-gray-300">

@@ -5,6 +5,7 @@ import {
 	loadResultsDraftOutcomes,
 	saveResultsDraftOutcomes,
 } from '$lib/server/adminResultsDraftStore';
+import { rankAutoPickTeamsForPool, selectAutoPickForEntry } from '$lib/server/auto-pick';
 import type { Actions, PageServerLoad } from './$types';
 
 async function getWeekDeadlineMs(pb: any, weekId: string): Promise<number | null> {
@@ -486,26 +487,45 @@ export const actions: Actions = {
 			await pb.collection('weekly_settings').update(weekId, { status: 'locked' }).catch(() => {});
 
 			const weekSetting = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
-			const autoTeamId  = weekSetting?.biggestFavoriteTeam ?? null;
-			if (!autoTeamId) return;
+		const storedAutoTeamId = weekSetting?.biggestFavoriteTeam ?? null;
 
-			const entries = await pb.collection('entries').getFullList({
-				filter: `season = "${seasonId}" && status = "active"`
-			}).catch(() => []) as any[];
+		// Rank auto-pick candidates from active odds so each entry receives the
+		// biggest favourite/underdog it hasn't already used this season
+		const odds = await pb.collection('game_odds').getFullList({
+			filter: `season = "${seasonId}" && week = ${weekNum} && isActive = true`
+		}).catch(() => []) as any[];
+		const lmsRanked = rankAutoPickTeamsForPool(odds, 'lms');
+		const shRanked  = rankAutoPickTeamsForPool(odds, 'second_half');
+		if (!lmsRanked.length && !shRanked.length && !storedAutoTeamId) return;
 
-			const existingPicks = await pb.collection('picks').getFullList({
-				filter: `week = "${weekId}"`, fields: 'entry'
-			}).catch(() => []) as any[];
-			const pickedEntryIds = new Set(existingPicks.map((p: any) => p.entry));
+		const entries = await pb.collection('entries').getFullList({
+			filter: `season = "${seasonId}" && status = "active"`
+		}).catch(() => []) as any[];
 
-			for (const entry of entries) {
-				if (pickedEntryIds.has(entry.id)) continue;
-				// 2H pool hasn't started yet — don't auto-pick for 2H entries
-				if (entry.entryType === 'second_half' && weekNum < shStartWeek) continue;
-				try {
-					await pb.collection('picks').create({
-						entry:       entry.id,
-						week:        weekId,
+		const existingPicks = await pb.collection('picks').getFullList({
+			filter: `week = "${weekId}"`, fields: 'entry'
+		}).catch(() => []) as any[];
+		const pickedEntryIds = new Set(existingPicks.map((p: any) => p.entry));
+
+		// Teams each entry has already used this season — auto-picks must skip them
+		const seasonPicks = await pb.collection('picks').getFullList({
+			filter: `week.season = "${seasonId}"`, fields: 'entry,pickedTeams'
+		}).catch(() => []) as any[];
+		const usedByEntry = new Map<string, Set<string>>();
+		for (const p of seasonPicks) {
+			const teams: string[] = Array.isArray(p.pickedTeams) ? p.pickedTeams : [p.pickedTeams];
+			const used = usedByEntry.get(p.entry) ?? new Set<string>();
+			for (const t of teams) if (t) used.add(t);
+			usedByEntry.set(p.entry, used);
+		}
+
+		for (const entry of entries) {
+			if (pickedEntryIds.has(entry.id)) continue;
+			// 2H pool hasn't started yet — don't auto-pick for 2H entries
+			if (entry.entryType === 'second_half' && weekNum < shStartWeek) continue;
+			const ranked     = entry.entryType === 'second_half' ? shRanked : lmsRanked;
+			const autoTeamId = selectAutoPickForEntry(ranked, usedByEntry.get(entry.id)) ?? storedAutoTeamId;
+			if (!autoTeamId) continue;
 						pickedTeams: [autoTeamId],
 						entryType:   entry.entryType,
 						isAutoPick:  true

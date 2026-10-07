@@ -18,6 +18,7 @@
 	const oddsByWeek             = $derived((data as any).oddsByWeek             as Record<string, any[]>);
 	const teamSpreadByWeek       = $derived((data as any).teamSpreadByWeek       as Record<string, Record<string, number>>);
 	const recommendationsByWeek  = $derived((data as any).recommendationsByWeek  as Record<string, any[]>);
+	const autoPickTeamByWeek     = $derived((data as any).autoPickTeamByWeek     as Record<string, any> ?? {});
 
 	const isLms = $derived(entry?.entryType === 'lms');
 
@@ -101,6 +102,9 @@
 			selections = { ...selections, [weekId]: [teamId] };
 		} else if (cur.length < required) {
 			selections = { ...selections, [weekId]: [...cur, teamId] };
+		} else {
+			// Selection full — swap out the oldest pick so changing is one click
+			selections = { ...selections, [weekId]: [...cur.slice(1), teamId] };
 		}
 	}
 
@@ -266,7 +270,7 @@
 					{@const currentPick    = pickByWeek[currentWeek.id]}
 					{@const pickedTeams    = currentPick?.expand?.pickedTeams ?? []}
 					{@const isAutoPick     = currentPick?.isAutoPick === true}
-					{@const autoPick       = currentWeek.expand?.biggestFavoriteTeam}
+					{@const autoPick       = autoPickTeamByWeek[currentWeek.id] ?? currentWeek.expand?.biggestFavoriteTeam}
 					{@const hasPick        = !!currentPick}
 
 					<div class="mt-4 flex items-center gap-4 rounded-lg border px-4 py-3
@@ -385,7 +389,7 @@
 			{@const hasPick     = !!pick}
 			{@const canSubmit   = sel.length === picksRequired}
 			{@const pickedTeams = pick?.expand?.pickedTeams ?? []}
-			{@const autoPick    = week.expand?.biggestFavoriteTeam}
+			{@const autoPick    = autoPickTeamByWeek[week.id] ?? week.expand?.biggestFavoriteTeam}
 			{@const isAutoPick  = pick?.isAutoPick === true}
 
 			<div class="border-t border-gray-800 {!isOpen ? 'opacity-50 hover:opacity-80 transition-opacity' : ''}">
@@ -694,8 +698,7 @@
 																{#each divTeams as team}
 																	{@const selected   = sel.includes(team.id)}
 																	{@const usedOther  = (usedByWeek[week.id] ?? []).includes(team.id)}
-																	{@const limitFull  = !selected && !isLms && sel.length >= picksRequired}
-																	{@const disabled   = usedOther || limitFull}
+																	{@const disabled   = usedOther}
 																	{@const teamSpread = teamSpreadByWeek?.[week.id]?.[team.id] ?? null}
 																	<button
 																		type="button"
@@ -709,9 +712,7 @@
 																					: 'border-green-600 bg-green-950/40 text-white'
 																				: usedOther
 																					? 'cursor-not-allowed border-gray-800 bg-gray-900/20 text-gray-700 line-through'
-																					: limitFull
-																						? 'cursor-not-allowed border-gray-800 text-gray-600'
-																						: 'border-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-900/60'}"
+																				: 'border-gray-700 text-gray-300 hover:border-gray-500 hover:bg-gray-900/60'}"
 																	>
 																		<img
 																			src={teamLogoUrl(team.abbreviation)}

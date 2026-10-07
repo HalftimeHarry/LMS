@@ -2,6 +2,7 @@ import { redirect, fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import { submitPickSchema } from '$lib/schemas';
 import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { rankAutoPickTeamsForPool, selectAutoPickForEntry } from '$lib/server/auto-pick';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -163,6 +164,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		for (const t of pick.expand?.pickedTeams ?? []) usedTeamIds.add(t.id);
 	}
 
+	// Effective per-entry auto-pick for each open week: the best-ranked team this
+	// entry hasn't already used — what they'd actually receive at the deadline.
+	const autoPickTeamByWeek: Record<string, any> = {};
+	for (const [wid, games] of Object.entries(oddsByWeek)) {
+		const ranked     = rankAutoPickTeamsForPool(games as any[], isLms ? 'lms' : 'second_half');
+		const autoTeamId = selectAutoPickForEntry(ranked, usedTeamIds);
+		if (!autoTeamId) continue;
+		for (const g of games) {
+			const t = g.expand?.homeTeam?.id === autoTeamId ? g.expand?.homeTeam
+				: g.expand?.awayTeam?.id === autoTeamId ? g.expand?.awayTeam
+				: null;
+			if (t) { autoPickTeamByWeek[wid] = t; break; }
+		}
+	}
+
 	const recommendationsByWeek: Record<string, Array<{
 		teamId: string; abbreviation: string; city: string; name: string;
 		spread: number; moneyline: number | null; opponent: string; isHome: boolean;
@@ -171,7 +187,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	for (const [wid, games] of Object.entries(oddsByWeek)) {
 		const week = openWeeks.find(w => w.id === wid);
-		const autoPickTeamId = week?.biggestFavoriteTeam ?? null;
+		const autoPickTeamId = autoPickTeamByWeek[wid]?.id ?? week?.biggestFavoriteTeam ?? null;
 
 		// Build candidate list — one entry per team per game
 		const candidates: any[] = [];
@@ -237,6 +253,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		oddsByWeek,
 		teamSpreadByWeek,
 		recommendationsByWeek,
+		autoPickTeamByWeek,
 	};
 };
 
