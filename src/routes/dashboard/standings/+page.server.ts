@@ -10,6 +10,18 @@ export function _getActiveEntryIdsForPickBreakdown(entries: Array<{ id: string; 
 	);
 }
 
+export function _mergePickCell(
+	current: { teams?: string[]; isAutoPick?: boolean; isOwn?: boolean } | undefined,
+	next: { teams?: string[]; isAutoPick?: boolean; isOwn?: boolean }
+): { teams: string[]; isAutoPick: boolean; isOwn: boolean } {
+	const mergedTeams = Array.from(new Set([...(current?.teams ?? []), ...(next.teams ?? [])]));
+	return {
+		teams: mergedTeams,
+		isAutoPick: Boolean(current?.isAutoPick || next.isAutoPick),
+		isOwn: Boolean(current?.isOwn || next.isOwn),
+	};
+}
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const pb       = await pbAdmin();
 	const poolType = (url.searchParams.get('pool') ?? 'lms') as 'lms' | 'second_half';
@@ -133,11 +145,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			for (const pick of picks) {
 				if (!visibleWeekIds.has(pick.week)) continue;
 				if (!pickGrid[pick.entry]) pickGrid[pick.entry] = {};
-				pickGrid[pick.entry][pick.week] = {
+				pickGrid[pick.entry][pick.week] = _mergePickCell(pickGrid[pick.entry][pick.week], {
 					teams:      (pick.expand?.pickedTeams ?? []).map((t: any) => t.abbreviation),
 					isAutoPick: pick.isAutoPick === true,
 					isOwn:      myEntryIds.has(pick.entry)
-				};
+				});
 			}
 		}
 	}
@@ -155,11 +167,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		for (const pick of myPicks) {
 			if (!openWeekIds.has(pick.week)) continue;
 			if (!pickGrid[pick.entry]) pickGrid[pick.entry] = {};
-			pickGrid[pick.entry][pick.week] = {
+			pickGrid[pick.entry][pick.week] = _mergePickCell(pickGrid[pick.entry][pick.week], {
 				teams:      (pick.expand?.pickedTeams ?? []).map((t: any) => t.abbreviation),
 				isAutoPick: pick.isAutoPick === true,
 				isOwn:      true
-			};
+			});
 		}
 	}
 

@@ -311,6 +311,36 @@
 	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{(pageForm as any).error}</div>
 {/if}
 
+{#if (pageForm as any)?.zeroSurvivorResolution && (pageForm as any).zeroSurvivorResolution.status !== 'continue'}
+	{@const z = (pageForm as any).zeroSurvivorResolution}
+	<div class="mb-4 rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-100">
+		<h3 class="text-sm font-semibold uppercase tracking-wider text-amber-300">2nd Half Pool — Zero Survivors Detected</h3>
+		<div class="mt-3 grid gap-2 sm:grid-cols-2">
+			<div><span class="text-gray-400">Tournament:</span> {z.seasonId ?? '2nd Half'}</div>
+			<div><span class="text-gray-400">Week:</span> {z.weekNum ?? weekNum}</div>
+			<div><span class="text-gray-400">Entries entering week:</span> {z.entries?.length ?? 0}</div>
+			<div><span class="text-gray-400">Status:</span> {z.status}</div>
+			<div><span class="text-gray-400">Maximum correct picks:</span> {z.maxCorrectPicks ?? 0}</div>
+			<div><span class="text-gray-400">Highest-ranked entries:</span> {(z.highestRankedEntries ?? []).length}</div>
+		</div>
+		{#if z.needsAdminConfirmation || z.status === 'winner_candidate' || z.status === 'tie_required'}
+			<form method="POST" action="?/confirmWinnerResolution" class="mt-4 flex flex-wrap items-center gap-3">
+				<input type="hidden" name="seasonId" value={activePair?.sh?.id ?? ''} />
+				<input type="hidden" name="weekId" value={shWeek?.id ?? ''} />
+				{#if z.highestRankedEntries?.length === 1}
+					<input type="hidden" name="winnerEntryId" value={z.highestRankedEntries[0]} />
+				{/if}
+				{#if z.highestRankedEntries?.length > 1}
+					<input type="hidden" name="tieResolution" value="Pending approved tiebreaker" />
+				{/if}
+				<button type="submit" class="rounded border border-amber-500 bg-amber-900/60 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900">
+					{z.status === 'tie_required' ? 'Mark tie for review' : 'Confirm winner candidate'}
+				</button>
+			</form>
+		{/if}
+	</div>
+{/if}
+
 {#if !selectedWeekResultsEnabled}
 	<div class="mb-4 rounded-xl border border-yellow-900/60 bg-black/85 px-5 py-4 text-sm text-yellow-200">
 		<p class="font-semibold">Results Week {weekNum} is not active yet.</p>

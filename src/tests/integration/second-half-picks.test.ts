@@ -15,6 +15,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { actions } from '../../routes/dashboard/picks/+page.server';
+import { _mergePickCell } from '../../routes/dashboard/standings/+page.server';
+import { _getZeroSurvivorWinnerResolution } from '../../routes/admin/results/+page.server';
 import { pbAdmin } from '$lib/server/pb-admin';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -184,6 +186,146 @@ describe('Second Half pick submission — pick count enforcement', () => {
 		expect(cols.picks.create).toHaveBeenCalledWith(expect.objectContaining({
 			pickedTeams: ['team1'],
 		}));
+	});
+});
+
+describe('Second Half standings grid', () => {
+	it('merges multiple picks for the same week into one displayed cell', () => {
+		const merged = _mergePickCell(
+			{ teams: ['DAL'], isAutoPick: false, isOwn: false },
+			{ teams: ['PHI', 'DAL'], isAutoPick: true, isOwn: true }
+		);
+
+		expect(merged.teams).toEqual(['DAL', 'PHI']);
+		expect(merged.isAutoPick).toBe(true);
+		expect(merged.isOwn).toBe(true);
+	});
+
+	it('keeps both picks in a week when one is winning and one is losing', () => {
+		const merged = _mergePickCell(
+			{ teams: ['PHI'], isAutoPick: false, isOwn: true },
+			{ teams: ['DAL'], isAutoPick: false, isOwn: true }
+		);
+
+		expect(merged.teams).toEqual(['PHI', 'DAL']);
+		expect(merged.isOwn).toBe(true);
+	});
+
+	it('keeps both picks in a week when both selections are winners', () => {
+		const merged = _mergePickCell(
+			{ teams: ['ATL'], isAutoPick: false, isOwn: false },
+			{ teams: ['CIN'], isAutoPick: false, isOwn: false }
+		);
+
+		expect(merged.teams).toEqual(['ATL', 'CIN']);
+		expect(merged.isOwn).toBe(false);
+	});
+
+	it('keeps both picks in a week when both selections are losers', () => {
+		const merged = _mergePickCell(
+			{ teams: ['JAX'], isAutoPick: true, isOwn: false },
+			{ teams: ['NE'], isAutoPick: false, isOwn: false }
+		);
+
+		expect(merged.teams).toEqual(['JAX', 'NE']);
+		expect(merged.isAutoPick).toBe(true);
+	});
+});
+
+describe('Second Half zero-survivor winner resolution', () => {
+	it('chooses the sole highest correct-pick entry as the winner candidate', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: Array.from({ length: 10 }, (_, index) => ({
+				id: `entry${index + 1}`,
+				season: 'season1',
+				entryType: 'second_half',
+				status: 'active',
+			})),
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week10', pickedTeams: ['team1', 'team2'] },
+				{ id: 'p2', entry: 'entry2', week: 'week10', pickedTeams: ['team3', 'team4'] },
+				{ id: 'p3', entry: 'entry3', week: 'week10', pickedTeams: ['team5', 'team6'] },
+				{ id: 'p4', entry: 'entry4', week: 'week10', pickedTeams: ['team7', 'team8'] },
+				{ id: 'p5', entry: 'entry5', week: 'week10', pickedTeams: ['team9', 'team10'] },
+				{ id: 'p6', entry: 'entry6', week: 'week10', pickedTeams: ['team11', 'team12'] },
+				{ id: 'p7', entry: 'entry7', week: 'week10', pickedTeams: ['team13', 'team14'] },
+				{ id: 'p8', entry: 'entry8', week: 'week10', pickedTeams: ['team15', 'team16'] },
+				{ id: 'p9', entry: 'entry9', week: 'week10', pickedTeams: ['team17', 'team18'] },
+				{ id: 'p10', entry: 'entry10', week: 'week10', pickedTeams: ['team19', 'team20'] },
+			],
+			teamResult: {
+				team1: 'correct', team2: 'incorrect',
+				team3: 'incorrect', team4: 'incorrect',
+				team5: 'incorrect', team6: 'incorrect',
+				team7: 'incorrect', team8: 'incorrect',
+				team9: 'incorrect', team10: 'incorrect',
+				team11: 'incorrect', team12: 'incorrect',
+				team13: 'incorrect', team14: 'incorrect',
+				team15: 'incorrect', team16: 'incorrect',
+				team17: 'incorrect', team18: 'incorrect',
+				team19: 'incorrect', team20: 'incorrect',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: [],
+		});
+		expect(result.status).toBe('winner_candidate');
+		expect(result.highestRankedEntries).toEqual(['entry1']);
+		expect(result.needsAdminConfirmation).toBe(true);
+	});
+
+	it('keeps tied leaders pending admin review without declaring a single winner', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: Array.from({ length: 10 }, (_, index) => ({
+				id: `entry${index + 1}`,
+				season: 'season1',
+				entryType: 'second_half',
+				status: 'active',
+			})),
+			picks: Array.from({ length: 10 }, (_, index) => ({
+				id: `p${index + 1}`,
+				entry: `entry${index + 1}`,
+				week: 'week10',
+				pickedTeams: ['team10', 'team20'],
+			})),
+			teamResult: {
+				team10: 'correct', team20: 'incorrect',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: [],
+		});
+		expect(result.status).toBe('tie_required');
+		expect(result.highestRankedEntries).toHaveLength(10);
+		expect(result.needsAdminConfirmation).toBe(true);
+	});
+
+	it('keeps resolution pending when a required game is still unresolved', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: [
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry2', season: 'season1', entryType: 'second_half', status: 'active' },
+			],
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week10', pickedTeams: ['team1', 'team2'] },
+				{ id: 'p2', entry: 'entry2', week: 'week10', pickedTeams: ['team3', 'team4'] },
+			],
+			teamResult: {
+				team1: 'correct',
+				team2: 'incorrect',
+				team3: 'incorrect',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: [],
+		});
+		expect(result.status).toBe('pending_results');
 	});
 });
 

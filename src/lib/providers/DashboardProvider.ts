@@ -26,7 +26,7 @@ export interface DashboardPoolCardViewModel {
 
 interface DashboardPoolCardInput {
 	type: DashboardPoolType;
-	season: { id: string; secondHalfEnabled?: boolean | null; secondHalfStartWeek?: number | null };
+	season: { id: string; status?: string | null; secondHalfEnabled?: boolean | null; secondHalfStartWeek?: number | null };
 	currentWeek: { week: number; status: string; entryDeadline?: string | null; pickDeadline?: string | null } | null;
 	week6Week: { week: number; status: string; entryDeadline?: string | null; pickDeadline?: string | null } | null;
 	now: number;

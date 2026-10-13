@@ -461,6 +461,31 @@
 			</li>
 		{/each}
 	</ol>
+
+	<div class="mt-6 rounded-xl border border-blue-900/40 bg-blue-950/20 p-5">
+		<h3 class="mb-2 text-base font-bold text-[#c9a84c]">What Happens If Everyone Is Eliminated?</h3>
+		<p class="mb-3 text-sm leading-relaxed text-gray-300">
+			In the Second Half Pool, participants must correctly select the required number of winning NFL teams each week to remain alive.
+			Beginning in <strong class="text-white">Week 10</strong>, each entry must correctly select <strong class="text-white">two winning teams</strong>.
+			If either selected team loses or ties, that entry is eliminated.
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-gray-300">
+			<strong class="text-white">If every remaining entry is eliminated during the same week</strong>, the winner will be determined by the number of correct picks made during that final elimination week.
+			The entry with the most correct picks will be ranked highest. Only entries that were still alive entering that week are eligible.
+			Picks from previous weeks do not count toward this tiebreaker. If multiple entries have the same highest number of correct picks,
+			those entries remain tied for the winning position until the tie is resolved under the pool's approved tiebreaker procedure.
+			All relevant NFL game results must be final before a winner is confirmed.
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-gray-300">
+			<strong class="text-white">Example:</strong> Ten entries remain entering Week 10, and all ten are eliminated.
+			Four entries correctly pick one of their two teams, and six entries correctly pick neither team.
+			The four entries with one correct pick are tied for the highest position. The six entries with zero correct picks are ranked below them.
+		</p>
+		<p class="text-sm leading-relaxed text-gray-300">
+			<strong class="text-white">Important:</strong> One correct pick does not keep an entry alive in a two-pick week.
+			This rule applies only when every remaining entry is eliminated.
+		</p>
+	</div>
 </section>
 
 <!-- FAQs -->
