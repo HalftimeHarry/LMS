@@ -19,9 +19,22 @@
  *   node scripts/seed-test-entries.js --dry-run   (print plan, no writes)
  */
 
-const PB_URL      = 'https://pocketbase-production-2547.up.railway.app';
-const ADMIN_EMAIL = 'ddinsmore8@gmail.com';
-const ADMIN_PASS  = 'MADcap(123)';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+// Credentials come from the environment — never hardcode them here and never log them.
+const REQUIRED_ENV = ['PUBLIC_POCKETBASE_URL', 'POCKETBASE_ADMIN_EMAIL', 'POCKETBASE_ADMIN_PASSWORD'];
+const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name]);
+if (missingEnv.length) {
+  console.error(`Missing required environment variable(s): ${missingEnv.join(', ')}`);
+  console.error('Copy .env.example to .env and fill in real values (never commit .env).');
+  process.exit(1);
+}
+
+const PB_URL      = process.env.PUBLIC_POCKETBASE_URL;
+const ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL;
+const ADMIN_PASS  = process.env.POCKETBASE_ADMIN_PASSWORD;
 
 const PICK_WEEKS  = 3;   // seed picks for first N weeks
 const PAID_RATE   = 0.65; // fraction of entries that are paid/active
