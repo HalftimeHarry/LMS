@@ -11,6 +11,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { load, actions } from '../../routes/admin/entries/+page.server';
+import { load as loadRules } from '../../routes/dashboard/rules/+page.server';
+import { actions as newEntryActions } from '../../routes/dashboard/entries/new/+page.server';
 import { pbAdmin } from '$lib/server/pb-admin';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,6 +113,20 @@ describe('load — entry deadlines derived from game_odds', () => {
 		expect(result.shEntryDeadline).toBeNull();
 	});
 
+	it('does not use weekly_settings deadlines when Week 6 kickoff odds are missing', async () => {
+		collections.seasons.getFullList = vi.fn().mockResolvedValue([SEASON]);
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue(null);
+		collections.weekly_settings.getFirstListItem = vi.fn().mockResolvedValue({
+			id: 'w6',
+			deadline: minutesFromNow(60)
+		});
+
+		const result = await loadRules({ locals: { role: 'participant' } } as any) as any;
+
+		expect(result.week6Deadline).toBeNull();
+		expect(result.week6PickDeadline).toBeNull();
+	});
+
 	it('returns null deadlines when no active season', async () => {
 		collections.seasons.getFullList = vi.fn().mockResolvedValue([
 			{ ...SEASON, status: 'complete' }
@@ -177,6 +193,35 @@ describe('createEntries — blocked after game-derived deadline', () => {
 		} as any);
 
 		expect((result as any)?.status).not.toBe(400);
+	});
+
+	it('does not allow 2H entry creation based only on a weekly_settings deadline', async () => {
+		collections.seasons.getOne = vi.fn().mockResolvedValue({
+			id: 's1',
+			status: 'active',
+			secondHalfEnabled: true,
+			secondHalfStartWeek: 6
+		});
+		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue(null);
+		collections.weekly_settings.getFirstListItem = vi.fn().mockResolvedValue({
+			deadline: minutesFromNow(60)
+		});
+		collections.entries.create = vi.fn();
+
+		const result = await newEntryActions.default({
+			request: {
+				formData: async () => makeFormData({
+					seasonId: 's1',
+					entryType: 'second_half',
+					entryName: 'Test 2nd Half'
+				})
+			},
+			locals: { user: { id: 'u1' } }
+		} as any);
+
+		expect((result as any).status).toBe(400);
+		expect((result as any).data.error).toMatch(/registration is closed/i);
+		expect(collections.entries.create).not.toHaveBeenCalled();
 	});
 
 	it('blocks 2H entry creation when week 6 deadline has passed', async () => {

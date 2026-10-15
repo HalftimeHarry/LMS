@@ -50,10 +50,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		week6PickDeadline = deriveDeadlineFromKickoff(week6Kickoff, 30);
 
 		const week6 = await pb.collection('weekly_settings')
-			.getFirstListItem(`season = "${season.id}" && week = ${shStartWeek}`, { fields: 'id,deadline' })
+			.getFirstListItem(`season = "${season.id}" && week = ${shStartWeek}`, { fields: 'id' })
 			.catch(() => null) as any;
-		if (!week6Deadline) week6Deadline = week6?.deadline ?? null;
-		if (!week6PickDeadline) week6PickDeadline = week6?.deadline ?? null;
 		week6Id = week6?.id ?? null;
 	}
 

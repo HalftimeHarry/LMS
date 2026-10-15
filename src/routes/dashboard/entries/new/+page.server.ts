@@ -23,14 +23,6 @@ async function fetchWeekKickoff(pb: any, seasonId: string, weekNum: number): Pro
 	return getKickoffIso(odds);
 }
 
-/** Fetch the week-6 pick deadline for a season (the canonical 2H entry cutoff). */
-async function fetchWeek6Deadline(pb: any, seasonId: string, startWeek = 6): Promise<string | null> {
-	const week = await pb.collection('weekly_settings')
-		.getFirstListItem(`season = "${seasonId}" && week = ${startWeek}`, { fields: 'deadline' })
-		.catch(() => null) as any;
-	return week?.deadline ?? null;
-}
-
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) redirect(302, '/login?redirect=/dashboard/entries/new');
 
@@ -52,9 +44,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	]);
 
 	const lmsDeadline = week1Kickoff ? deriveCutoffFromKickoff(week1Kickoff) : null;
-	const shDeadlineFromOdds = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
-	const shDeadlineFallback = await fetchWeek6Deadline(pb, activeSeason.id, shStartWeek);
-	const week6Deadline = shDeadlineFromOdds ?? shDeadlineFallback;
+	const week6Deadline = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
 
 	const lmsOpen = activeSeason.lmsEnabled !== false
 		&& activeSeason.status === 'open'
@@ -116,9 +106,7 @@ export const actions: Actions = {
 		if (entryType === 'second_half') {
 			const shStartWeek   = season.secondHalfStartWeek ?? 6;
 			const shKickoff = await fetchWeekKickoff(pb, seasonId, shStartWeek);
-			const shDeadlineFromOdds = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
-			const shDeadlineFallback = await fetchWeek6Deadline(pb, seasonId, shStartWeek);
-			const week6Deadline = shDeadlineFromOdds ?? shDeadlineFallback;
+			const week6Deadline = shKickoff ? deriveCutoffFromKickoff(shKickoff) : null;
 
 			const secondHalfOpen = season.secondHalfEnabled !== false
 				&& season.status === 'active'
