@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
-import { getDeadlinePairFromKickoff, getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { getDeadlinePairFromKickoff, getKickoffIso, isTestSeason, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, url, depends, cookies }) => {
@@ -105,8 +105,10 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		return derived;
 	};
 
-	const withEffectiveDeadline = async (weekObj: any | null): Promise<any | null> => {
+	const withEffectiveDeadline = async (weekObj: any | null, season?: any): Promise<any | null> => {
 		if (!weekObj) return weekObj;
+		// Test seasons run on their own accelerated schedule — stored deadlines are intentional.
+		if (isTestSeason(season)) return weekObj;
 		const derived = await getDerivedDeadlinePair(weekObj.season, Number(weekObj.week));
 		if (!derived.pickDeadline && !derived.entryDeadline) return weekObj;
 		return {
@@ -131,7 +133,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 
 		let selected: any | null = null;
 		for (const week of openWeeks) {
-			const effectiveWeek = await withEffectiveDeadline(week);
+			const effectiveWeek = await withEffectiveDeadline(week, s);
 			const deadline = effectiveWeek?.deadline ? new Date(effectiveWeek.deadline) : null;
 			if (deadline && !Number.isNaN(deadline.getTime()) && deadline > now) {
 				selected = effectiveWeek;
@@ -140,7 +142,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		}
 
 		if (!selected && openWeeks.length > 0) {
-			selected = await withEffectiveDeadline(openWeeks[openWeeks.length - 1]);
+			selected = await withEffectiveDeadline(openWeeks[openWeeks.length - 1], s);
 		}
 
 		if (!selected) {
@@ -148,7 +150,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 				`season = "${s.id}" && status = "locked" && week >= ${minWeek}`,
 				{ sort: 'week' }
 			).catch(() => null);
-			selected = await withEffectiveDeadline(lockedWeek);
+			selected = await withEffectiveDeadline(lockedWeek, s);
 		}
 
 		return selected;

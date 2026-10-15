@@ -17,7 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import { WeekProvider }   from '$lib/providers/WeekProvider';
-import { deriveDeadlineFromKickoff, getDeadlinePairFromKickoff, getKickoffIso } from '$lib/server/deadlines';
+import { deriveDeadlineFromKickoff, effectivePickDeadline, getDeadlinePairFromKickoff, getKickoffIso, isTestSeason } from '$lib/server/deadlines';
 
 describe('getKickoffIso — game_time_stamp is the only authoritative kickoff', () => {
 	it('returns game_time_stamp when present', () => {
@@ -153,6 +153,43 @@ describe('getDeadlinePairFromKickoff', () => {
 
 		expect(deadlines.pickDeadline).toBe('2026-09-09T19:50:00.000Z');
 		expect(deadlines.entryDeadline).toBe('2026-09-09T19:40:00.000Z');
+	});
+});
+
+describe('isTestSeason', () => {
+	it('detects [TEST] seasons by name', () => {
+		expect(isTestSeason({ name: '[TEST] LMS (1h/week)' })).toBe(true);
+		expect(isTestSeason({ name: '2026 - 2027 LMS' })).toBe(false);
+		expect(isTestSeason(null)).toBe(false);
+		expect(isTestSeason(undefined)).toBe(false);
+	});
+});
+
+describe('effectivePickDeadline', () => {
+	const kickoff = '2026-10-16T00:15:00.000Z'; // Thu 8:15 PM EDT — wk6 first game
+	const stored = '2026-10-15 17:35:00.000Z';  // stale stored value
+
+	it('derives kickoff − 30 min for real seasons', () => {
+		expect(effectivePickDeadline(kickoff, stored, false)).toBe('2026-10-15T23:45:00.000Z');
+	});
+
+	it('preserves the intentional stored schedule for test seasons', () => {
+		expect(effectivePickDeadline(kickoff, stored, true)).toBe(stored);
+	});
+
+	it('falls back to the stored deadline when no kickoff exists', () => {
+		expect(effectivePickDeadline(null, stored, false)).toBe(stored);
+		expect(effectivePickDeadline(undefined, undefined, false)).toBeNull();
+	});
+
+	it('boundary: pick accepted before the deadline, rejected at and after it', () => {
+		const cutoffIso = effectivePickDeadline(kickoff, stored, false)!;
+		const cutoff = new Date(cutoffIso).getTime();
+		const accepts = (nowIso: string) => new Date(nowIso).getTime() < cutoff;
+
+		expect(accepts('2026-10-15T23:44:59.999Z')).toBe(true);  // 1ms before
+		expect(accepts('2026-10-15T23:45:00.000Z')).toBe(false); // exactly at
+		expect(accepts('2026-10-15T23:45:00.001Z')).toBe(false); // 1ms after
 	});
 });
 

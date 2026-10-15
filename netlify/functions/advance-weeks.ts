@@ -1,5 +1,6 @@
 import { schedule } from '@netlify/functions';
 import { rankAutoPickTeamsForPool, selectAutoPickForEntry, selectAutoPickTeamForPool } from '../../src/lib/server/auto-pick';
+import { deriveDeadlineFromKickoff, isTestSeason, PICK_DEADLINE_MINUTES } from '../../src/lib/server/deadlines';
 
 /**
  * Scheduled function — runs every 2 minutes.
@@ -297,14 +298,41 @@ async function advanceWeeks(): Promise<void> {
 	log.push(`${seasons.length} active season(s)`);
 
 	for (const season of seasons) {
-		const isTest = season.name?.includes('[TEST]');
+		const isTest = isTestSeason(season);
 		const shStartWeek = season.secondHalfStartWeek ?? 6;
 		const weeks  = await pbGet('weekly_settings', `season = "${season.id}"`, '+week');
+
+		// Effective pick deadlines: earliest active kickoff − 30 min for real seasons
+		// (stored weekly_settings.deadline can be stale); test seasons keep their
+		// intentional accelerated stored schedule. game_time_stamp is authoritative.
+		const kickoffCache = new Map<number, string | null>();
+		const getEarliestKickoff = async (weekNum: number): Promise<string | null> => {
+			if (kickoffCache.has(weekNum)) return kickoffCache.get(weekNum) ?? null;
+			const odds = await pbGet('game_odds',
+				`season = "${season.id}" && week = ${weekNum} && isActive = true`);
+			let earliest: string | null = null;
+			let earliestMs = Infinity;
+			for (const g of odds) {
+				const ts = typeof g.game_time_stamp === 'string' ? g.game_time_stamp.trim() : '';
+				if (!ts) continue;
+				const ms = new Date(ts).getTime();
+				if (Number.isNaN(ms)) continue;
+				if (ms < earliestMs) { earliestMs = ms; earliest = ts; }
+			}
+			kickoffCache.set(weekNum, earliest);
+			return earliest;
+		};
+		const effectiveDeadlineMs = async (weekNum: number, stored: string): Promise<number> => {
+			const storedMs = new Date(stored).getTime();
+			if (isTest) return storedMs;
+			const derived = deriveDeadlineFromKickoff(await getEarliestKickoff(weekNum), PICK_DEADLINE_MINUTES);
+			return derived ? new Date(derived).getTime() : storedMs;
+		};
 
 		for (let i = 0; i < weeks.length; i++) {
 			const week        = weeks[i];
 			const nextWeek    = weeks[i + 1] ?? null;
-			const deadline    = new Date(week.deadline).getTime();
+			const deadline    = await effectiveDeadlineMs(week.week, week.deadline);
 			const resultsAt   = deadline + RESULTS_DELAY_MS;
 			const completeAt  = deadline + COMPLETE_DELAY_MS;
 
@@ -335,7 +363,7 @@ async function advanceWeeks(): Promise<void> {
 					// 1. Standard: deadline + 10min (original behaviour)
 					// 2. Pre-deadline: 10min before NEXT week's deadline (weeks > 2 only)
 					const standardTrigger = now >= resultsAt;
-					const nextDeadline    = nextWeek ? new Date(nextWeek.deadline).getTime() : null;
+					const nextDeadline    = nextWeek ? await effectiveDeadlineMs(nextWeek.week, nextWeek.deadline) : null;
 					const preTrigger      = week.week > 1 && nextDeadline !== null
 						&& now >= (nextDeadline - PRE_DEADLINE_SIMULATE_MS);
 

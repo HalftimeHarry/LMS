@@ -1,6 +1,6 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { error, fail } from '@sveltejs/kit';
-import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { getKickoffIso, KICKOFF_FIELDS, resolveEffectivePickDeadline } from '$lib/server/deadlines';
 import { WeekProvider, SeasonProvider, TeamProvider, EntryProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryType } from '$lib/providers';
@@ -543,7 +543,11 @@ export const actions: Actions = {
 		const log: string[] = [];
 
 		for (const week of weeks as any[]) {
-			const dl         = new Date(week.deadline).getTime();
+			// Effective pick deadline: kickoff − 30 min for real seasons;
+			// test seasons keep their intentional stored schedule.
+			const effectiveIso = await resolveEffectivePickDeadline(pb, season, week.week, week.deadline ?? null);
+			const dl         = effectiveIso ? new Date(effectiveIso).getTime() : NaN;
+			if (!Number.isFinite(dl)) continue;
 			const resultsAt  = dl + RESULTS_DELAY_MS;
 			const completeAt = dl + COMPLETE_DELAY_MS;
 

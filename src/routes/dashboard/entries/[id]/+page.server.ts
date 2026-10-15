@@ -1,23 +1,20 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
 import { submitPickSchema } from '$lib/schemas';
-import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { resolveEffectivePickDeadline } from '$lib/server/deadlines';
 import { rankAutoPickTeamsForPool, selectAutoPickForEntry } from '$lib/server/auto-pick';
 import { SeasonProvider } from '$lib/providers/SeasonProvider';
 import type { Actions, PageServerLoad } from './$types';
 
-async function fetchWeekCutoffFromOdds(pb: any, seasonId: string, weekNum: number): Promise<Date | null> {
-	const odds = await pb.collection('game_odds').getFirstListItem(
-		`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-		{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
-	).catch(() => null) as any;
-
-	const kickoff = getKickoffIso(odds);
-	if (!kickoff) return null;
-
-	const cutoff = new Date(kickoff);
-	cutoff.setMinutes(cutoff.getMinutes() - 40);
-	return cutoff;
+/**
+ * Effective pick cutoff: earliest active kickoff − 30 min for real seasons;
+ * the stored weekly_settings.deadline for test seasons or when no odds exist.
+ */
+async function fetchPickCutoff(pb: any, season: any, weekNum: number, storedDeadline: string | null): Promise<Date | null> {
+	const iso = await resolveEffectivePickDeadline(pb, season, weekNum, storedDeadline);
+	if (!iso) return null;
+	const cutoff = new Date(iso);
+	return Number.isNaN(cutoff.getTime()) ? null : cutoff;
 }
 
 export const load: PageServerLoad = async ({ locals, params }) => {
@@ -55,12 +52,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const visibleWeeks = allWeeks.filter(w => w.week >= secondHalfStartWeek);
 	const openWeeksRaw = visibleWeeks.filter(w => w.status === 'open');
 
-	// Source-of-truth deadline: 40 min before first kickoff from game_odds.
+	// Source-of-truth deadline: 30 min before first kickoff from game_odds.
 	const now = new Date();
 	const deadlinePassedWeekIds = new Set<string>();
 	const openWeeks: any[] = [];
 	for (const w of openWeeksRaw) {
-		const cutoff = await fetchWeekCutoffFromOdds(pb, season.id, w.week);
+		const cutoff = await fetchPickCutoff(pb, season, w.week, w.deadline ?? null);
 		if (cutoff && now >= cutoff) {
 			deadlinePassedWeekIds.add(w.id);
 			continue;
@@ -299,12 +296,12 @@ export const actions: Actions = {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 
-		const cutoff = await fetchWeekCutoffFromOdds(pb, entry.season, week.week);
+		const season = await pb.collection('seasons').getOne(entry.season) as unknown as import('$lib/providers/SeasonProvider').Season;
+		const cutoff = await fetchPickCutoff(pb, season, week.week, week.deadline ?? null);
 		if (cutoff && new Date() >= cutoff) {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 
-		const season = await pb.collection('seasons').getOne(entry.season) as unknown as import('$lib/providers/SeasonProvider').Season;
 		const picksRequired = entryType === 'lms'
 			? 1
 			: SeasonProvider.secondHalfPicksForWeek(season, week.week);

@@ -1,5 +1,6 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { selectAutoPickTeamForPool } from '$lib/server/auto-pick';
+import { resolveEffectivePickDeadline } from '$lib/server/deadlines';
 import type { PageServerLoad } from './$types';
 
 export function _getActiveEntryIdsForPickBreakdown(entries: Array<{ id: string; status?: string }>) {
@@ -110,13 +111,28 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		sort:   '+entryName'
 	}).catch(() => []) as any[];
 
-	// Prefer the earliest open week with a future deadline; fall back to most recent locked week
+	// Prefer the earliest open week with a future deadline; fall back to most recent locked week.
+	// The effective pick deadline is kickoff-derived (game_time_stamp − 30 min) for real
+	// seasons; test seasons keep their intentional stored schedule.
 	const now = new Date();
-	const currentWeek =
-		weeks.find(w => w.status === 'open' && new Date(w.deadline) > now) ??
-		weeks.find(w => w.status === 'open') ??
-		weeks.find(w => w.status === 'locked') ??
-		null;
+
+	const withEffectiveDeadline = async (weekObj: any | null): Promise<any | null> => {
+		if (!weekObj) return null;
+		const effective = await resolveEffectivePickDeadline(pb, activeSeason, Number(weekObj.week), weekObj.deadline ?? null);
+		return effective ? { ...weekObj, deadline: effective } : weekObj;
+	};
+
+	const openWeeks = weeks.filter(w => w.status === 'open');
+	let currentWeek: any = null;
+	for (const w of openWeeks) {
+		const effective = await withEffectiveDeadline(w);
+		if (effective?.deadline && new Date(effective.deadline) > now) {
+			currentWeek = effective;
+			break;
+		}
+	}
+	currentWeek ??= await withEffectiveDeadline(openWeeks[0] ?? null);
+	currentWeek ??= await withEffectiveDeadline(weeks.find(w => w.status === 'locked') ?? null);
 
 	if (entries.length === 0) {
 		return { seasons, activeSeason, poolType, weeks, entries: [], pickGrid: {}, currentWeek, userId, poolAutoPickByWeek };

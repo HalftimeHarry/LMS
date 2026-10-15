@@ -1,21 +1,18 @@
 import { redirect, fail } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
-import { getKickoffIso, KICKOFF_FIELDS } from '$lib/server/deadlines';
+import { resolveEffectivePickDeadline } from '$lib/server/deadlines';
 import { submitPickSchema } from '$lib/schemas';
 import type { Actions, PageServerLoad } from './$types';
 
-async function fetchWeekCutoff(pb: any, seasonId: string, weekNum: number): Promise<Date | null> {
-	const odds = await pb.collection('game_odds').getFirstListItem(
-		`season = "${seasonId}" && week = ${weekNum} && isActive = true`,
-		{ sort: 'game_time_stamp', fields: KICKOFF_FIELDS }
-	).catch(() => null) as any;
-
-	const kickoff = getKickoffIso(odds);
-	if (!kickoff) return null;
-
-	const cutoff = new Date(kickoff);
-	cutoff.setMinutes(cutoff.getMinutes() - 40);
-	return cutoff;
+/**
+ * Effective pick cutoff: earliest active kickoff − 30 min for real seasons;
+ * the stored weekly_settings.deadline for test seasons or when no odds exist.
+ */
+async function fetchPickCutoff(pb: any, season: any, weekNum: number, storedDeadline: string | null): Promise<Date | null> {
+	const iso = await resolveEffectivePickDeadline(pb, season, weekNum, storedDeadline);
+	if (!iso) return null;
+	const cutoff = new Date(iso);
+	return Number.isNaN(cutoff.getTime()) ? null : cutoff;
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -58,8 +55,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		};
 	}
 
-	// Source-of-truth deadline: 40 min before first kickoff from game_odds.
-	const cutoff = await fetchWeekCutoff(pb, season.id, week.week);
+	// Source-of-truth deadline: 30 min before first kickoff from game_odds.
+	const cutoff = await fetchPickCutoff(pb, season, week.week, week.deadline ?? null);
 	if (cutoff && new Date() >= cutoff) {
 		return {
 			entry,
@@ -140,13 +137,13 @@ export const actions: Actions = {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 
-		const cutoff = await fetchWeekCutoff(pb, entry.season, week.week);
+		const season = await pb.collection('seasons').getOne(entry.season);
+		const cutoff = await fetchPickCutoff(pb, season, week.week, week.deadline ?? null);
 		if (cutoff && new Date() >= cutoff) {
 			return fail(400, { error: 'The deadline for this week has passed.' });
 		}
 
 		// Enforce pick count
-		const season = await pb.collection('seasons').getOne(entry.season);
 		const picksRequired = entryType === 'lms'
 			? 1
 			: (week.secondHalfPicksPerWeek ?? season.secondHalfPicksPerWeek ?? 1);
