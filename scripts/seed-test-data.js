@@ -5,7 +5,9 @@
  * Creates:
  *   - 20 test users  (user1@blo.com … user20@blo.com, password MADcap(123))
  *   - 1 second_half season  (2026 - 2027 Second Half, status active)
- *   - 18 open weeks for the second_half season (deadline today 3pm PST + 7 days/week)
+ *   - 18 open weeks for the second_half season (deadlines derived from the LMS
+ *     anchor's kickoffs: first kickoff − 30 min; mirrors the LMS week deadline
+ *     when no odds exist; weeks with neither are skipped)
  *   - Entries spread across both seasons (1–7 per user, ~60% paid/active)
  *   - Picks for active entries: each entry picks a unique team per week
  *     for weeks 1–3 (~70% of active entries have picks, simulating real usage)
@@ -19,10 +21,6 @@ const ADMIN_PASS  = 'MADcap(123)';
 const USER_PASS   = 'MADcap(123)';
 const TOTAL_USERS = 20;
 const PICK_WEEKS  = 3; // seed picks for first N weeks
-
-// Week 1 deadline: today 3pm PST = 23:00 UTC
-const week1Deadline = new Date();
-week1Deadline.setUTCHours(23, 0, 0, 0);
 
 function pbDate(d) {
   return d.toISOString().replace('T', ' ').slice(0, 23) + 'Z';
@@ -108,6 +106,29 @@ async function main() {
     .sort((a, b) => a.week - b.week);
   console.log(`${lmsWeeks.length} LMS weeks found`);
 
+  // 2b. Earliest active kickoff per week from the LMS anchor's game_odds.
+  //     game_time_stamp is the only authoritative kickoff value.
+  const kickoffByWeek = new Map();
+  for (const g of await getAll(token, 'game_odds', `season = "${lmsSeason.id}" && isActive = true`)) {
+    const ts = typeof g.game_time_stamp === 'string' ? g.game_time_stamp.trim() : '';
+    if (!ts) continue;
+    const ms = new Date(ts).getTime();
+    if (Number.isNaN(ms)) continue;
+    const wk = Number(g.week);
+    if (!kickoffByWeek.has(wk) || ms < kickoffByWeek.get(wk)) kickoffByWeek.set(wk, ms);
+  }
+  // Pick deadline = first kickoff − 30 min; falls back to the LMS week's stored
+  // deadline; null when neither exists (week is skipped, never given a fake date).
+  const pickDeadlineForWeek = (w) => {
+    const kickoffMs = kickoffByWeek.get(w);
+    if (kickoffMs !== undefined) return new Date(kickoffMs - 30 * 60 * 1000);
+    const lmsWeek = lmsWeeks.find(x => x.week === w);
+    return lmsWeek?.deadline ? new Date(String(lmsWeek.deadline).replace(' ', 'T')) : null;
+  };
+  // Entry/payment cutoff = week-1 first kickoff − 40 min.
+  const wk1KickoffMs = kickoffByWeek.get(1);
+  const paymentDeadline = wk1KickoffMs !== undefined ? pbDate(new Date(wk1KickoffMs - 40 * 60 * 1000)) : null;
+
   // 3. Create / find Second Half season
   console.log('\nCreating Second Half season...');
   let shSeason;
@@ -120,7 +141,7 @@ async function main() {
       name: '2026 - 2027 Second Half', year: 2026, status: 'active',
       lmsEntryFee: 100, secondHalfEntryFee: 50,
       secondHalfPicksPerWeek: 1, regularSeasonOnly: true,
-      paymentDeadline: pbDate(week1Deadline)
+      paymentDeadline
     });
     console.log(`Created: ${shSeason.id}`);
   }
@@ -133,7 +154,8 @@ async function main() {
   } else {
     let created = 0;
     for (let w = 1; w <= 18; w++) {
-      const deadline = new Date(week1Deadline.getTime() + (w - 1) * 7 * 24 * 60 * 60 * 1000);
+      const deadline = pickDeadlineForWeek(w);
+      if (!deadline) { process.stdout.write('-'); continue; }
       try {
         await post(token, '/collections/weekly_settings/records', {
           season: shSeason.id, week: w, status: 'open', deadline: pbDate(deadline)

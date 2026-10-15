@@ -1,6 +1,7 @@
 import { schedule } from '@netlify/functions';
 import { rankAutoPickTeamsForPool, selectAutoPickForEntry, selectAutoPickTeamForPool } from '../../src/lib/server/auto-pick';
 import { deriveDeadlineFromKickoff, isTestSeason, PICK_DEADLINE_MINUTES } from '../../src/lib/server/deadlines';
+import { resolveOddsSourceSeason } from '../../src/lib/server/deadline-verification';
 
 /**
  * Scheduled function — runs every 2 minutes.
@@ -299,6 +300,8 @@ async function advanceWeeks(): Promise<void> {
 
 	for (const season of seasons) {
 		const isTest = isTestSeason(season);
+		// Second Half season records share their LMS anchor's game_odds (existing pairing rule)
+		const oddsSourceId = resolveOddsSourceSeason(season, seasons).id;
 		const shStartWeek = season.secondHalfStartWeek ?? 6;
 		const weeks  = await pbGet('weekly_settings', `season = "${season.id}"`, '+week');
 
@@ -309,7 +312,7 @@ async function advanceWeeks(): Promise<void> {
 		const getEarliestKickoff = async (weekNum: number): Promise<string | null> => {
 			if (kickoffCache.has(weekNum)) return kickoffCache.get(weekNum) ?? null;
 			const odds = await pbGet('game_odds',
-				`season = "${season.id}" && week = ${weekNum} && isActive = true`);
+				`season = "${oddsSourceId}" && week = ${weekNum} && isActive = true`);
 			let earliest: string | null = null;
 			let earliestMs = Infinity;
 			for (const g of odds) {

@@ -1,6 +1,7 @@
 import { pbAdmin } from '$lib/server/pb-admin';
 import { error, fail } from '@sveltejs/kit';
 import { getKickoffIso, KICKOFF_FIELDS, resolveEffectivePickDeadline } from '$lib/server/deadlines';
+import { resolveOddsSourceSeason } from '$lib/server/deadline-verification';
 import { WeekProvider, SeasonProvider, TeamProvider, EntryProvider } from '$lib/providers';
 import type { Actions, PageServerLoad } from './$types';
 import type { EntryType } from '$lib/providers';
@@ -536,6 +537,9 @@ export const actions: Actions = {
 		const season = await pb.collection('seasons').getOne(seasonId);
 		const isTest = (season as any).name?.includes('[TEST]');
 		const shStartWeek = (season as any).secondHalfStartWeek ?? 6;
+		// Second Half season records share their LMS anchor's game_odds (existing pairing rule)
+		const allSeasons = await pb.collection('seasons').getFullList().catch(() => []) as any[];
+		const oddsSource = resolveOddsSourceSeason(season as any, allSeasons);
 		const weeks  = await pb.collection('weekly_settings').getFullList({
 			filter: `season = "${seasonId}"`, sort: '+week'
 		});
@@ -545,7 +549,7 @@ export const actions: Actions = {
 		for (const week of weeks as any[]) {
 			// Effective pick deadline: kickoff − 30 min for real seasons;
 			// test seasons keep their intentional stored schedule.
-			const effectiveIso = await resolveEffectivePickDeadline(pb, season, week.week, week.deadline ?? null);
+			const effectiveIso = await resolveEffectivePickDeadline(pb, oddsSource, week.week, week.deadline ?? null);
 			const dl         = effectiveIso ? new Date(effectiveIso).getTime() : NaN;
 			if (!Number.isFinite(dl)) continue;
 			const resultsAt  = dl + RESULTS_DELAY_MS;

@@ -39,6 +39,26 @@ await pb.collection('_superusers').authWithPassword(
 	process.env.POCKETBASE_ADMIN_PASSWORD
 );
 
+// Mirrors resolveOddsSourceSeason in src/lib/server/deadline-verification.ts
+// (kept inline — plain Node cannot import the TS module).
+function resolveOddsSourceSeason(season, allSeasons) {
+	const isSecondHalf = (s) =>
+		!!s && ((s.lmsEnabled === false && s.secondHalfEnabled !== false)
+			|| String(s.name ?? '').toLowerCase().includes('second half'));
+	if (!isSecondHalf(season)) return season;
+	const cycleKey = (s) => {
+		const m = String(s?.name ?? '').match(/(\d{4}\s*-\s*\d{4})/);
+		return m ? m[1].replace(/\s+/g, '') : null;
+	};
+	const key = cycleKey(season);
+	const byCycle = key
+		? allSeasons.find((c) => c.id !== season.id && !isSecondHalf(c) && cycleKey(c) === key)
+		: null;
+	if (byCycle) return byCycle;
+	const yearKey = String(season.year ?? '');
+	return allSeasons.find((c) => c.id !== season.id && !isSecondHalf(c) && String(c.year ?? '') === yearKey) ?? season;
+}
+
 const fmtET = (value) => {
 	const d = new Date(typeof value === 'string' && !value.includes('T') ? value.replace(' ', 'T') : value);
 	if (Number.isNaN(d.getTime())) return '—';
@@ -61,11 +81,12 @@ console.log(`Seasons: ${realSeasons.length} real, ${testCount} [TEST] skipped (i
 
 const rows = [];
 for (const season of realSeasons) {
+	const oddsSource = resolveOddsSourceSeason(season, realSeasons);
 	const weeks = await pb.collection('weekly_settings').getFullList({
 		filter: `season = "${season.id}"`, sort: 'week'
 	});
 	const odds = await pb.collection('game_odds').getFullList({
-		filter: `season = "${season.id}" && isActive = true`,
+		filter: `season = "${oddsSource.id}" && isActive = true`,
 		fields: 'week,game_time_stamp'
 	}).catch(() => []);
 
