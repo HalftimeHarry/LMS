@@ -306,12 +306,16 @@ const MONTHS = {
   December: 11,
 };
 
+/**
+ * @param {unknown} value
+ */
 function normalizeTeamName(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
 }
 
+/** @type {Record<string, string>} */
 const TEAM_ALIASES = {
   'newenglandpatriots': 'NE',
   'patriots': 'NE',
@@ -323,8 +327,7 @@ const TEAM_ALIASES = {
   '49ers': 'SF',
   'losangeleschargers': 'LAC',
   'chargers': 'LAC',
-  'losangeleschargers': 'LAC',
-  'buffalo bills': 'BUF',
+  'buffalobills': 'BUF',
   'bills': 'BUF',
   'dolphins': 'MIA',
   'jets': 'NYJ',
@@ -352,11 +355,10 @@ const TEAM_ALIASES = {
   'packers': 'GB',
   'cardinals': 'ARI',
   'buccaneers': 'TB',
-  'saints': 'NO',
   'niners': 'SF',
-  'chargers': 'LAC',
 };
 
+/** @type {Record<string, string>} */
 const TEAM_NAME_TO_ABBR = {
   'arizonacardinals': 'ARI',
   'atlantafalcons': 'ATL',
@@ -392,13 +394,19 @@ const TEAM_NAME_TO_ABBR = {
   'washingtoncommanders': 'WAS',
 };
 
+/**
+ * @param {string} teamName
+ * @param {Map<string, string>} teamMap
+ * @param {Map<string, string>} abbrToId
+ * @returns {string | null}
+ */
 function resolveTeamId(teamName, teamMap, abbrToId) {
   const normalized = normalizeTeamName(teamName);
 
   const direct = teamMap.get(normalized);
   if (direct) return direct;
 
-  const aliasAbbr = TEAM_ALIASES[normalized] || TEAM_NAME_TO_ABBR[normalized];
+  const aliasAbbr = TEAM_ALIASES[normalized] ?? TEAM_NAME_TO_ABBR[normalized] ?? null;
   if (aliasAbbr) {
     const byAlias = abbrToId.get(aliasAbbr.toUpperCase());
     if (byAlias) return byAlias;
@@ -409,7 +417,7 @@ function resolveTeamId(teamName, teamMap, abbrToId) {
   if (mascotToken && mascotToken !== normalized) {
     const fallbackAbbr = TEAM_ALIASES[mascotToken];
     if (fallbackAbbr) {
-      return abbrToId.get(fallbackAbbr.toUpperCase());
+      return abbrToId.get(fallbackAbbr.toUpperCase()) ?? null;
     }
   }
 
@@ -429,6 +437,11 @@ async function auth() {
   return data.token;
 }
 
+/**
+ * @param {string} token
+ * @param {string} collection
+ * @param {{ filter?: string; sort?: string; fields?: string }} [options]
+ */
 async function getAll(token, collection, { filter, sort, fields } = {}) {
   const items = [];
   let page = 1;
@@ -457,6 +470,12 @@ async function getAll(token, collection, { filter, sort, fields } = {}) {
   return items;
 }
 
+/**
+ * @param {string} token
+ * @param {string} collection
+ * @param {string} id
+ * @param {Record<string, unknown>} body
+ */
 async function patchRecord(token, collection, id, body) {
   const res = await fetch(`${PB_URL}/api/collections/${collection}/records/${id}`, {
     method: 'PATCH',
@@ -473,6 +492,9 @@ async function patchRecord(token, collection, id, body) {
   return data;
 }
 
+/**
+ * @param {string} text
+ */
 function parseCsvRows(text) {
   return text
     .trim()

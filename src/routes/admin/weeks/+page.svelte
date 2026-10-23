@@ -486,7 +486,7 @@
 					</div>
 					{#if lmsCount > 0}
 					<div class="mt-1 flex justify-between border-t border-[rgba(201,168,76,0.1)] pt-1">
-						<span>Per-entry payout (winner takes all)</span>
+						<span>Per-entry split payout</span>
 						<span class="text-[#c9a84c] font-medium">${lmsPayout.toLocaleString()}</span>
 					</div>
 					{/if}
@@ -509,7 +509,7 @@
 					</div>
 					{#if shCount > 0}
 					<div class="mt-1 flex justify-between border-t border-blue-900/30 pt-1">
-						<span>Per-entry payout (winner takes all)</span>
+						<span>Per-entry split payout</span>
 						<span class="text-blue-400 font-medium">${shPayout.toLocaleString()}</span>
 					</div>
 					{/if}

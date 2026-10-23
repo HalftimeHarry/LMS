@@ -8,6 +8,7 @@ export interface DashboardPoolCardViewModel {
 	entryDeadline: string | null;
 	pickDeadline: string | null;
 	registrationLabel: string;
+	registrationClosed: boolean;
 	picksLabel: string;
 	registrationLive: boolean;
 	picksLive: boolean;
@@ -41,29 +42,43 @@ export class DashboardProvider {
 		const shStartWeek = input.shStartWeek ?? 6;
 		const seasonAllowsLmsRegistration = input.season.status === 'open';
 		const beforeStart = !input.currentWeek || input.currentWeek.week < shStartWeek;
-		const week = input.type === 'second_half' && input.week6Week ? input.week6Week : input.currentWeek;
+		const currentPickWeek = input.currentWeek;
+		const secondHalfRegistrationWeek = input.type === 'second_half' && beforeStart ? (input.week6Week ?? input.currentWeek) : null;
 		const lmsRegistrationClosedBySecondHalf = input.type === 'lms' && (!!input.currentWeek && input.currentWeek.week >= shStartWeek);
 		const lmsRegistrationClosedByStatus = input.type === 'lms' && !seasonAllowsLmsRegistration;
-		const entryDeadline = (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus) ? null : (week?.entryDeadline ?? null);
-		const pickDeadline = week?.pickDeadline ?? null;
+		const entryDeadline = input.type === 'second_half'
+			? (beforeStart ? (secondHalfRegistrationWeek?.entryDeadline ?? null) : null)
+			: (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus) ? null : (input.currentWeek?.entryDeadline ?? null);
+		const pickDeadline = currentPickWeek?.pickDeadline ?? null;
 
 		const entryDeadlineTime = entryDeadline ? new Date(entryDeadline).getTime() : NaN;
 		const pickDeadlineTime = pickDeadline ? new Date(pickDeadline).getTime() : NaN;
 		const entryDiffMs = Number.isFinite(entryDeadlineTime) ? entryDeadlineTime - input.now : 0;
 		const pickDiffMs = Number.isFinite(pickDeadlineTime) ? pickDeadlineTime - input.now : 0;
-		const entryLive = !(lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
-			&& !!input.currentWeek
-			&& input.currentWeek.status === 'open'
-			&& Number.isFinite(entryDeadlineTime)
-			&& entryDiffMs > 0;
-		const entryDeadlinePassed = lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus || (Number.isFinite(entryDeadlineTime) && entryDiffMs <= 0);
+		const entryLive = input.type === 'second_half'
+			? !!secondHalfRegistrationWeek && secondHalfRegistrationWeek.status === 'open' && Number.isFinite(entryDeadlineTime) && entryDiffMs > 0
+			: !(lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
+				&& !!input.currentWeek
+				&& input.currentWeek.status === 'open'
+				&& Number.isFinite(entryDeadlineTime)
+				&& entryDiffMs > 0;
+		const entryDeadlinePassed = input.type === 'second_half'
+			? !!secondHalfRegistrationWeek && Number.isFinite(entryDeadlineTime) && entryDiffMs <= 0
+			: lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus || (Number.isFinite(entryDeadlineTime) && entryDiffMs <= 0);
 		const pickLive = input.type === 'lms'
 			? !!input.currentWeek && input.currentWeek.status === 'open' && Number.isFinite(pickDeadlineTime) && pickDiffMs > 0
 			: !beforeStart && input.currentWeek?.status === 'open' && Number.isFinite(pickDeadlineTime) && pickDiffMs > 0;
 		const pickDeadlinePassed = Number.isFinite(pickDeadlineTime) && pickDiffMs <= 0;
-		const registrationLabel = (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
-			? 'Registration closed'
-			: (entryDeadline ? (entryDeadlinePassed ? 'Registration closed' : 'Registration open') : 'Registration TBD');
+		const registrationClosed = input.type === 'second_half'
+			? (beforeStart ? !!entryDeadline && entryDeadlinePassed : true)
+			: (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus || (!!entryDeadline && entryDeadlinePassed));
+		const registrationLabel = input.type === 'second_half'
+			? (beforeStart
+				? (entryDeadline ? (entryDeadlinePassed ? 'Registration closed' : 'Registration open') : 'Registration TBD')
+				: 'Registration closed')
+			: (lmsRegistrationClosedBySecondHalf || lmsRegistrationClosedByStatus)
+				? 'Season registration closed'
+				: (entryDeadline ? (entryDeadlinePassed ? 'Registration closed' : 'Registration open') : 'Registration TBD');
 		const picksLabel = input.type === 'lms'
 			? (pickDeadline ? (pickDeadlinePassed ? 'Pick deadline closed' : 'Picks open') : 'Picks TBD')
 			: (beforeStart ? 'Picks pending' : (pickDeadline ? (pickDeadlinePassed ? 'Pick deadline closed' : 'Picks open') : 'Picks TBD'));
@@ -91,11 +106,12 @@ export class DashboardProvider {
 		return {
 			type: input.type,
 			title: input.type === 'lms' ? 'Last Man Standing' : 'Second Half Pool',
-			subtitle: input.type === 'lms' ? 'Pick the LOSER' : 'Pick the WINNER',
+			subtitle: input.type === 'lms' ? 'LOSER' : 'WINNER',
 			weekLabel: input.type === 'lms' ? `Week ${input.currentWeek?.week ?? 1}` : (beforeStart ? `Week ${shStartWeek}` : `Week ${input.currentWeek?.week ?? shStartWeek}`),
 			entryDeadline,
 			pickDeadline,
 			registrationLabel,
+			registrationClosed,
 			picksLabel,
 			registrationLive: entryLive,
 			picksLive: pickLive,

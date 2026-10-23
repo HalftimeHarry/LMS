@@ -16,7 +16,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { actions } from '../../routes/dashboard/picks/+page.server';
 import { _mergePickCell } from '../../routes/dashboard/standings/+page.server';
-import { _getZeroSurvivorWinnerResolution } from '../../routes/admin/results/+page.server';
+import { actions as adminResultsActions, _calculatePerEntryShareAmounts, _getZeroSurvivorWinnerResolution } from '../../routes/admin/results/+page.server';
 import { pbAdmin } from '$lib/server/pb-admin';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -232,6 +232,152 @@ describe('Second Half standings grid', () => {
 	});
 });
 
+describe('zero-survivor winner confirmation safeguards', () => {
+	let mockPb: any;
+	let cols: ReturnType<typeof makeCollections>;
+
+	beforeEach(() => {
+		cols = makeCollections();
+		mockPb = makePb(cols);
+		vi.mocked(pbAdmin).mockResolvedValue(mockPb);
+	});
+
+	it('blocks direct confirmation when a relevant game is pending even if the week is marked complete', async () => {
+		cols.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: 'week1', status: 'complete', week: 7,
+		});
+		cols.game_odds.getFullList = vi.fn().mockResolvedValue([{ id: 'g1', resultStatus: 'pending' }]);
+		cols.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'winner' },
+		]);
+
+		const result = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+
+		expect((result as any).status).toBe(400);
+		expect((result as any).data.error).toMatch(/pending|final/i);
+	});
+
+	it('blocks direct confirmation when a relevant game result is missing final status', async () => {
+		cols.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: 'week1', status: 'complete', week: 7,
+		});
+		cols.game_odds.getFullList = vi.fn().mockResolvedValue([{ id: 'g1' }]);
+		cols.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'winner' },
+		]);
+
+		const result = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+
+		expect((result as any).status).toBe(400);
+		expect((result as any).data.error).toMatch(/missing an explicit final-result status|pending/i);
+	});
+
+	it('blocks direct confirmation when a relevant game exists but is not marked final', async () => {
+		cols.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: 'week1', status: 'complete', week: 7,
+		});
+		cols.game_odds.getFullList = vi.fn().mockResolvedValue([{ id: 'g1', resultStatus: 'postponed' }]);
+		cols.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'winner' },
+		]);
+
+		const result = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+
+		expect((result as any).status).toBe(400);
+		expect((result as any).data.error).toMatch(/pending|final/i);
+	});
+
+	it('allows confirmation once every relevant game is explicitly final', async () => {
+		cols.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: 'week1', status: 'complete', week: 7,
+		});
+		cols.game_odds.getFullList = vi.fn().mockResolvedValue([{ id: 'g1', resultStatus: 'final' }]);
+		cols.entries.getFullList = vi.fn().mockResolvedValue([
+			{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'winner' },
+		]);
+		cols.entries.update = vi.fn().mockResolvedValue({ id: 'entry1', status: 'winner' });
+
+		const result = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+
+		expect((result as any).success).toBe(true);
+	});
+
+	it('does not duplicate or overwrite a protected settlement on repeated confirmation', async () => {
+		cols.weekly_settings.getOne = vi.fn().mockResolvedValue({
+			id: 'week1', status: 'complete', week: 7,
+		});
+		cols.game_odds.getFullList = vi.fn().mockResolvedValue([{ id: 'g1', resultStatus: 'final' }]);
+		cols.entries.getFullList = vi.fn()
+			.mockResolvedValueOnce([
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'active' },
+			])
+			.mockResolvedValueOnce([
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'winner' },
+			]);
+		cols.entries.update = vi.fn().mockResolvedValue({ id: 'entry1', status: 'winner' });
+
+		const first = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+		const second = await adminResultsActions.confirmWinnerResolution({
+			request: { formData: async () => makeFormData({
+				seasonId: 'season1',
+				weekId: 'week1',
+				winnerEntryId: 'entry1',
+				poolType: 'second_half',
+			}) }
+		} as any);
+
+		expect((first as any).success).toBe(true);
+		expect((second as any).success).toBe(true);
+		expect(cols.entries.update).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('split-pot share allocation', () => {
+	it('allocates one share per qualifying entry from the winners list', () => {
+		const result = _calculatePerEntryShareAmounts(1000, ['entry1', 'entry2', 'entry2']);
+		expect(result.totalCents).toBe(1000);
+		expect(result.shares).toEqual([
+			{ entryId: 'entry1', cents: 500 },
+			{ entryId: 'entry2', cents: 500 },
+		]);
+	});
+});
+
 describe('Second Half zero-survivor winner resolution', () => {
 	it('chooses the sole highest correct-pick entry as the winner candidate', () => {
 		const result = _getZeroSurvivorWinnerResolution({
@@ -274,6 +420,66 @@ describe('Second Half zero-survivor winner resolution', () => {
 		expect(result.status).toBe('winner_candidate');
 		expect(result.highestRankedEntries).toEqual(['entry1']);
 		expect(result.needsAdminConfirmation).toBe(true);
+	});
+
+	it('ranks by cumulative correct picks across the pool instead of only the final week', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: [
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry2', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry3', season: 'season1', entryType: 'second_half', status: 'active' },
+			],
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week8', pickedTeams: ['w8a'] },
+				{ id: 'p2', entry: 'entry1', week: 'week9', pickedTeams: ['w9a'] },
+				{ id: 'p3', entry: 'entry1', week: 'week10', pickedTeams: ['w10a'] },
+				{ id: 'p4', entry: 'entry2', week: 'week10', pickedTeams: ['w10b', 'w10c'] },
+				{ id: 'p5', entry: 'entry3', week: 'week10', pickedTeams: ['w10d'] },
+			],
+			teamResult: {
+				w8a: 'correct',
+				w9a: 'correct',
+				w10a: 'correct',
+				w10b: 'correct',
+				w10c: 'correct',
+				w10d: 'incorrect',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: [],
+		});
+		expect(result.status).toBe('winner_candidate');
+		expect(result.highestRankedEntries).toEqual(['entry1']);
+		expect(result.maxCorrectPicks).toBe(3);
+	});
+
+	it('treats an all-eliminated LMS week as a split among entries alive entering that week', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week9',
+			weekNum: 9,
+			entries: [
+				{ id: 'entry1', season: 'season1', entryType: 'lms', status: 'eliminated' },
+				{ id: 'entry2', season: 'season1', entryType: 'lms', status: 'eliminated' },
+				{ id: 'entry3', season: 'season1', entryType: 'lms', status: 'eliminated' },
+			],
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week9', pickedTeams: ['team1'] },
+				{ id: 'p2', entry: 'entry2', week: 'week9', pickedTeams: ['team2'] },
+				{ id: 'p3', entry: 'entry3', week: 'week9', pickedTeams: ['team3'] },
+			],
+			teamResult: {
+				team1: 'correct',
+				team2: 'correct',
+				team3: 'correct',
+			},
+			poolType: 'lms',
+			remainingActiveEntryIds: ['entry1', 'entry2', 'entry3'],
+		});
+		expect(result.status).toBe('tie_required');
+		expect(result.highestRankedEntries).toEqual(['entry1', 'entry2', 'entry3']);
 	});
 
 	it('keeps tied leaders pending admin review without declaring a single winner', () => {
