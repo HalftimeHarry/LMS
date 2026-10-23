@@ -1,5 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import { pbAdmin } from '$lib/server/pb-admin';
+import { buildPoolEstimateBySeason } from '$lib/payoutEstimate';
 import { getDeadlinePairFromKickoff, getKickoffIso, isTestSeason, KICKOFF_FIELDS } from '$lib/server/deadlines';
 import type { PageServerLoad } from './$types';
 
@@ -245,8 +246,8 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	// Pool-wide stats per season (all users)
 	const poolStatsBySeason: Record<string, {
 		total: number; active: number; pending: number; eliminated: number; pot: number;
-		lms: { total: number; active: number; eliminated: number; pot: number; paid: number; free: number };
-		sh:  { total: number; active: number; eliminated: number; pot: number };
+		lms: { total: number; active: number; eliminated: number; pot: number; paid: number; free: number; gross: number };
+		sh:  { total: number; active: number; eliminated: number; pot: number; paid: number; free: number; gross: number };
 	}> = {};
 
 	await Promise.all(
@@ -264,6 +265,13 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 			const lmsAll = all.filter((x: any) => x.entryType === 'lms');
 			const shAll  = all.filter((x: any) => x.entryType === 'second_half');
 
+			const lmsGross = lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * lmsFee;
+			const shGross = shAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * shFee;
+			const lmsPaid = lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length;
+			const shPaid = shAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length;
+			const lmsFree = lmsAll.filter((x: any) => x.paymentMethod === 'free').length;
+			const shFree = shAll.filter((x: any) => x.paymentMethod === 'free').length;
+
 			poolStatsBySeason[sid] = {
 				total:      all.length,
 				active:     all.filter((x: any) => x.status === 'active').length,
@@ -278,15 +286,19 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 					total:      lmsAll.length,
 					active:     lmsAll.filter((x: any) => x.status === 'active').length,
 					eliminated: lmsAll.filter((x: any) => x.status === 'eliminated').length,
-					free:       lmsAll.filter((x: any) => x.paymentMethod === 'free').length,
-					paid:       lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length,
-					pot:        Math.max(0, lmsAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * lmsFee - maintFee),
+					free:       lmsFree,
+					paid:       lmsPaid,
+					gross:      lmsGross,
+					pot:        Math.max(0, lmsGross - maintFee),
 				},
 				sh: {
 					total:      shAll.length,
 					active:     shAll.filter((x: any) => x.status === 'active').length,
 					eliminated: shAll.filter((x: any) => x.status === 'eliminated').length,
-					pot:        shAll.filter((x: any) => x.paid && x.paymentMethod !== 'free').length * shFee,
+					free:       shFree,
+					paid:       shPaid,
+					gross:      shGross,
+					pot:        shGross,
 				},
 			};
 		})
@@ -295,6 +307,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	// Stat cards only count real (non-test) season entries
 	const realSeasonIds = new Set(allSeasons.filter(s => !s.name?.includes('[TEST]')).map(s => s.id));
 	const realEntries   = e.filter(x => realSeasonIds.has(x.season));
+	const poolEstimateBySeason = buildPoolEstimateBySeason(poolStatsBySeason);
 
 	const pickView = (cookies.get('pick_view') ?? 'entries') as 'entries' | 'standings';
 
@@ -316,6 +329,7 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 		week6BySeason,
 		entriesBySeason,
 		poolStatsBySeason,
+		poolEstimateBySeason,
 		pickByEntry,
 		usedTeamCountByEntry,
 		selectedSeasonId: defaultSeasonId,

@@ -95,6 +95,7 @@ async function main() {
       { name: 'awayTeam',      type: 'relation', required: true,  collectionId: teamsId,   maxSelect: 1, cascadeDelete: false },
       { name: 'game_time_stamp', type: 'text',   required: false },
       { name: 'gameTime',      type: 'date',     required: false },
+      { name: 'resultStatus',  type: 'select',   required: false, values: ['pending', 'final', 'postponed', 'cancelled'], maxSelect: 1 },
       { name: 'homeSpread',    type: 'number',   required: false },
       { name: 'homeMoneyline', type: 'number',   required: false },
       { name: 'awayMoneyline', type: 'number',   required: false },

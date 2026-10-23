@@ -31,6 +31,9 @@
 	const shDeadline      = $derived(fmtDeadline(week6Deadline));
 	const shStartWeek     = $derived(season?.secondHalfStartWeek ?? 6);
 	const lmsStartWeek    = 1;
+
+	// Live countdown tick for deadline cards
+	let now = $state(Date.now());
 	const shDiff          = $derived(week6Deadline ? (new Date(week6Deadline).getTime() - now) : 0);
 	const shLive          = $derived(!!week6Deadline && shDiff > 0);
 	const shUrgent        = $derived(shLive && shDiff < 3_600_000);
@@ -45,9 +48,6 @@
 	const lmsHours        = $derived(lmsLive ? Math.floor((lmsDiff % 86_400_000) / 3_600_000) : 0);
 	const lmsMinutes      = $derived(lmsLive ? Math.floor((lmsDiff % 3_600_000) / 60_000) : 0);
 	const lmsSeconds      = $derived(lmsLive ? Math.floor((lmsDiff % 60_000) / 1_000) : 0);
-
-	// Live countdown tick for deadline cards
-	let now = $state(Date.now());
 	$effect(() => {
 		const id = setInterval(() => { now = Date.now(); }, 1000);
 		return () => clearInterval(id);
@@ -81,7 +81,7 @@
 
 	const pastWinners = $derived(parsePastWinners(season?.pastWinnersJson));
 	const rulesDeadlineNote = $derived(
-		season?.rulesDeadlineNote?.trim() || 'Picks need to be in by 9:55 AM EST.'
+		season?.rulesDeadlineNote?.trim() || 'Picks are due by the displayed weekly pick deadline.'
 	);
 	const winnersLocationNote = $derived(
 		season?.winnersLocationNote?.trim() ||
@@ -252,7 +252,7 @@
 					name="rulesDeadlineNote"
 					rows="2"
 					bind:value={rulesDeadlineNoteInput}
-					placeholder="Example: Picks need to be in by 9:55 AM EST."
+					placeholder="Example: Picks are due by the displayed weekly pick deadline."
 					class="w-full rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-[#c9a84c] focus:outline-none"
 				></textarea>
 			</div>
@@ -364,10 +364,11 @@
 			{ rule: 'Once you use a team you <strong class="text-white">cannot use that team again</strong> for the rest of the season.' },
 			{ rule: 'If the team you picked <strong class="text-white">WINS</strong> its game, you are eliminated.' },
 			{ rule: '<strong class="text-white">TIES:</strong> Rare in the NFL, but if a tie occurs both teams are eliminated.' },
-			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. After the deadline you can view everyone's picks.` },
+			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> — <strong class="text-white">30 minutes before the first kickoff of the week</strong> — with NO EXCEPTIONS. After the deadline you can view everyone's picks.` },
 			{ rule: 'If you miss the deadline, you automatically receive the <strong class="text-white">biggest favourite available to you</strong> as your pick. Teams you\'ve already used are skipped.' },
 			{ rule: 'This pool applies to the <strong class="text-white">NFL regular season only</strong>.' },
 			{ rule: 'If <strong class="text-white">5 or fewer players remain</strong>, all may agree to split the pot. All active entries must agree — if not, picks continue as normal.' },
+			{ rule: 'If <strong class="text-white">every remaining entry is eliminated in the same week</strong>, the pool ends and the prize pot is split equally among the entries alive entering that week.' },
 		] as item, i}
 			<li class="flex gap-4 text-sm text-gray-300">
 				<span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[rgba(201,168,76,0.4)] text-xs text-[#c9a84c]">
@@ -377,6 +378,22 @@
 			</li>
 		{/each}
 	</ol>
+
+	<div class="mt-6 rounded-xl border border-[rgba(201,168,76,0.3)] bg-[rgba(201,168,76,0.04)] p-5">
+		<h3 class="mb-2 text-base font-bold text-[#c9a84c]">What Happens If Everyone Is Eliminated?</h3>
+		<p class="mb-3 text-sm leading-relaxed text-gray-300">
+			In the main LMS pool, if every remaining entry is eliminated during the same week, the pool ends and the prize pot is divided equally among all entries that were still alive entering that week.
+			If 10 entries remain and all 10 are eliminated, each entry receives <strong class="text-white">1/10 of the pot</strong>.
+			Shares are awarded per entry, not per person, so a participant holding two live entries receives two equal shares.
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-gray-300">
+			If multiple entries survive through the final week of the NFL regular season, those surviving entries also split the pot equally.
+			All relevant game results must be final before payouts are confirmed.
+		</p>
+		<p class="text-sm leading-relaxed text-gray-300">
+			This rule applies to the main LMS pool only. The separate Second Half pool uses cumulative correct-pick scoring to rank eligible entries before any equal split is applied.
+		</p>
+	</div>
 </section>
 
 <!-- Second Half rules -->
@@ -450,7 +467,7 @@
 			{ rule: 'Once you use a team you <strong class="text-white">cannot use that team again</strong> for the rest of the season.' },
 			{ rule: 'If the team you picked <strong class="text-white">LOSES</strong> its game, you are eliminated.' },
 			{ rule: '<strong class="text-white">Weeks 6–9:</strong> pick <strong class="text-white">1 team</strong> per week. From <strong class="text-white">Week 10 onward:</strong> pick <strong class="text-white">2 teams</strong> per week — both must win.' },
-			{ rule: `All picks are due by the <strong class="text-white">weekly deadline</strong> with NO EXCEPTIONS. Missed picks receive the biggest underdog available to you automatically. Teams you've already used are skipped. ${rulesDeadlineNote}` },
+			{ rule: `All picks are due by the <strong class="text-white">weekly pick deadline</strong> — <strong class="text-white">30 minutes before the first kickoff of the week</strong> — with NO EXCEPTIONS. Missed picks receive the biggest underdog available to you automatically. Teams you've already used are skipped. ${rulesDeadlineNote}` },
 			{ rule: 'Pool runs through the <strong class="text-white">NFL regular season only</strong>.' },
 		] as item, i}
 			<li class="flex gap-4 text-sm text-gray-300">
@@ -465,25 +482,22 @@
 	<div class="mt-6 rounded-xl border border-blue-900/40 bg-blue-950/20 p-5">
 		<h3 class="mb-2 text-base font-bold text-[#c9a84c]">What Happens If Everyone Is Eliminated?</h3>
 		<p class="mb-3 text-sm leading-relaxed text-gray-300">
-			In the Second Half Pool, participants must correctly select the required number of winning NFL teams each week to remain alive.
-			Beginning in <strong class="text-white">Week 10</strong>, each entry must correctly select <strong class="text-white">two winning teams</strong>.
+			In the Second Half Pool, each entry must correctly select the required number of winning NFL teams each week to remain alive.
+			Weeks 6–9 require <strong class="text-white">one winning team</strong> per week, and from <strong class="text-white">Week 10 onward</strong> each entry must pick <strong class="text-white">two teams</strong> and both must win.
 			If either selected team loses or ties, that entry is eliminated.
 		</p>
 		<p class="mb-3 text-sm leading-relaxed text-gray-300">
-			<strong class="text-white">If every remaining entry is eliminated during the same week</strong>, the winner will be determined by the number of correct picks made during that final elimination week.
-			The entry with the most correct picks will be ranked highest. Only entries that were still alive entering that week are eligible.
-			Picks from previous weeks do not count toward this tiebreaker. If multiple entries have the same highest number of correct picks,
-			those entries remain tied for the winning position until the tie is resolved under the pool's approved tiebreaker procedure.
-			All relevant NFL game results must be final before a winner is confirmed.
+			<strong class="text-white">If every remaining entry is eliminated during the same week</strong>, only entries that were still alive entering that week qualify for winner consideration.
+			Those eligible entries are ranked by their cumulative correct picks across the Second Half pool, including the final elimination week.
+			If multiple eligible entries are tied for the highest cumulative total, they split the Second Half pot equally, per entry.
+			All relevant NFL game results must be final before winners and payouts are confirmed.
 		</p>
 		<p class="mb-3 text-sm leading-relaxed text-gray-300">
-			<strong class="text-white">Example:</strong> Ten entries remain entering Week 10, and all ten are eliminated.
-			Four entries correctly pick one of their two teams, and six entries correctly pick neither team.
-			The four entries with one correct pick are tied for the highest position. The six entries with zero correct picks are ranked below them.
+			<strong class="text-white">Example:</strong> Ten entries remain entering Week 10. After the final results are official, four entries are tied at 12 correct picks in the Second Half pool, and the remaining six entries have fewer correct picks.
+			Those four tied entries split the Second Half pot equally, per entry. The other six entries are below them.
 		</p>
 		<p class="text-sm leading-relaxed text-gray-300">
-			<strong class="text-white">Important:</strong> One correct pick does not keep an entry alive in a two-pick week.
-			This rule applies only when every remaining entry is eliminated.
+			<strong class="text-white">Important:</strong> This rule applies only when every remaining entry is eliminated. One correct pick does not keep an entry alive in a two-pick week.
 		</p>
 	</div>
 </section>

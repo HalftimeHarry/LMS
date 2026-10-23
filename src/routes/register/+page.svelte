@@ -5,7 +5,15 @@
 
 	import type { ActionData } from './$types';
 
-	let { form }: { form: ActionData } = $props();
+	type RegisterForm = {
+		error?: string;
+		fields?: {
+			displayName?: string;
+			email?: string;
+		};
+	};
+
+	let { form }: { form: RegisterForm | undefined } = $props();
 
 	const reason  = $derived($page.url.searchParams.get('reason'));
 

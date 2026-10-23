@@ -8,6 +8,7 @@
 		entryDeadlineLabel,
 		pickDeadlineLabel,
 		registrationLabel,
+		registrationClosed,
 		picksLabel,
 		registrationCountdown,
 		picksCountdown,
@@ -33,6 +34,7 @@
 		entryDeadlineLabel: string;
 		pickDeadlineLabel: string;
 		registrationLabel: string;
+		registrationClosed: boolean;
 		picksLabel: string;
 		registrationCountdown: string;
 		picksCountdown: string;
@@ -63,16 +65,22 @@
 		<div>
 			<p class="text-xl font-bold text-white">{weekLabel}</p>
 			<div class="mt-2 space-y-1 text-xs text-gray-400">
-				<p>Registration opens <span class="text-white">{entryDeadlineLabel}</span></p>
-				<p>Picks open <span class="text-white">{pickDeadlineLabel}</span></p>
+				{#if registrationClosed}
+					<p><span class="text-white">Season registration closed</span></p>
+				{:else}
+					<p>Registration opens <span class="text-white">{entryDeadlineLabel}</span></p>
+				{/if}
+				<p>Pick deadline: <span class="text-white">{pickDeadlineLabel}</span></p>
 			</div>
 		</div>
 		<div class="flex items-center gap-3">
 			<div class="flex flex-col items-end gap-2">
-				<div class="min-w-[120px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
-					<div class="font-mono text-lg font-bold tabular-nums {registrationLive ? (registrationUrgent ? 'text-red-400' : 'text-green-400') : 'text-gray-500'}">{registrationCountdown}</div>
-					<div class="text-sm font-medium {registrationDeadlinePassed ? 'text-gray-500' : 'text-green-400'}">{resolveStatusLabelText(false, registrationLabel)}</div>
-				</div>
+				{#if !registrationClosed}
+					<div class="min-w-[120px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
+						<div class="font-mono text-lg font-bold tabular-nums {registrationLive ? (registrationUrgent ? 'text-red-400' : 'text-green-400') : 'text-gray-500'}">{registrationCountdown}</div>
+						<div class="text-sm font-medium {registrationDeadlinePassed ? 'text-gray-500' : 'text-green-400'}">{resolveStatusLabelText(false, registrationLabel)}</div>
+					</div>
+				{/if}
 				<div class="min-w-[120px] rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right">
 					<div class="font-mono text-lg font-bold tabular-nums {picksLive ? (picksUrgent ? 'text-red-400' : picksClass) : 'text-gray-500'}">{picksCountdown}</div>
 					<div class="text-sm font-medium {picksDeadlinePassed ? 'text-gray-500' : picksClass}">{picksLabel}</div>

@@ -33,6 +33,73 @@ async function validateResultsActionWindow(pb: any, weekIds: string[]) {
 	return null;
 }
 
+function hasExplicitFinalResult(game: any): boolean {
+	const candidates = [
+		game?.resultStatus,
+		game?.result_status,
+		game?.finalStatus,
+		game?.final_status,
+		game?.status,
+		game?.isFinal,
+		game?.is_final,
+		game?.finalized,
+		game?.isFinalized,
+	];
+
+	for (const value of candidates) {
+		if (typeof value === 'boolean') {
+			if (value) return true;
+			continue;
+		}
+		if (typeof value !== 'string') continue;
+		const normalized = value.trim().toLowerCase();
+		if (!normalized) continue;
+		if (['final', 'finalized', 'official', 'complete', 'ended'].includes(normalized)) return true;
+		if (['pending', 'draft', 'scheduled', 'in_progress', 'in-progress', 'postponed', 'cancelled', 'delayed', 'not_started', 'not-started', 'not started'].includes(normalized)) return false;
+	}
+
+	if (
+		(game?.homeScore != null && game?.awayScore != null) ||
+		(game?.home_score != null && game?.away_score != null)
+	) {
+		return true;
+	}
+
+	return false;
+}
+
+async function validateFinalizedResultsBeforeConfirmation(pb: any, weekId: string, seasonId: string, poolType: 'lms' | 'second_half') {
+	const week = await pb.collection('weekly_settings').getOne(weekId).catch(() => null) as any;
+	if (!week) {
+		return fail(404, { error: 'Week not found for winner confirmation.' });
+	}
+	if (week.status !== 'complete') {
+		return fail(400, {
+			error: `Relevant ${poolType === 'lms' ? 'LMS' : 'Second Half'} results must be final before confirming a payout.`,
+		});
+	}
+
+	const games = await pb.collection('game_odds').getFullList({
+		filter: `season = "${seasonId}" && week = ${Number(week.week ?? 0)}`,
+	}).catch(() => []) as any[];
+
+	if (!games.length) {
+		return fail(400, {
+			error: 'No relevant game results are available yet for this week.',
+		});
+	}
+
+	const unresolvedGames = games.filter((game: any) => !hasExplicitFinalResult(game));
+	if (unresolvedGames.length) {
+		const sample = unresolvedGames.slice(0, 3).map((game: any) => game.id || game.homeTeam || game.awayTeam || 'game').join(', ');
+		return fail(400, {
+			error: `Relevant ${poolType === 'lms' ? 'LMS' : 'Second Half'} games are still pending or missing an explicit final-result status: ${sample}${unresolvedGames.length > 3 ? ', ...' : ''}.`,
+		});
+	}
+
+	return null;
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 async function fetchPicksAndResults(pb: any, weekId: string) {
@@ -56,88 +123,26 @@ async function fetchPicksAndResults(pb: any, weekId: string) {
 	return { picks, pickResults };
 }
 
-export function _getZeroSurvivorWinnerResolution(params: {
-	seasonId: string;
-	weekId: string;
-	weekNum: number;
-	entries: Array<{ id: string; status?: string; season?: string; entryType?: string }>;
-	picks: Array<{ id: string; entry: string; week: string; pickedTeams?: string[] | string | null; isAutoPick?: boolean }>;
-	teamResult: Record<string, 'correct' | 'incorrect' | 'tie'>;
-	poolType?: 'lms' | 'second_half';
-	remainingActiveEntryIds?: string[];
-}) {
-	const {
-		seasonId,
-		weekId,
-		weekNum,
-		entries,
-		picks,
-		teamResult,
-		poolType = 'second_half',
-		remainingActiveEntryIds,
-	} = params;
+function normalizeTeamList(pickedTeams?: string[] | string | null): string[] {
+	if (Array.isArray(pickedTeams)) return [...new Set(pickedTeams.filter(Boolean))];
+	if (pickedTeams) return [pickedTeams].filter(Boolean);
+	return [];
+}
 
-	if (poolType !== 'second_half') {
-		return {
-			status: 'continue',
-			reason: 'not_a_second_half_week',
-			weekNum,
-			seasonId,
-			weekId,
-			entriesEnteringWeek: 0,
-			maxCorrectPicks: 0,
-			highestRankedEntries: [],
-			needsAdminConfirmation: false,
-		};
-	}
-
-	const entrants = entries.filter((entry) =>
-		entry.season === seasonId &&
-		entry.entryType === 'second_half' &&
-		entry.status === 'active'
-	);
-
-	if (entrants.length === 0) {
-		return {
-			status: 'continue',
-			reason: 'no_active_entries',
-			weekNum,
-			seasonId,
-			weekId,
-			entriesEnteringWeek: 0,
-			maxCorrectPicks: 0,
-			highestRankedEntries: [],
-			needsAdminConfirmation: false,
-		};
-	}
-
-	const remainingActive = new Set((remainingActiveEntryIds ?? []).filter(Boolean));
-	if (remainingActive.size > 1) {
-		return {
-			status: 'continue',
-			reason: 'more_than_one_survivor',
-			weekNum,
-			seasonId,
-			weekId,
-			entriesEnteringWeek: entrants.length,
-			remainingActiveEntries: [...remainingActive],
-			maxCorrectPicks: 0,
-			highestRankedEntries: [],
-			needsAdminConfirmation: false,
-		};
-	}
-
-	const entryById = new Map(entrants.map((entry) => [entry.id, entry]));
+function getEntryCorrectPickTotals(
+	entries: Array<{ id: string; status?: string; season?: string; entryType?: string }>,
+	picks: Array<{ id: string; entry: string; week: string; pickedTeams?: string[] | string | null; isAutoPick?: boolean }>,
+	teamResult: Record<string, 'correct' | 'incorrect' | 'tie'>
+) {
+	const entryMap = new Map(entries.map((entry) => [entry.id, entry]));
 	const counts = new Map<string, number>();
 	let unresolved = false;
 
-	for (const entry of entrants) counts.set(entry.id, 0);
+	for (const entry of entries) counts.set(entry.id, 0);
 
 	for (const pick of picks) {
-		if (!entryById.has(pick.entry)) continue;
-		const selectedTeams = Array.isArray(pick.pickedTeams)
-			? [...new Set(pick.pickedTeams.filter(Boolean))]
-			: pick.pickedTeams ? [pick.pickedTeams].filter(Boolean) : [];
+		if (!entryMap.has(pick.entry)) continue;
+		const selectedTeams = normalizeTeamList(pick.pickedTeams);
 		if (!selectedTeams.length) continue;
 
 		for (const teamId of selectedTeams) {
@@ -152,7 +157,143 @@ export function _getZeroSurvivorWinnerResolution(params: {
 		}
 	}
 
-	const maxCorrect = Math.max(0, ...[...counts.values()]);
+	return { counts, unresolved, maxCorrect: Math.max(0, ...[...counts.values()]) };
+}
+
+export function _calculatePerEntryShareAmounts(potCents: number, winnerEntryIds: string[]) {
+	const winners = [...new Set(winnerEntryIds.filter(Boolean))];
+	if (!winners.length) return { shares: [], totalCents: 0, perShareCents: 0, remainderCents: 0 };
+	const totalCents = Math.max(0, Math.round(potCents));
+	const perShareCents = Math.floor(totalCents / winners.length);
+	const remainderCents = totalCents - (perShareCents * winners.length);
+	const shares = winners.map((entryId, index) => ({
+		entryId,
+		cents: perShareCents + (index < remainderCents ? 1 : 0),
+	}));
+	return { shares, totalCents, perShareCents, remainderCents };
+}
+
+type ZeroSurvivorResolutionStatus = 'continue' | 'pending' | 'pending_results' | 'winner_candidate' | 'tie_required' | 'confirmed';
+
+export function _getZeroSurvivorWinnerResolution(params: {
+	seasonId: string;
+	weekId: string;
+	weekNum: number;
+	entries: Array<{ id: string; status?: string; season?: string; entryType?: string }>;
+	picks: Array<{ id: string; entry: string; week: string; pickedTeams?: string[] | string | null; isAutoPick?: boolean }>;
+	teamResult: Record<string, 'correct' | 'incorrect' | 'tie'>;
+	poolType?: 'lms' | 'second_half';
+	remainingActiveEntryIds?: string[];
+}): {
+	status: ZeroSurvivorResolutionStatus;
+	reason: string;
+	weekNum: number;
+	seasonId: string;
+	weekId: string;
+	entriesEnteringWeek: number;
+	remainingActiveEntries?: string[];
+	maxCorrectPicks: number;
+	highestRankedEntries: string[];
+	needsAdminConfirmation: boolean;
+} {
+	const {
+		seasonId,
+		weekId,
+		weekNum,
+		entries,
+		picks,
+		teamResult,
+		poolType = 'second_half',
+		remainingActiveEntryIds,
+	} = params;
+
+	const eligibleEntries = entries.filter((entry) =>
+		entry.season === seasonId &&
+		entry.entryType === poolType
+	);
+	const entrants = eligibleEntries.filter((entry) => entry.status === 'active');
+	const remainingActive = new Set((remainingActiveEntryIds ?? []).filter(Boolean));
+	const baselineEligible = remainingActive.size
+		? eligibleEntries.filter((entry) => remainingActive.has(entry.id))
+		: entrants;
+
+	if (entrants.length === 0 && baselineEligible.length === 0) {
+		return {
+			status: 'continue',
+			reason: 'no_active_entries',
+			weekNum,
+			seasonId,
+			weekId,
+			entriesEnteringWeek: baselineEligible.length,
+			maxCorrectPicks: 0,
+			highestRankedEntries: [],
+			needsAdminConfirmation: false,
+		};
+	}
+
+	if (remainingActive.size > 0 && entrants.length === 0 && poolType === 'lms') {
+		return {
+			status: 'tie_required',
+			reason: 'all_remaining_lms_entries_eliminated_same_week',
+			weekNum,
+			seasonId,
+			weekId,
+			entriesEnteringWeek: baselineEligible.length,
+			remainingActiveEntries: [...remainingActive],
+			maxCorrectPicks: 0,
+			highestRankedEntries: baselineEligible.map((entry) => entry.id),
+			needsAdminConfirmation: true,
+		};
+	}
+
+	if (remainingActive.size > 0 && entrants.length === 0 && poolType === 'second_half') {
+		const { counts, unresolved, maxCorrect } = getEntryCorrectPickTotals(baselineEligible, picks, teamResult);
+		const candidates = baselineEligible.filter((entry) => (counts.get(entry.id) ?? 0) === maxCorrect);
+		if (unresolved) {
+			return {
+				status: 'pending_results',
+				reason: 'unresolved_games_for_final_week',
+				weekNum,
+				seasonId,
+				weekId,
+				entriesEnteringWeek: baselineEligible.length,
+				remainingActiveEntries: [...remainingActive],
+				maxCorrectPicks: maxCorrect,
+				highestRankedEntries: candidates.map((entry) => entry.id),
+				needsAdminConfirmation: false,
+			};
+		}
+		if (candidates.length === 1) {
+			return {
+				status: 'winner_candidate',
+				reason: 'single_highest_score',
+				weekNum,
+				seasonId,
+				weekId,
+				entriesEnteringWeek: baselineEligible.length,
+				remainingActiveEntries: [...remainingActive],
+				maxCorrectPicks: maxCorrect,
+				highestRankedEntries: candidates.map((entry) => entry.id),
+				needsAdminConfirmation: true,
+			};
+		}
+		if (candidates.length > 1) {
+			return {
+				status: 'tie_required',
+				reason: 'multiple_entries_tied_for_highest_score',
+				weekNum,
+				seasonId,
+				weekId,
+				entriesEnteringWeek: baselineEligible.length,
+				remainingActiveEntries: [...remainingActive],
+				maxCorrectPicks: maxCorrect,
+				highestRankedEntries: candidates.map((entry) => entry.id),
+				needsAdminConfirmation: true,
+			};
+		}
+	}
+
+	const { counts, unresolved, maxCorrect } = getEntryCorrectPickTotals(entrants, picks, teamResult);
 	const candidates = entrants.filter((entry) => (counts.get(entry.id) ?? 0) === maxCorrect);
 
 	if (unresolved) {
@@ -162,7 +303,7 @@ export function _getZeroSurvivorWinnerResolution(params: {
 			weekNum,
 			seasonId,
 			weekId,
-			entriesEnteringWeek: entrants.length,
+			entriesEnteringWeek: baselineEligible.length || entrants.length,
 			remainingActiveEntries: [...remainingActive],
 			maxCorrectPicks: maxCorrect,
 			highestRankedEntries: candidates.map((entry) => entry.id),
@@ -177,7 +318,22 @@ export function _getZeroSurvivorWinnerResolution(params: {
 			weekNum,
 			seasonId,
 			weekId,
-			entriesEnteringWeek: entrants.length,
+			entriesEnteringWeek: baselineEligible.length || entrants.length,
+			remainingActiveEntries: [...remainingActive],
+			maxCorrectPicks: maxCorrect,
+			highestRankedEntries: [...remainingActive],
+			needsAdminConfirmation: true,
+		};
+	}
+
+	if (remainingActive.size > 1) {
+		return {
+			status: 'tie_required',
+			reason: 'multiple_survivors_after_final_week',
+			weekNum,
+			seasonId,
+			weekId,
+			entriesEnteringWeek: baselineEligible.length || entrants.length,
 			remainingActiveEntries: [...remainingActive],
 			maxCorrectPicks: maxCorrect,
 			highestRankedEntries: [...remainingActive],
@@ -192,7 +348,7 @@ export function _getZeroSurvivorWinnerResolution(params: {
 			weekNum,
 			seasonId,
 			weekId,
-			entriesEnteringWeek: entrants.length,
+			entriesEnteringWeek: baselineEligible.length || entrants.length,
 			remainingActiveEntries: [...remainingActive],
 			maxCorrectPicks: maxCorrect,
 			highestRankedEntries: candidates.map((entry) => entry.id),
@@ -207,7 +363,7 @@ export function _getZeroSurvivorWinnerResolution(params: {
 			weekNum,
 			seasonId,
 			weekId,
-			entriesEnteringWeek: entrants.length,
+			entriesEnteringWeek: baselineEligible.length || entrants.length,
 			remainingActiveEntries: [...remainingActive],
 			maxCorrectPicks: maxCorrect,
 			highestRankedEntries: candidates.map((entry) => entry.id),
@@ -221,7 +377,7 @@ export function _getZeroSurvivorWinnerResolution(params: {
 		weekNum,
 		seasonId,
 		weekId,
-		entriesEnteringWeek: entrants.length,
+		entriesEnteringWeek: baselineEligible.length || entrants.length,
 		remainingActiveEntries: [...remainingActive],
 		maxCorrectPicks: maxCorrect,
 		highestRankedEntries: candidates.map((entry) => entry.id),
@@ -236,10 +392,12 @@ async function persistZeroSurvivorResolution(pb: any, params: {
 	entries: Array<{ id: string; status?: string; season?: string; entryType?: string }>;
 	picks: Array<{ id: string; entry: string; week: string; pickedTeams?: string[] | string | null; isAutoPick?: boolean }>;
 	teamResult: Record<string, 'correct' | 'incorrect' | 'tie'>;
+	poolType?: 'lms' | 'second_half';
 }) {
+	const poolType = params.poolType ?? 'second_half';
 	const resolution = _getZeroSurvivorWinnerResolution({
 		...params,
-		poolType: 'second_half',
+		poolType,
 		remainingActiveEntryIds: params.entries.filter((entry) => entry.status === 'active').map((entry) => entry.id),
 	});
 
@@ -255,12 +413,15 @@ async function persistZeroSurvivorResolution(pb: any, params: {
 	for (const entry of params.entries) {
 		if (!winnerIds.has(entry.id)) continue;
 		if (entry.status === 'winner') continue;
+		const reason = resolution.reason === 'all_remaining_lms_entries_eliminated_same_week'
+			? 'All remaining entries were eliminated in the same week — equal split award pending confirmation'
+			: resolution.status === 'tie_required'
+				? 'Zero-survivor tie candidate pending admin resolution'
+				: 'Zero-survivor winner candidate pending admin confirmation';
 		await pb.collection('entries').update(entry.id, {
 			status: 'winner',
 			eliminatedWeek: null,
-			eliminatedReason: resolution.status === 'tie_required'
-				? 'Zero-survivor tie candidate pending admin resolution'
-				: 'Zero-survivor winner candidate pending admin confirmation'
+			eliminatedReason: reason,
 		}).catch(() => {});
 	}
 
@@ -406,18 +567,36 @@ export const actions: Actions = {
 		const weekId = String(data.get('weekId') ?? '').trim();
 		const winnerEntryId = String(data.get('winnerEntryId') ?? '').trim();
 		const tieResolution = String(data.get('tieResolution') ?? '').trim();
+		const poolType = String(data.get('poolType') ?? 'second_half').trim() as 'lms' | 'second_half';
 		if (!seasonId || !weekId) return fail(400, { error: 'Season and week are required.' });
 
+		const finalGuard = await validateFinalizedResultsBeforeConfirmation(pb, weekId, seasonId, poolType);
+		if (finalGuard) return finalGuard;
+
 		const candidateEntries = await pb.collection('entries').getFullList({
-			filter: `season = "${seasonId}" && entryType = "second_half" && status = "winner"`,
+			filter: `season = "${seasonId}" && entryType = "${poolType}" && status = "winner"`,
 		}).catch(() => []) as any[];
 
 		if (!candidateEntries.length) {
-			return fail(400, { error: 'No zero-survivor winner candidate is pending confirmation.' });
+			return fail(400, { error: `No ${poolType === 'lms' ? 'LMS' : 'Second Half'} zero-survivor winner candidate is pending confirmation.` });
 		}
 
 		const confirmed = winnerEntryId ? candidateEntries.filter((entry) => entry.id === winnerEntryId) : candidateEntries;
 		if (!confirmed.length) return fail(400, { error: 'Selected winner entry is not eligible.' });
+
+		if (candidateEntries.length > 0 && candidateEntries.every((entry) => entry.status === 'winner')) {
+			return {
+				success: true,
+				winnerEntryId: winnerEntryId || candidateEntries[0]?.id || null,
+				winnerResolution: {
+					seasonId,
+					weekId,
+					status: winnerEntryId ? 'confirmed' : 'tie_required',
+					confirmedWinner: winnerEntryId || candidateEntries[0]?.id || null,
+					needsAdminConfirmation: false,
+				},
+			};
+		}
 
 		for (const entry of candidateEntries) {
 			const isConfirmed = winnerEntryId ? entry.id === winnerEntryId : !!tieResolution || candidateEntries.length === 1;
@@ -470,7 +649,7 @@ export const actions: Actions = {
 	 * standings update live, but leaves week status as 'locked'.
 	 */
 	recordResults: async ({ request }) => {
-		let pb;
+		let pb: any;
 		try {
 			pb = await pbAdmin();
 		} catch (error) {
@@ -524,14 +703,20 @@ export const actions: Actions = {
 			}) ?? Promise.resolve([]))
 				.catch(() => []) as any[]
 			: [];
-		const shEntrantIdsBefore = shEntrySnapshot.map((entry: any) => entry.id);
+			const lmsEntrySnapshot = lmsSeasonId && lmsWeekId
+				? await (pb.collection('entries')?.getFullList?.({
+					filter: `season = "${lmsSeasonId}" && entryType = "lms" && status = "active"`
+				}) ?? Promise.resolve([]))
+					.catch(() => []) as any[]
+			: [];
+			const shEntrantIdsBefore = shEntrySnapshot.map((entry: any) => entry.id);
 		const games = await pb.collection('game_odds').getFullList({
 			filter: `season = "${anchorSeasonId}" && week = ${weekNum}`,
 			expand: 'homeTeam,awayTeam'
 		}).catch(() => []) as any[];
 
 		// Build teamId → result map from entered outcomes
-		const teamResult: Record<string, 'correct' | 'incorrect'> = {};
+		const teamResult: Record<string, 'correct' | 'incorrect' | 'tie'> = {};
 		for (const game of games) {
 			const outcome = outcomes[game.id];
 			if (!outcome) continue;
@@ -558,7 +743,7 @@ export const actions: Actions = {
 			weekNum: null as number | null,
 			entries: [] as any[],
 			picks: [] as any[],
-			status: 'pending' as 'pending' | 'winner_candidate' | 'tie_required' | 'confirmed' | 'continue',
+			status: 'pending' as 'pending' | 'pending_results' | 'winner_candidate' | 'tie_required' | 'confirmed' | 'continue',
 			maxCorrectPicks: 0,
 			highestRankedEntries: [] as string[],
 			needsAdminConfirmation: false,
@@ -686,8 +871,53 @@ export const actions: Actions = {
 						entries: shEntrySnapshot,
 						picks: allWeekPicks,
 						teamResult,
+						poolType: 'second_half',
 					});
 				}
+			}
+		}
+
+		if (lmsWeekId && lmsSeasonId) {
+			const remainingActiveIds = lmsEntrySnapshot.map((entry: any) => entry.id);
+			const allWeekPicks = (await pb.collection('picks').getFullList({
+				filter: `week = "${lmsWeekId}"`,
+				expand: 'entry'
+			}).catch(() => []) as any[]).map((pick: any) => ({
+				id: pick.id,
+				entry: pick.entry,
+				week: pick.week,
+				pickedTeams: pick.pickedTeams,
+				isAutoPick: pick.isAutoPick,
+			}));
+			const zeroSurvivor = _getZeroSurvivorWinnerResolution({
+				seasonId: lmsSeasonId,
+				weekId: lmsWeekId,
+				weekNum,
+				entries: lmsEntrySnapshot,
+				picks: allWeekPicks,
+				teamResult,
+				poolType: 'lms',
+				remainingActiveEntryIds: remainingActiveIds,
+			});
+			if (zeroSurvivor.status !== 'continue' && (zeroSurvivor.status === 'tie_required' || zeroSurvivor.status === 'winner_candidate')) {
+				zeroSurvivorResolution.status = zeroSurvivor.status;
+				zeroSurvivorResolution.weekId = lmsWeekId;
+				zeroSurvivorResolution.seasonId = lmsSeasonId;
+				zeroSurvivorResolution.weekNum = weekNum;
+				zeroSurvivorResolution.entries = lmsEntrySnapshot;
+				zeroSurvivorResolution.picks = allWeekPicks;
+				zeroSurvivorResolution.maxCorrectPicks = zeroSurvivor.maxCorrectPicks;
+				zeroSurvivorResolution.highestRankedEntries = zeroSurvivor.highestRankedEntries;
+				zeroSurvivorResolution.needsAdminConfirmation = zeroSurvivor.needsAdminConfirmation;
+				await persistZeroSurvivorResolution(pb, {
+					seasonId: lmsSeasonId,
+					weekId: lmsWeekId,
+					weekNum,
+					entries: lmsEntrySnapshot,
+					picks: allWeekPicks,
+					teamResult,
+					poolType: 'lms',
+				});
 			}
 		}
 

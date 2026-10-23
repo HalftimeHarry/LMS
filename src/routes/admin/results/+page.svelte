@@ -331,7 +331,7 @@
 					<input type="hidden" name="winnerEntryId" value={z.highestRankedEntries[0]} />
 				{/if}
 				{#if z.highestRankedEntries?.length > 1}
-					<input type="hidden" name="tieResolution" value="Pending approved tiebreaker" />
+					<input type="hidden" name="tieResolution" value="Split equally among tied highest-scoring entries" />
 				{/if}
 				<button type="submit" class="rounded border border-amber-500 bg-amber-900/60 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-900">
 					{z.status === 'tie_required' ? 'Mark tie for review' : 'Confirm winner candidate'}

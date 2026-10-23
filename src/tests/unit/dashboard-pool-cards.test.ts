@@ -50,10 +50,67 @@ describe('DashboardProvider', () => {
 			shStartWeek: 6
 		});
 
-		expect(card.registrationLabel).toBe('Registration closed');
+		expect(card.registrationLabel).toBe('Season registration closed');
 		expect(card.registrationLive).toBe(false);
 		expect(card.picksLive).toBe(true);
 		expect(card.footerMessage).toContain('LMS registration is closed');
+	});
+
+	it('keeps the permanently closed registration state separate from the weekly pick state', () => {
+		const card = DashboardProvider.buildPoolCardViewModel({
+			type: 'lms',
+			season: { id: 'season-1', status: 'closed', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			currentWeek: {
+				week: 8,
+				status: 'open',
+				entryDeadline: null,
+				pickDeadline: '2026-10-22T23:45:00.000Z'
+			},
+			week6Week: null,
+			now: new Date('2026-10-20T00:00:00.000Z').getTime(),
+			entries: [],
+			myEntryCount: 0,
+			userHasEntry: false,
+			shStartWeek: 6
+		});
+
+		expect(card.registrationClosed).toBe(true);
+		expect(card.registrationLabel).toBe('Season registration closed');
+		expect(card.registrationLive).toBe(false);
+		expect(card.picksLabel).toBe('Picks open');
+		expect(card.picksLive).toBe(true);
+		expect(card.entryDeadline).toBeNull();
+	});
+
+	it('keeps Second Half registration closed after the cutoff while current week picks stay open', () => {
+		const card = DashboardProvider.buildPoolCardViewModel({
+			type: 'second_half',
+			season: { id: 'season-1', status: 'active', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			currentWeek: {
+				week: 8,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:35:00.000Z',
+				pickDeadline: '2026-10-22T23:45:00.000Z'
+			},
+			week6Week: {
+				week: 6,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:35:00.000Z',
+				pickDeadline: '2026-10-15T20:45:00.000Z'
+			},
+			now: new Date('2026-10-20T00:00:00.000Z').getTime(),
+			entries: [],
+			myEntryCount: 0,
+			userHasEntry: false,
+			shStartWeek: 6
+		});
+
+		expect(card.registrationClosed).toBe(true);
+		expect(card.registrationLabel).toBe('Registration closed');
+		expect(card.registrationLive).toBe(false);
+		expect(card.picksLabel).toBe('Picks open');
+		expect(card.picksLive).toBe(true);
+		expect(card.entryDeadline).toBeNull();
 	});
 
 	it('builds Second Half card state before Week 6 as registration-only', () => {
@@ -83,6 +140,57 @@ describe('DashboardProvider', () => {
 		expect(card.picksLabel).toBe('Picks pending');
 		expect(card.picksLive).toBe(false);
 		expect(card.footerMessage).toContain('Registration is open');
+	});
+
+	it('keeps both pool cards aligned to the Week 7 kickoff-derived deadline before and at cutoff', () => {
+		const firstKickoffIso = '2026-10-23T00:15:00.000Z';
+		const expectedDeadlineIso = new Date(new Date(firstKickoffIso).getTime() - (30 * 60 * 1000)).toISOString();
+
+		const buildCard = (type: 'lms' | 'second_half', now: number) => DashboardProvider.buildPoolCardViewModel({
+			type,
+			season: { id: 'season-1', status: 'active', secondHalfEnabled: true, secondHalfStartWeek: 6 },
+			currentWeek: {
+				week: 7,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:40:00.000Z',
+				pickDeadline: expectedDeadlineIso
+			},
+			week6Week: {
+				week: 6,
+				status: 'open',
+				entryDeadline: '2026-10-15T20:35:00.000Z',
+				pickDeadline: '2026-10-15T23:45:00.000Z'
+			},
+			now,
+			entries: [],
+			myEntryCount: 0,
+			userHasEntry: false,
+			shStartWeek: 6
+		});
+
+		const beforeDeadlineLms = buildCard('lms', new Date(expectedDeadlineIso).getTime() - 1000);
+		const beforeDeadlineSh = buildCard('second_half', new Date(expectedDeadlineIso).getTime() - 1000);
+		const atDeadlineLms = buildCard('lms', new Date(expectedDeadlineIso).getTime());
+		const atDeadlineSh = buildCard('second_half', new Date(expectedDeadlineIso).getTime());
+
+		for (const card of [beforeDeadlineLms, beforeDeadlineSh]) {
+			expect(card.weekLabel).toBe('Week 7');
+			expect(card.pickDeadline).toBe(expectedDeadlineIso);
+			expect(card.picksLive).toBe(true);
+			expect(card.picksLabel).toBe('Picks open');
+			expect(card.registrationLabel).toBe(card.type === 'lms' ? 'Season registration closed' : 'Registration closed');
+			expect(formatCountdownDisplay(card.picksDiffMs, card.picksLive)).not.toBe('—');
+		}
+
+		for (const card of [atDeadlineLms, atDeadlineSh]) {
+			expect(card.weekLabel).toBe('Week 7');
+			expect(card.pickDeadline).toBe(expectedDeadlineIso);
+			expect(card.picksLive).toBe(false);
+			expect(card.picksDeadlinePassed).toBe(true);
+			expect(card.picksLabel).toBe('Pick deadline closed');
+			expect(card.registrationLabel).toBe(card.type === 'lms' ? 'Season registration closed' : 'Registration closed');
+			expect(formatCountdownDisplay(card.picksDiffMs, card.picksLive)).toBe('—');
+		}
 	});
 
 	it('uses a placeholder value when a countdown is not active', () => {

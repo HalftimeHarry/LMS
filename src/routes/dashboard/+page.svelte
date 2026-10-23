@@ -17,6 +17,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { createDashboardController } from '$lib/controllers';
+	import { getEstimatedShareDisplay } from '$lib/payoutEstimate';
+	import { SeasonProvider } from '$lib/providers';
 	import { resolveCardCountdownDisplay } from '$lib/utils';
 
 	let { data }: { data: PageData } = $props();
@@ -157,6 +159,37 @@
 
 	const pickView = $derived((data as any).pickView as 'entries' | 'standings');
 
+	const missingPickNotices = $derived((() => {
+		if (!selectedGroup) return [] as Array<{ week: number; count: number; entry: any; href: string; pool: 'lms' | 'second_half' }>;
+
+		const notices: Array<{ week: number; count: number; entry: any; href: string; pool: 'lms' | 'second_half' }> = [];
+		const season = selectedGroup.season;
+		const seasonId = season.id;
+		const lmsWeek = currentWeekBySeason[seasonId] ?? null;
+		const shWeek = currentWeekSHBySeason[seasonId] ?? null;
+		const maybeAddMissing = (entries: any[], week: any | null, pool: 'lms' | 'second_half') => {
+			if (!week || week.status !== 'open') return;
+			const required = pool === 'lms' ? 1 : SeasonProvider.secondHalfPicksForWeek(season, week.week);
+			for (const entry of entries) {
+				if (entry.status !== 'active') continue;
+				const pickedTeams = pickByEntry[entry.id]?.expand?.pickedTeams ?? [];
+				const missing = Math.max(0, required - (pickedTeams.length ?? 0));
+				if (missing > 0) {
+					notices.push({
+						week: week.week,
+						count: missing,
+						entry,
+						href: pickLink(entry),
+						pool,
+					});
+				}
+			}
+		};
+		maybeAddMissing(selectedGroup.entries.filter((e: any) => e.entryType === 'lms'), lmsWeek, 'lms');
+		maybeAddMissing(selectedGroup.entries.filter((e: any) => e.entryType === 'second_half'), shWeek, 'second_half');
+		return notices;
+	})());
+
 	const dashboardCards = $derived(
 		createDashboardController({
 			seasonGroups,
@@ -204,6 +237,18 @@
 
 	function fmtDeadline(iso: string | null | undefined): string {
 		return formatDeadlineLong(iso);
+	}
+
+	const usdFormatter = new Intl.NumberFormat('en-US', {
+		style: 'currency',
+		currency: 'USD',
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	});
+
+	function formatCurrency(value: number | null | undefined): string {
+		if (value == null || !Number.isFinite(value)) return '—';
+		return usdFormatter.format(value);
 	}
 </script>
 
@@ -260,6 +305,23 @@
 	{@const myShAlive    = myShEntries.filter((e: any)  => e.status === 'active').length}
 	{@const myLmsOut     = myLmsEntries.filter((e: any) => e.status === 'eliminated').length}
 	{@const myShOut      = myShEntries.filter((e: any)  => e.status === 'eliminated').length}
+	{@const lmsEstimate  = getEstimatedShareDisplay({ pot: lms.pot, totalAliveEntries: lms.active, userAliveEntries: myLmsAlive, currencyFormatter: formatCurrency })}
+	{@const shEstimate   = getEstimatedShareDisplay({ pot: sh.pot, totalAliveEntries: sh.active, userAliveEntries: myShAlive, currencyFormatter: formatCurrency })}
+
+	{#if missingPickNotices.length > 0}
+		<div class="border-t border-gray-800 px-5 pb-4 pt-5">
+			<div class="rounded-lg border border-red-900/60 bg-red-950/20 p-3 text-sm text-red-200">
+				<div class="flex flex-col gap-2">
+					{#each missingPickNotices as notice}
+						<a href={notice.href} class="inline-flex items-center justify-between gap-3 rounded border border-red-900/50 bg-black/20 px-2.5 py-2 transition hover:border-red-700 hover:bg-red-950/30">
+							<span class="font-semibold text-red-100">{notice.count} pick{notice.count === 1 ? '' : 's'} needed for Week {notice.week}</span>
+							<span class="text-xs text-red-300">{notice.entry.entryName}</span>
+						</a>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<div class="border-t border-gray-800 p-5">
 		<div class="flex flex-col gap-6">
@@ -273,39 +335,78 @@
 			</div>
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
 				<!-- Still alive -->
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="8"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-green-400">{lms.active}</div>
 					<div class="mt-1 text-xs text-gray-300">Still Alive</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">across all players</div>
 				</div>
 				<!-- Eliminated -->
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-[radial-gradient(circle_at_top,_rgba(239,68,68,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-red-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-red-400">{lms.eliminated}</div>
 					<div class="mt-1 text-xs text-gray-300">Eliminated</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">knocked out so far</div>
 				</div>
 				<!-- Total -->
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-400/30 bg-slate-400/10 text-slate-200">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M5 19V5M12 19V9M19 19v-7"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-white">{lms.total}</div>
 					<div class="mt-1 text-xs text-gray-300">Total Entries</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">in the LMS pool</div>
 				</div>
 				<!-- Pot -->
-				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-[rgba(201,168,76,0.3)] bg-[radial-gradient(circle_at_top,_rgba(201,168,76,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10 text-[#f1d27a]">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M12 2v20M17 5.5A4.5 4.5 0 0 0 12 3a4.5 4.5 0 0 0-5 4.5c0 2.5 2 3.5 5 4.5s5 2 5 4.5A4.5 4.5 0 0 1 12 21a4.5 4.5 0 0 1-5-4.5"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-[#c9a84c]">${lms.pot.toLocaleString()}</div>
 					<div class="mt-1 text-xs text-gray-300">Prize Pot</div>
 					{#if lmsMaintFee > 0}
 						<div class="mt-0.5 text-[10px] text-gray-400">${(lms.pot + lmsMaintFee).toLocaleString()} gross − ${lmsMaintFee.toLocaleString()} maintenance fee</div>
 					{/if}
 					<div class="mt-0.5 text-[10px] text-gray-400">{lms.paid ?? 0} paid · {lms.free ?? 0} free</div>
-					
 				</div>
 				<!-- My entries -->
-				<div class="rounded-xl border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.05)] p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-[rgba(201,168,76,0.4)] bg-[radial-gradient(circle_at_top,_rgba(201,168,76,0.11),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-[#c9a84c]/30 bg-[#c9a84c]/10 text-[#f1d27a]">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M7 12h10M12 7v10"/><circle cx="12" cy="12" r="9"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-[#c9a84c]">{myLmsAlive}<span class="text-sm text-gray-400">/{myLmsEntries.length}</span></div>
 					<div class="mt-1 text-xs text-gray-300">My Entries Alive</div>
 					<div class="mt-0.5 text-[10px] {myLmsOut > 0 ? 'text-red-500' : 'text-gray-400'}">
 						{myLmsOut > 0 ? `${myLmsOut} eliminated` : 'none eliminated'}
+					</div>
+					<div class="mt-2 text-[10px] text-gray-300">
+						{#if lmsEstimate.kind === 'single_entry'}
+							<div class="text-[10px] text-gray-300">Estimated equal-split share</div>
+							<div class="mt-1 text-sm font-semibold text-[#c9a84c]">{lmsEstimate.value}</div>
+						{:else if lmsEstimate.kind === 'multi_entry'}
+							<div class="text-[10px] text-gray-300">{lmsEstimate.display}</div>
+						{:else if lmsEstimate.kind === 'no_alive_entries'}
+							<div class="text-[10px] text-gray-300">No alive entries</div>
+						{:else if lmsEstimate.kind === 'pending'}
+							<div class="text-[10px] text-gray-300">Settlement pending.</div>
+						{:else if lmsEstimate.kind === 'unavailable'}
+							<div class="text-[10px] text-gray-300">Estimate unavailable.</div>
+						{/if}
+						<div class="mt-1 text-[10px] text-gray-400">Prize pot ÷ remaining entries. Not a guaranteed payout.</div>
 					</div>
 				</div>
 			</div>
@@ -320,31 +421,91 @@
 				<div class="h-px flex-1 bg-blue-900/30"></div>
 			</div>
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-blue-900/40 bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="8"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-green-400">{sh.active}</div>
 					<div class="mt-1 text-xs text-gray-300">Still Alive</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">across all players</div>
 				</div>
-				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-blue-900/40 bg-[radial-gradient(circle_at_top,_rgba(239,68,68,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-red-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-red-400">{sh.eliminated}</div>
 					<div class="mt-1 text-xs text-gray-300">Eliminated</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">knocked out so far</div>
 				</div>
-				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-blue-900/40 bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-400/30 bg-slate-400/10 text-slate-200">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M5 19V5M12 19V9M19 19v-7"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-white">{sh.total}</div>
 					<div class="mt-1 text-xs text-gray-300">Total Entries</div>
 					<div class="mt-0.5 text-[10px] text-gray-400">in the 2H pool</div>
 				</div>
-				<div class="rounded-xl border border-blue-900/40 bg-black/75 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-blue-900/40 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M12 2v20M17 5.5A4.5 4.5 0 0 0 12 3a4.5 4.5 0 0 0-5 4.5c0 2.5 2 3.5 5 4.5s5 2 5 4.5A4.5 4.5 0 0 1 12 21a4.5 4.5 0 0 1-5-4.5"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-[#c9a84c]">${sh.pot.toLocaleString()}</div>
 					<div class="mt-1 text-xs text-gray-300">Prize Pot</div>
-					
+					{#if typeof sh.pot === 'number'}
+						<div class="mt-0.5 text-[10px] text-gray-400">
+							{#if typeof sh.gross === 'number'}
+								${sh.gross.toLocaleString()} gross
+								{#if sh.pot < sh.gross}
+									− ${Math.max(0, sh.gross - sh.pot).toLocaleString()} maintenance fee
+								{/if}
+							{:else}
+								Gross revenue unavailable.
+							{/if}
+						</div>
+						<div class="mt-0.5 text-[10px] text-gray-400">
+							{#if typeof sh.paid === 'number' && typeof sh.free === 'number'}
+								{sh.paid} paid · {sh.free} free
+							{:else}
+								Paid/free counts unavailable: missing non-free paid count and free count.
+							{/if}
+						</div>
+					{:else}
+						<div class="mt-0.5 text-[10px] text-gray-400">Second Half breakdown unavailable: missing pot data.</div>
+					{/if}
 				</div>
-				<div class="rounded-xl border border-blue-700/40 bg-blue-950/10 p-4 text-center backdrop-blur-sm">
+				<div class="rounded-xl border border-blue-700/40 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.10),_transparent_58%)] p-4 text-center backdrop-blur-sm">
+					<div class="mb-2 flex justify-center">
+						<div class="flex h-8 w-8 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300">
+							<svg viewBox="0 0 24 24" class="h-4 w-4 fill-none stroke-current stroke-[2]" aria-hidden="true"><path d="M7 12h10M12 7v10"/><circle cx="12" cy="12" r="9"/></svg>
+						</div>
+					</div>
 					<div class="text-2xl font-bold text-blue-400">{myShAlive}<span class="text-sm text-gray-400">/{myShEntries.length}</span></div>
 					<div class="mt-1 text-xs text-gray-300">My Entries Alive</div>
 					<div class="mt-0.5 text-[10px] {myShOut > 0 ? 'text-red-500' : 'text-gray-400'}">
 						{myShOut > 0 ? `${myShOut} eliminated` : 'none eliminated'}
+					</div>
+					<div class="mt-2 text-[10px] text-gray-300">
+						{#if shEstimate.kind === 'single_entry'}
+							<div class="text-[10px] text-gray-300">Estimated equal-split share</div>
+							<div class="mt-1 text-sm font-semibold text-[#c9a84c]">{shEstimate.value}</div>
+						{:else if shEstimate.kind === 'multi_entry'}
+							<div class="text-[10px] text-gray-300">{shEstimate.display}</div>
+						{:else if shEstimate.kind === 'no_alive_entries'}
+							<div class="text-[10px] text-gray-300">No alive entries</div>
+						{:else if shEstimate.kind === 'pending'}
+							<div class="text-[10px] text-gray-300">Settlement pending.</div>
+						{:else if shEstimate.kind === 'unavailable'}
+							<div class="text-[10px] text-gray-300">Estimate unavailable.</div>
+						{/if}
+						<div class="mt-1 text-[10px] text-gray-400">Prize pot ÷ remaining entries. Not a guaranteed payout.</div>
 					</div>
 				</div>
 			</div>
@@ -369,6 +530,7 @@
 			entryDeadlineLabel={lmsCard.entryDeadline ? fmtDeadline(lmsCard.entryDeadline) : 'TBD'}
 			pickDeadlineLabel={lmsCard.pickDeadline ? fmtDeadline(lmsCard.pickDeadline) : 'TBD'}
 			registrationLabel={lmsCard.registrationLabel}
+			registrationClosed={lmsCard.registrationClosed}
 			picksLabel={lmsCard.picksLabel}
 			registrationCountdown={formatCountdown(lmsCard.registrationDiffMs, lmsCard.registrationLive)}
 			picksCountdown={formatCountdown(lmsCard.picksDiffMs, lmsCard.picksLive)}
@@ -390,6 +552,7 @@
 			entryDeadlineLabel={shCard.entryDeadline ? fmtDeadline(shCard.entryDeadline) : 'TBD'}
 			pickDeadlineLabel={shCard.pickDeadline ? fmtDeadline(shCard.pickDeadline) : 'TBD'}
 			registrationLabel={shCard.registrationLabel}
+			registrationClosed={shCard.registrationClosed}
 			picksLabel={shCard.picksLabel}
 			registrationCountdown={formatCountdown(shCard.registrationDiffMs, shCard.registrationLive)}
 			picksCountdown={resolveCardCountdownDisplay({
@@ -577,15 +740,15 @@
 												{#if entry.paid}<span class="text-xs text-green-400">✅ Paid</span>{:else}<span class="text-xs text-gray-500">Payment pending</span>{/if}
 												<span class="rounded border px-2 py-0.5 text-xs font-medium {statusColors[entry.status] ?? ''}">{entry.status.replace('_',' ')}</span>
 												{#if entry.status === 'active'}
-													<span class="text-xs text-gray-500">{NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)} left</span>
+													<span class="text-xs text-gray-500">{NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)} teams available</span>
 												{/if}
 												{#if entry.status === 'active' && currentWeek}
 													{#if pick}
 														{@const teams = pick.expand?.pickedTeams ?? []}
 														<span class="flex items-center gap-1 rounded border px-2 py-0.5 text-xs
 															{isPending ? 'border-yellow-800 bg-yellow-950/60 text-yellow-400' : 'border-gray-700 text-gray-400'}">
-															{isPending ? 'Pending' : 'Locked'} —
-															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt={t.abbreviation} class="h-4 w-4 object-contain" /><span>{t.abbreviation}</span>{/each}
+															{isPending ? 'Result pending' : 'Locked'} —
+															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt="" aria-hidden="true" class="h-4 w-4 object-contain" /><span class="text-[11px] text-gray-200">{t.name ?? t.abbreviation}</span>{/each}
 															<span class="text-red-400">to lose</span>
 														</span>
 														{#if isPending}<span class="standings-pulse rounded border border-[rgba(201,168,76,0.4)] bg-[rgba(201,168,76,0.08)] px-2 py-0.5 text-xs font-semibold text-[#c9a84c]">Update →</span>{/if}
@@ -655,15 +818,15 @@
 												{#if entry.paid}<span class="text-xs text-green-400">✅ Paid</span>{:else}<span class="text-xs text-gray-500">Payment pending</span>{/if}
 												<span class="rounded border px-2 py-0.5 text-xs font-medium {statusColors[entry.status] ?? ''}">{entry.status.replace('_',' ')}</span>
 												{#if entry.status === 'active'}
-													<span class="text-xs text-gray-500">{NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)} left</span>
+													<span class="text-xs text-gray-500">{NFL_TEAMS - (usedTeamCountByEntry[entry.id] ?? 0)} teams available</span>
 												{/if}
 												{#if entry.status === 'active' && currentWeekSH}
 													{#if pick}
 														{@const teams = pick.expand?.pickedTeams ?? []}
 														<span class="flex items-center gap-1 rounded border px-2 py-0.5 text-xs
 															{isPending ? 'border-yellow-800 bg-yellow-950/60 text-yellow-400' : 'border-gray-700 text-gray-400'}">
-															{isPending ? 'Pending' : 'Locked'} —
-															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt={t.abbreviation} class="h-4 w-4 object-contain" /><span>{t.abbreviation}</span>{/each}
+															{isPending ? 'Result pending' : 'Locked'} —
+															{#each teams as t}<img src={teamLogoUrl(t.abbreviation)} alt="" aria-hidden="true" class="h-4 w-4 object-contain" /><span class="text-[11px] text-gray-200">{t.name ?? t.abbreviation}</span>{/each}
 															<span class="text-green-400">to win</span>
 														</span>
 														{#if isPending}<span class="standings-pulse rounded border border-blue-700 bg-blue-950/40 px-2 py-0.5 text-xs font-semibold text-blue-400">Update →</span>{/if}
