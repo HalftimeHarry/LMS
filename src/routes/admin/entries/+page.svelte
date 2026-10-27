@@ -15,10 +15,10 @@
 		return () => clearInterval(id);
 	});
 
-	const ctrl = createEntriesController(data.entries as any[]);
+	let ctrl: ReturnType<typeof createEntriesController> = $state(createEntriesController([] as any[]));
 	// Keep controller in sync when page data reloads after form actions or URL filter changes
 	$effect(() => {
-		ctrl.setEntries(data.entries as any[]);
+		ctrl.setEntries((data.entries as any[]) ?? []);
 		// Server already filters by status — keep controller's statusFilter in sync
 		// so the client-side derived doesn't double-filter and hide results
 		ctrl.statusFilter = (data.statusFilter ?? 'all') as any;
@@ -84,11 +84,6 @@
 	}
 	function nextStep() { modalStep = Math.min(modalStep + 1, 3); }
 	function prevStep() { modalStep = Math.max(modalStep - 1, 1); }
-
-	// Step 1 valid when a player is selected
-	const step1Valid = $derived(!!selectedUserId);
-	// Step 2 valid when season + baseName filled
-	const step2Valid = $derived(!!selectedSeasonId && baseName.trim().length >= 2);
 
 	// --- Player search ---
 	let playerSearch   = $state('');
@@ -157,6 +152,19 @@
 				? `${selectedUser.displayName} 2nd Half`
 				: `${selectedUser.displayName} LMS`;
 		}
+	});
+
+	// Step 1 valid when a player is selected
+	const step1Valid = $derived(!!selectedUserId);
+	// Step 2 valid when season + baseName filled
+	const step2Valid = $derived(!!selectedSeasonId && baseName.trim().length >= 2);
+
+	// Local filter state — kept in sync with URL params so selects reflect current state
+	let filterStatus   = $state('all');
+	let filterPoolType = $state('all');
+	$effect(() => {
+		filterStatus   = data.statusFilter ?? 'all';
+		filterPoolType = data.poolType     ?? 'all';
 	});
 
 	// Client-side search and pool type filter delegated to controller
@@ -282,8 +290,8 @@
 			});
 		}
 	});
-	let maintFeeInput     = $state(String(maintFee));
-	$effect(() => { maintFeeInput = String(maintFee); });
+	let maintFeeInput     = $state('');
+	$effect(() => { maintFeeInput = String(activeSeason?.maintenanceFee ?? 0); });
 	const paidCount       = $derived(poolEntries.filter((e: any) => e.paid).length);
 	const freeCount       = $derived(poolEntries.filter((e: any) => e.paymentMethod === 'free').length);
 	const pendingCount    = $derived(poolEntries.filter((e: any) => e.status === 'pending_payment').length);
@@ -292,14 +300,6 @@
 	const registeredCount = $derived(new Set(poolEntries.map((e: any) => e.user)).size);
 
 	let statsOpen = $state(true);
-
-	// Local filter state — kept in sync with URL params so selects reflect current state
-	let filterStatus   = $state(data.statusFilter ?? 'all');
-	let filterPoolType = $state(data.poolType     ?? 'all');
-	$effect(() => {
-		filterStatus   = data.statusFilter ?? 'all';
-		filterPoolType = data.poolType     ?? 'all';
-	});
 
 	function updateFilter(key: string, value: string) {
 		const params = new URLSearchParams($page.url.searchParams);
@@ -681,8 +681,8 @@
 
 			<!-- Season -->
 			<div class="flex flex-col gap-1.5">
-				<label class="text-xs font-medium text-gray-400">Season</label>
-				<select bind:value={selectedSeasonId}
+				<label for="entry-season" class="text-xs font-medium text-gray-400">Season</label>
+				<select id="entry-season" bind:value={selectedSeasonId}
 					class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none">
 					{#each data.seasons as s}
 						<option value={s.id}>{s.name}</option>
@@ -727,22 +727,22 @@
 			<!-- Count + base name side by side -->
 			<div class="grid grid-cols-2 gap-3">
 				<div class="flex flex-col gap-1.5">
-					<label class="text-xs font-medium text-gray-400">Number of entries</label>
-					<input type="number" min="1" max="20" bind:value={entryCount}
+					<label for="entry-count" class="text-xs font-medium text-gray-400">Number of entries</label>
+					<input id="entry-count" type="number" min="1" max="20" bind:value={entryCount}
 						class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white focus:border-[#c9a84c] focus:outline-none" />
 					<p class="text-xs text-gray-600">Max 20. Suffix added when &gt; 1.</p>
 				</div>
 				<div class="flex flex-col gap-1.5">
-					<label class="text-xs font-medium text-gray-400">Entry base name</label>
-					<input type="text" bind:value={baseName} placeholder="e.g. Dustin Entry"
+					<label for="entry-base-name" class="text-xs font-medium text-gray-400">Entry base name</label>
+					<input id="entry-base-name" type="text" bind:value={baseName} placeholder="e.g. Dustin Entry"
 						class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 				</div>
 			</div>
 
 			<!-- Referred by -->
 			<div class="flex flex-col gap-1.5">
-				<label class="text-xs font-medium text-gray-400">Referred by <span class="text-gray-600">(optional)</span></label>
-				<input type="text" bind:value={referredBy} placeholder="Referring player's name"
+				<label for="entry-referrer" class="text-xs font-medium text-gray-400">Referred by <span class="text-gray-600">(optional)</span></label>
+				<input id="entry-referrer" type="text" bind:value={referredBy} placeholder="Referring player's name"
 					class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-[#c9a84c] focus:outline-none" />
 			</div>
 

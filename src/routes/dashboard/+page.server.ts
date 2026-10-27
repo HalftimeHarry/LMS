@@ -90,8 +90,8 @@ export const load: PageServerLoad = async ({ locals, url, depends, cookies }) =>
 	const currentWeekBySeason: Record<string, any> = {};
 	const now = new Date();
 
-	const derivedDeadlineCache = new Map<string, { pick: string | null; entry: string | null }>();
-	const getDerivedDeadlinePair = async (seasonId: string, weekNum: number): Promise<{ pick: string | null; entry: string | null }> => {
+	const derivedDeadlineCache = new Map<string, { pickDeadline: string | null; entryDeadline: string | null }>();
+	const getDerivedDeadlinePair = async (seasonId: string, weekNum: number): Promise<{ pickDeadline: string | null; entryDeadline: string | null }> => {
 		const key = `${seasonId}:${weekNum}`;
 		if (derivedDeadlineCache.has(key)) return derivedDeadlineCache.get(key)!;
 
