@@ -11,9 +11,9 @@ export interface Week {
 	deadline:               string;
 	status:                 WeekStatus;
 	biggestFavoriteTeam:    string | null;
-	notes:                  string | null;
+	notes?:                 string | null;
 	// null = use season default; explicit value overrides for this week only
-	secondHalfPicksPerWeek: number | null;
+	secondHalfPicksPerWeek?: number | null;
 	expand?: {
 		biggestFavoriteTeam?: { id: string; abbreviation: string; name: string; city: string };
 	};

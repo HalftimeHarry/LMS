@@ -1,7 +1,7 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, type Cookies } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-const clearDevAuth = (cookies: { delete: (name: string, options?: { path?: string }) => void; set: (name: string, value: string, options?: { path?: string; httpOnly?: boolean }) => void }) => {
+const clearDevAuth = (cookies: Cookies) => {
 	cookies.delete('pb_auth', { path: '/' });
 	cookies.set('dev_bypass', 'disabled', { path: '/', httpOnly: true });
 };

@@ -14,9 +14,9 @@ function makeLocals(userId = 'user1') {
 }
 
 /** Capture the redirect location thrown by SvelteKit's redirect() */
-async function catchRedirect(fn: () => Promise<unknown>): Promise<string> {
+async function catchRedirect(fn: () => unknown | Promise<unknown>): Promise<string> {
 	try {
-		await fn();
+		await Promise.resolve(fn());
 		return '';
 	} catch (e: any) {
 		return e?.location ?? '';

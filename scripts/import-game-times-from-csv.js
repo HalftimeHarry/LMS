@@ -291,6 +291,7 @@ const CSV = String.raw`1,Wed,September 9,New England Patriots,,@,Seattle Seahawk
 18,Sun,January 10,Pittsburgh Steelers,,@,Baltimore Ravens,,1:00 PM
 18,Sun,January 10,Dallas Cowboys,,@,Washington Commanders,,1:00 PM`;
 
+/** @type {Record<string, number>} */
 const MONTHS = {
   January: 0,
   February: 1,
@@ -495,6 +496,10 @@ async function patchRecord(token, collection, id, body) {
 /**
  * @param {string} text
  */
+/**
+ * @param {string} text
+ * @returns {{ week: number, day: string, dateText: string, away: string, home: string, timeText: string }[]}
+ */
 function parseCsvRows(text) {
   return text
     .trim()
@@ -512,9 +517,12 @@ function parseCsvRows(text) {
         timeText: cells[8],
       };
     })
-    .filter(Boolean);
+    .filter((row) => row !== null);
 }
 
+/**
+ * @param {string} offsetLabel
+ */
 function parseGmtOffsetToMinutes(offsetLabel) {
   // Example labels: GMT-4, GMT-05:00, GMT+0
   const match = String(offsetLabel || '').match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
@@ -528,6 +536,9 @@ function parseGmtOffsetToMinutes(offsetLabel) {
   return sign * (hours * 60 + minutes);
 }
 
+/**
+ * @param {number} utcMillis
+ */
 function getEasternOffsetMinutes(utcMillis) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -548,6 +559,13 @@ function getEasternOffsetMinutes(utcMillis) {
   return parseGmtOffsetToMinutes(offsetPart);
 }
 
+/**
+ * @param {number} year
+ * @param {number} monthIndex
+ * @param {number} day
+ * @param {number} hour
+ * @param {number} minute
+ */
 function easternLocalToUtcIso(year, monthIndex, day, hour, minute) {
   // Convert local ET wall time into an exact UTC instant (handles DST by iterating offset).
   let utcMillis = Date.UTC(year, monthIndex, day, hour, minute);
@@ -562,6 +580,10 @@ function easternLocalToUtcIso(year, monthIndex, day, hour, minute) {
   return new Date(utcMillis).toISOString();
 }
 
+/**
+ * @param {{ dateText: string, timeText: string }} row
+ * @param {number} seasonStartYear
+ */
 function parseDateForRow(row, seasonStartYear) {
   const [monthName, dayText] = row.dateText.split(' ');
   const monthIndex = MONTHS[monthName];
@@ -583,6 +605,9 @@ function parseDateForRow(row, seasonStartYear) {
   return easternLocalToUtcIso(year, monthIndex, day, hour, minute);
 }
 
+/**
+ * @param {string | null | undefined} [seasonId]
+ */
 export async function importGameTimesFromCsv(seasonId) {
   if (!PB_URL || !ADMIN_EMAIL || !ADMIN_PASS) {
     throw new Error('Missing PUBLIC_POCKETBASE_URL, POCKETBASE_ADMIN_EMAIL, or POCKETBASE_ADMIN_PASSWORD');
@@ -632,6 +657,7 @@ export async function importGameTimesFromCsv(seasonId) {
   let failed = 0;
 
   for (const row of rows) {
+    if (!row) continue;
     const homeId = resolveTeamId(row.home, teamMap, abbrToId);
     const awayId = resolveTeamId(row.away, teamMap, abbrToId);
     if (!homeId || !awayId) {
@@ -659,7 +685,8 @@ export async function importGameTimesFromCsv(seasonId) {
       }
     } catch (error) {
       failed++;
-      console.warn(`Failed ${row.week} ${row.away} @ ${row.home}: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Failed ${row.week} ${row.away} @ ${row.home}: ${message}`);
     }
   }
 

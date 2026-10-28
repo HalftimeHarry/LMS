@@ -64,7 +64,7 @@ describe('load — entry deadlines derived from game_odds', () => {
 			return Promise.resolve(null);
 		});
 
-		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
+		const result = (await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any)) as any;
 
 		const expected = new Date(kickoff);
 		expected.setMinutes(expected.getMinutes() - 40);
@@ -78,7 +78,7 @@ describe('load — entry deadlines derived from game_odds', () => {
 			return Promise.resolve(null);
 		});
 
-		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
+		const result = (await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any)) as any;
 
 		const expected = new Date(kickoff);
 		expected.setMinutes(expected.getMinutes() - 40);
@@ -95,7 +95,7 @@ describe('load — entry deadlines derived from game_odds', () => {
 			return Promise.resolve(null);
 		});
 
-		await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
+		await (load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any) as any);
 
 		// One of the calls should query week = 8 for second-half deadline derivation.
 		const queries = collections.game_odds.getFirstListItem.mock.calls.map((c: any[]) => String(c[0]));
@@ -105,7 +105,7 @@ describe('load — entry deadlines derived from game_odds', () => {
 	it('returns null deadlines when no odds exist', async () => {
 		collections.game_odds.getFirstListItem = vi.fn().mockResolvedValue(null);
 
-		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
+		const result = (await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any)) as any;
 
 		expect(result.lmsEntryDeadline).toBeNull();
 		expect(result.shEntryDeadline).toBeNull();
@@ -116,7 +116,7 @@ describe('load — entry deadlines derived from game_odds', () => {
 			{ ...SEASON, status: 'complete' }
 		]);
 
-		const result = await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any);
+		const result = (await load({ url: new URL('http://x/admin/entries'), locals: { role: 'pool_admin' } } as any)) as any;
 
 		expect(result.lmsEntryDeadline).toBeNull();
 		expect(result.shEntryDeadline).toBeNull();

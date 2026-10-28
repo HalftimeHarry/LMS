@@ -11,6 +11,7 @@
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	const ZERO_SURVIVOR_AUTOMATION_DISABLED = true;
 	const pageData = $derived(data);
 	const pageForm = $derived(form);
 
@@ -311,7 +312,7 @@
 	<div class="mb-4 rounded border border-red-800 bg-red-950/60 px-4 py-3 text-sm text-red-400">{(pageForm as any).error}</div>
 {/if}
 
-{#if (pageForm as any)?.zeroSurvivorResolution && (pageForm as any).zeroSurvivorResolution.status !== 'continue'}
+{#if !ZERO_SURVIVOR_AUTOMATION_DISABLED && (pageForm as any)?.zeroSurvivorResolution && (pageForm as any).zeroSurvivorResolution.status !== 'continue'}
 	{@const z = (pageForm as any).zeroSurvivorResolution}
 	<div class="mb-4 rounded-xl border border-amber-800 bg-amber-950/30 p-4 text-sm text-amber-100">
 		<h3 class="text-sm font-semibold uppercase tracking-wider text-amber-300">2nd Half Pool — Zero Survivors Detected</h3>

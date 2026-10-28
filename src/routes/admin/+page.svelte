@@ -45,11 +45,15 @@
 	}
 
 	// Default to the first active LMS (non-second-half) season
-	const defaultSeasonId = (data.seasons as any[]).find(
-		s => !s.name?.toLowerCase().includes('second half') && (s.status === 'active' || s.status === 'open')
-	)?.id ?? (data.seasons as any[])[0]?.id ?? '';
+	const defaultSeasonId = $derived.by(() => {
+		const seasons = (data.seasons as any[]) ?? [];
+		return seasons.find(
+			s => !s.name?.toLowerCase().includes('second half') && (s.status === 'active' || s.status === 'open')
+		)?.id ?? seasons[0]?.id ?? '';
+	});
 
-	let selectedSeasonId = $state(defaultSeasonId);
+	let selectedSeasonId = $state('');
+	$effect(() => { if (!selectedSeasonId) selectedSeasonId = defaultSeasonId; });
 
 	const selectedSeason = $derived(
 		(data.seasons as any[]).find(s => s.id === selectedSeasonId) ?? null
@@ -57,7 +61,7 @@
 	const selectedData = $derived(
 		(data.seasonDataMap as any)[selectedSeasonId] ?? null
 	);
-	const selectedPoolType = $derived(() => {
+	const selectedPoolType = $derived.by(() => {
 		const season = selectedSeason as any;
 		if (!season) return 'all';
 		const byFlags = season.lmsEnabled === false && season.secondHalfEnabled !== false;

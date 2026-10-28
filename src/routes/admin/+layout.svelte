@@ -53,14 +53,14 @@
 			<nav class="flex flex-col gap-1">
 				{#each navItems as item}
 					<a href={item.href}
-						onclick={(e) => { if (item.disabled) e.preventDefault(); }}
+						onclick={(e) => { if ('disabled' in item && item.disabled) e.preventDefault(); }}
 						class="rounded px-3 py-2 text-sm transition
 							{$page.url.pathname === item.href
 								? 'bg-[rgba(201,168,76,0.1)] text-[#c9a84c]'
-								: item.disabled
+								: 'disabled' in item && item.disabled
 								? 'cursor-not-allowed text-gray-600'
 								: 'text-gray-300 hover:bg-gray-800 hover:text-white'}"
-						aria-disabled={item.disabled ? 'true' : undefined}
+						aria-disabled={('disabled' in item && item.disabled) ? 'true' : undefined}
 					>{item.label}</a>
 				{/each}
 			</nav>
@@ -101,14 +101,14 @@
 					<p class="px-4 pb-1 pt-3 text-xs text-gray-600">{isSuperAdmin ? 'Super Admin' : 'Pool Admin'}</p>
 					<nav class="flex flex-col py-1">
 						{#each navItems as item}
-							<a href={item.href} onclick={(e) => { if (item.disabled) { e.preventDefault(); return; } closeMenu(); }}
+							<a href={item.href} onclick={(e) => { if ('disabled' in item && item.disabled) { e.preventDefault(); return; } closeMenu(); }}
 								class="px-4 py-2.5 text-sm transition
 									{$page.url.pathname === item.href
 										? 'bg-[rgba(201,168,76,0.1)] text-[#c9a84c]'
-										: item.disabled
+										: 'disabled' in item && item.disabled
 										? 'cursor-not-allowed text-gray-600'
 										: 'text-gray-300 hover:bg-gray-800 hover:text-white'}"
-								aria-disabled={item.disabled ? 'true' : undefined}
+								aria-disabled={('disabled' in item && item.disabled) ? 'true' : undefined}
 							>{item.label}</a>
 						{/each}
 					</nav>

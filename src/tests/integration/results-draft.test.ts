@@ -31,6 +31,22 @@ function makeFormData(fields: Record<string, string>) {
 	} as unknown as FormData;
 }
 
+function makeStatefulEntries(entries: Array<{ id: string; season: string; entryType: 'lms' | 'second_half'; status?: string }>) {
+	const state = entries.map((entry) => ({ ...entry, status: entry.status ?? 'active' }));
+	const map = new Map(state.map((entry) => [entry.id, entry]));
+	return {
+		entries: state,
+		getFullList: vi.fn(async () => [...state]),
+		update: vi.fn(async (id: string, patch: Record<string, any>) => {
+			const current = map.get(id);
+			if (!current) throw new Error(`Missing entry ${id}`);
+			Object.assign(current, patch);
+			map.set(id, current);
+			return current;
+		}),
+	};
+}
+
 // ── shared mock state ─────────────────────────────────────────────────────────
 
 let mockPb: any;
@@ -342,6 +358,109 @@ describe('recordResults — Save & Finalize (no draft)', () => {
 		} as any);
 
 		expect(collections.weekly_settings.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('recordResults — zero-survivor automation is disabled for the season', () => {
+	it('uses the actual Week 7 LMS outcome set and keeps the six true survivors active while eliminating the seven Giants entries', async () => {
+		const lmsEntries = [
+			...Array.from({ length: 7 }, (_, index) => ({ id: `giant${index + 1}`, season: SEASON_ID, entryType: 'lms' as const, status: 'active' })),
+			...Array.from({ length: 3 }, (_, index) => ({ id: `ind${index + 1}`, season: SEASON_ID, entryType: 'lms' as const, status: 'active' })),
+			{ id: 'ne1', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+			{ id: 'lv1', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+			{ id: 'phi1', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+		];
+		const statefulEntries = makeStatefulEntries(lmsEntries);
+		const giantIds = lmsEntries.slice(0, 7).map((entry) => entry.id);
+		const survivorIds = lmsEntries.slice(7).map((entry) => entry.id);
+		const picks = lmsEntries.map((entry, index) => ({
+			id: `pick${index + 1}`,
+			entry: entry.id,
+			week: LMS_WEEK,
+			pickedTeams: index < 7 ? [HOME_TEAM] : [AWAY_TEAM],
+			expand: { entry: { id: entry.id, status: 'active', entryType: 'lms' } },
+		}));
+		collections.picks.getFullList = vi.fn().mockResolvedValue(picks);
+		collections.entries = statefulEntries;
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect((result as any).success).toBe(true);
+		expect((result as any).eliminated).toBe(7);
+		expect((result as any).zeroSurvivorResolution).toBeUndefined();
+		const activeIds = statefulEntries.entries.filter((entry) => entry.status === 'active').map((entry) => entry.id).sort();
+		expect(activeIds).toEqual([...survivorIds].sort());
+		const eliminatedIds = statefulEntries.entries.filter((entry) => entry.status === 'eliminated').map((entry) => entry.id).sort();
+		expect(eliminatedIds).toEqual([...giantIds].sort());
+		const winnerUpdates = (statefulEntries.update as any).mock.calls.filter(([, payload]: any[]) => payload?.status === 'winner');
+		expect(winnerUpdates).toHaveLength(0);
+	});
+
+	it('does not assign winners in a genuine all-eliminated LMS week and leaves all eliminated entries intact for manual review', async () => {
+		const lmsEntries = [
+			{ id: 'all1', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+			{ id: 'all2', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+			{ id: 'all3', season: SEASON_ID, entryType: 'lms' as const, status: 'active' },
+		];
+		const statefulEntries = makeStatefulEntries(lmsEntries);
+		const picks = lmsEntries.map((entry, index) => ({
+			id: `pick${index + 1}`,
+			entry: entry.id,
+			week: LMS_WEEK,
+			pickedTeams: [HOME_TEAM],
+			expand: { entry: { id: entry.id, status: 'active', entryType: 'lms' } },
+		}));
+		collections.picks.getFullList = vi.fn().mockResolvedValue(picks);
+		collections.entries = statefulEntries;
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData(baseFields({ draft: '1' })) }
+		} as any);
+
+		expect((result as any).success).toBe(true);
+		expect((result as any).eliminated).toBe(3);
+		expect((result as any).zeroSurvivorResolution).toBeUndefined();
+		const allEliminated = statefulEntries.entries.filter((entry) => entry.status === 'eliminated').map((entry) => entry.id);
+		expect(allEliminated).toHaveLength(3);
+		const winnerUpdates = (statefulEntries.update as any).mock.calls.filter(([, payload]: any[]) => payload?.status === 'winner');
+		expect(winnerUpdates).toHaveLength(0);
+	});
+
+	it('does not auto-create zero-survivor winners for Second Half when the pool is processed separately', async () => {
+		const shEntries = Array.from({ length: 3 }, (_, index) => ({
+			id: `sh${index + 1}`,
+			season: SEASON_ID,
+			entryType: 'second_half' as const,
+			status: 'active',
+		}));
+		const statefulEntries = makeStatefulEntries(shEntries);
+		const picks = shEntries.map((entry, index) => ({
+			id: `shpick${index + 1}`,
+			entry: entry.id,
+			week: 'shWeek6',
+			pickedTeams: index === 0 ? [HOME_TEAM] : [AWAY_TEAM],
+			expand: { entry: { id: entry.id, status: 'active', entryType: 'second_half' } },
+		}));
+		collections.picks.getFullList = vi.fn().mockResolvedValue(picks);
+		collections.entries = statefulEntries;
+		collections.weekly_settings.getOne = vi.fn().mockResolvedValue({ id: 'shWeek6', status: 'locked', week: 6, deadline: '2026-09-15T23:50:00.000Z' });
+
+		const result = await actions.recordResults({
+			request: { formData: async () => makeFormData({
+				shWeekId: 'shWeek6',
+				shSeasonId: SEASON_ID,
+				weekNum: '6',
+				draft: '1',
+				[`gameId_${GAME_ID}`]: 'home',
+			}) }
+		} as any);
+
+		expect((result as any).success).toBe(true);
+		expect((result as any).zeroSurvivorResolution).toBeUndefined();
+		const winnerUpdates = (statefulEntries.update as any).mock.calls.filter(([, payload]: any[]) => payload?.status === 'winner');
+		expect(winnerUpdates).toHaveLength(0);
 	});
 });
 

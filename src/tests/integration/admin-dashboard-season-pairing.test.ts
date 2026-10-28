@@ -112,7 +112,7 @@ describe('admin dashboard season pairing', () => {
 	});
 
 	it('uses paired LMS season entries for Second Half season stats and pending payments', async () => {
-		const data = await load({ locals: { role: 'pool_admin' } } as any);
+		const data = (await load({ locals: { role: 'pool_admin' } } as any)) as any;
 
 		expect(data.seasonDataMap.lms1.stats.totalEntries).toBe(2);
 		expect(data.seasonDataMap.lms1.stats.lmsEntries).toBe(2);

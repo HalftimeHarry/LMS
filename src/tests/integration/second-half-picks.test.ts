@@ -379,6 +379,34 @@ describe('split-pot share allocation', () => {
 });
 
 describe('Second Half zero-survivor winner resolution', () => {
+	it('uses the final elimination week score only when all remaining entries are eliminated in the same week', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: [
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry2', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry3', season: 'season1', entryType: 'second_half', status: 'active' },
+			],
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week10', pickedTeams: ['team1', 'team2'] },
+				{ id: 'p2', entry: 'entry2', week: 'week10', pickedTeams: ['team3', 'team4'] },
+				{ id: 'p3', entry: 'entry3', week: 'week10', pickedTeams: ['team5', 'team6'] },
+			],
+			teamResult: {
+				team1: 'correct', team2: 'correct',
+				team3: 'incorrect', team4: 'incorrect',
+				team5: 'incorrect', team6: 'incorrect',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: ['entry1', 'entry2', 'entry3'],
+		});
+		expect(result.status).toBe('winner_candidate');
+		expect(result.highestRankedEntries).toEqual(['entry1']);
+		expect(result.maxCorrectPicks).toBe(2);
+	});
+
 	it('chooses the sole highest correct-pick entry as the winner candidate', () => {
 		const result = _getZeroSurvivorWinnerResolution({
 			seasonId: 'season1',
@@ -508,6 +536,32 @@ describe('Second Half zero-survivor winner resolution', () => {
 		expect(result.status).toBe('tie_required');
 		expect(result.highestRankedEntries).toHaveLength(10);
 		expect(result.needsAdminConfirmation).toBe(true);
+	});
+
+	it('does not use cumulative season scores when the rule is a same-week all-eliminated tie-breaker', () => {
+		const result = _getZeroSurvivorWinnerResolution({
+			seasonId: 'season1',
+			weekId: 'week10',
+			weekNum: 10,
+			entries: [
+				{ id: 'entry1', season: 'season1', entryType: 'second_half', status: 'active' },
+				{ id: 'entry2', season: 'season1', entryType: 'second_half', status: 'active' },
+			],
+			picks: [
+				{ id: 'p1', entry: 'entry1', week: 'week6', pickedTeams: ['teamA'] },
+				{ id: 'p2', entry: 'entry1', week: 'week10', pickedTeams: ['teamB'] },
+				{ id: 'p3', entry: 'entry2', week: 'week10', pickedTeams: ['teamC'] },
+			],
+			teamResult: {
+				teamA: 'correct',
+				teamB: 'correct',
+				teamC: 'correct',
+			},
+			poolType: 'second_half',
+			remainingActiveEntryIds: ['entry1', 'entry2'],
+		});
+		expect(result.status).toBe('tie_required');
+		expect(result.maxCorrectPicks).toBe(1);
 	});
 
 	it('keeps resolution pending when a required game is still unresolved', () => {
