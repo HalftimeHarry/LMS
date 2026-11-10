@@ -112,6 +112,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		picksRequiredByWeek[w.id] = entry.entryType === 'lms'
 			? 1
 			: SeasonProvider.secondHalfPicksForWeek(season, w.week);
+
+		if (Number(w.week) === 10) {
+			console.log('[week-10-pick-limit]', {
+				entryType: entry.entryType,
+				seasonName: season?.name,
+				startWeek: season?.secondHalfPicksStartWeek,
+				picksPerWeek: season?.secondHalfPicksPerWeek,
+				required: picksRequiredByWeek[w.id]
+			});
+		}
 	}
 
 	const isLms = entry.entryType === 'lms';
@@ -241,9 +251,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		entry,
 		season,
-		openWeeks:           openWeeks           as any[],
-		closedWeeks:         closedWeeks         as any[],
-		teams:               teams               as any[],
+		openWeeks,
+		closedWeeks,
+		teams,
 		pickByWeek,
 		usedByWeek,
 		picksRequiredByWeek,

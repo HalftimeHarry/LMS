@@ -511,6 +511,7 @@
 								<!-- ── OPEN WEEK: team picker ── -->
 								<!-- Sticky pick bar — instruction + live selection + submit -->
 								<div class="sticky top-0 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[rgba(201,168,76,0.25)] bg-gray-950/95 px-4 py-3 backdrop-blur-sm">
+									<pre class="text-xs text-yellow-300">{data.week10Debug}</pre>
 									<p class="text-xs text-gray-400">
 										{#if isLms}
 											Select <strong class="text-white">1 team</strong> you think will <strong class="text-red-400">lose</strong>.
